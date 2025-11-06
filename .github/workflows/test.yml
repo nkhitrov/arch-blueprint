@@ -1,0 +1,19 @@
+name: Testing package
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
+      - name: Run pre-commit check
+        run: |
+          uv sync --locked
+          uv run pre-commit run -a

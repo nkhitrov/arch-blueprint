@@ -18,7 +18,7 @@ class BlueprintModule:
                 if selected_module in dep:
                     from_, to_ = self.extract_namespaces_with_same_depth(dep)
                     if from_ != to_:
-                        res.add((from_,to_))
+                        res.add((from_, to_))
 
         return res
 

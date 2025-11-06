@@ -17,17 +17,17 @@ class PlantUmlRenderer:
             "#27AE60",
             "#34495E",
             "#E67E22",
-            "#8E44AD"
+            "#8E44AD",
         ]
 
     def render(self, target_modules: list[BlueprintModule]) -> None:
         header = textwrap.dedent("""\
             @startuml
             !theme amiga
-            
+
             top to bottom direction
             hide empty members
-            
+
             """)
 
         body = self._render_classes(target_modules)
@@ -59,7 +59,7 @@ class PlantUmlRenderer:
         text = ""
         arrow = "--->"
         for from_, to_ in links:
-            text += f"{from_ } {arrow} {to_}\n"
+            text += f"{from_} {arrow} {to_}\n"
 
         return text
 

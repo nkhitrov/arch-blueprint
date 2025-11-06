@@ -9,7 +9,12 @@ from arch_blueprint.utils import filter_substr
 
 
 class ArchBlueprint:
-    def __init__(self, root: str, target_names: Sequence[str], renderer: Optional[PlantUmlRenderer] = None):
+    def __init__(
+        self,
+        root: str,
+        target_names: Sequence[str],
+        renderer: Optional[PlantUmlRenderer] = None,
+    ):
         self.root = root
         self.target_names = target_names
         self.graph = grimp.build_graph(self.root)
@@ -38,8 +43,9 @@ class ArchBlueprint:
 
     def build_module(self, name: str, module_names: set[str]) -> BlueprintModule:
         dependencies = self._find_all_modules_imported_by(name)
-        return BlueprintModule(name=name, dependencies=dependencies, selected_modules=module_names)
-
+        return BlueprintModule(
+            name=name, dependencies=dependencies, selected_modules=module_names
+        )
 
     def _find_all_modules_imported_by(self, module: str) -> set[str]:
         result = set()
@@ -52,4 +58,3 @@ class ArchBlueprint:
             result.update(imported_mods)
 
         return result
-
