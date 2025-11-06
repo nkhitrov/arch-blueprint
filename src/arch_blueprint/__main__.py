@@ -1,13 +1,16 @@
-from arch_blueprint.blueprint import ArchBlueprint
 import argparse
+
+from arch_blueprint.blueprint import ArchBlueprint
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate component diagrams in plantuml for python applications"
+        description="Generate component diagrams in plantuml for python applications",
     )
     parser.add_argument(
-        "root", type=str, help="Name of root python module in project (example: 'myapp'"
+        "root",
+        type=str,
+        help="Name of root python module in project (example: 'myapp'",
     )
     parser.add_argument(
         "--modules",

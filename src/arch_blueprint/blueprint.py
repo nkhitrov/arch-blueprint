@@ -44,7 +44,9 @@ class ArchBlueprint:
     def build_module(self, name: str, module_names: set[str]) -> BlueprintModule:
         dependencies = self._find_all_modules_imported_by(name)
         return BlueprintModule(
-            name=name, dependencies=dependencies, selected_modules=module_names
+            name=name,
+            dependencies=dependencies,
+            selected_modules=module_names,
         )
 
     def _find_all_modules_imported_by(self, module: str) -> set[str]:
