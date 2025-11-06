@@ -27,3 +27,12 @@ repos:
           - "check"
           - "--fix"
           - "src"
+
+      - id: mypy
+        name: Validate types with MyPy
+        entry: poetry run mypy
+        language: system
+        pass_filenames: false
+        types: [python]
+        args:
+          - ./src
