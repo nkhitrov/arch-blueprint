@@ -1,16 +1,19 @@
 from dataclasses import dataclass
+from typing import Tuple
 
 
 @dataclass
 class BlueprintModule:
+    """Represents a module in the architecture blueprint."""
+
     name: str
     dependencies: set[str]
     selected_modules: set[str]
 
-    def get_namespace(self):
+    def get_namespace(self) -> str:
         return self.get_namespace_of_module(self.name)
 
-    def find_dependencies_namespace_to_namespaces(self):
+    def find_dependencies_namespace_to_namespaces(self) -> set[Tuple[str, str]]:
         res = set()
 
         for dep in self.dependencies:
@@ -22,11 +25,11 @@ class BlueprintModule:
 
         return res
 
-    def is_same_namespace(self, other):
+    def is_same_namespace(self, other: str) -> bool:
         namespace = self.get_namespace_of_module(other)
         return self.get_namespace() == namespace
 
-    def get_namespace_of_module(self, module):
+    def get_namespace_of_module(self, module: str) -> str:
         namespace, _ = module.rsplit(".", maxsplit=1)
         return namespace
 

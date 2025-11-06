@@ -6,7 +6,9 @@ from arch_blueprint.modules import BlueprintModule
 
 
 class PlantUmlRenderer:
-    def __init__(self, colors: Optional[Sequence[str]] = None):
+    """Renders PlantUML diagrams from blueprint modules."""
+
+    def __init__(self, colors: Optional[Sequence[str]] = None) -> None:
         self.colors = colors or [
             "#E74C3C",
             "#3498DB",
@@ -38,7 +40,7 @@ class PlantUmlRenderer:
         """)
 
         text = header + body + footer
-        print(text)
+        print(text)  # noqa: T201
 
     def _render_classes(self, blueprint_modules: list[BlueprintModule]) -> str:
         class_lines = []
@@ -49,7 +51,7 @@ class PlantUmlRenderer:
 
         return "\n".join(class_lines)
 
-    def _render_links(self, blueprint_modules):
+    def _render_links(self, blueprint_modules: list[BlueprintModule]) -> str:
         links = set()
         for blueprint_module in blueprint_modules:
             _links = blueprint_module.find_dependencies_namespace_to_namespaces()

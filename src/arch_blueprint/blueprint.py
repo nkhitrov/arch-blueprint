@@ -9,18 +9,20 @@ from arch_blueprint.utils import filter_substr
 
 
 class ArchBlueprint:
+    """Generates architecture blueprints for Python applications."""
+
     def __init__(
         self,
         root: str,
         target_names: Sequence[str],
         renderer: Optional[PlantUmlRenderer] = None,
-    ):
+    ) -> None:
         self.root = root
         self.target_names = target_names
         self.graph = grimp.build_graph(self.root)
         self.renderer = renderer or PlantUmlRenderer()
 
-    def run(self):
+    def run(self) -> None:
         blueprint_modules = self.collect_modules()
         self.renderer.render(blueprint_modules)
 
@@ -33,13 +35,12 @@ class ArchBlueprint:
 
         return result
 
-    def prepare_modules_list(self):
+    def prepare_modules_list(self) -> set[str]:
         module_names = set()
         for name in self.target_names:
             modules = self.graph.find_matching_modules(name)
             module_names.update(modules)
-        module_names = filter_substr(module_names)
-        return module_names
+        return filter_substr(module_names)
 
     def build_module(self, name: str, module_names: set[str]) -> BlueprintModule:
         dependencies = self._find_all_modules_imported_by(name)
