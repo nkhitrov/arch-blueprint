@@ -19,7 +19,7 @@ repos:
 
       - id: ruff
         name: Run ruff lints
-        entry: poetry run ruff
+        entry: uv run ruff
         language: system
         pass_filenames: false
         types: [python]
