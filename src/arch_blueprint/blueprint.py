@@ -36,11 +36,11 @@ class ArchBlueprint:
         return result
 
     def prepare_modules_list(self) -> set[str]:
-        module_names = set()
+        module_names: set[str] = set()
         for name in self.target_names:
             modules = self.graph.find_matching_modules(name)
             module_names.update(modules)
-        return filter_substr(module_names)
+        return filter_substr(module_names)  # type: ignore
 
     def build_module(self, name: str, module_names: set[str]) -> BlueprintModule:
         dependencies = self._find_all_modules_imported_by(name)
