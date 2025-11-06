@@ -5,7 +5,6 @@ import grimp
 
 from arch_blueprint.modules import BlueprintModule
 from arch_blueprint.puml import PlantUmlRenderer
-from arch_blueprint.utils import filter_substr
 
 
 class ArchBlueprint:
@@ -40,7 +39,7 @@ class ArchBlueprint:
         for name in self.target_names:
             modules = self.graph.find_matching_modules(name)
             module_names.update(modules)
-        return filter_substr(module_names)  # type: ignore
+        return self._exclude_sub_modules(module_names)
 
     def build_module(self, name: str, module_names: set[str]) -> BlueprintModule:
         dependencies = self._find_all_modules_imported_by(name)
@@ -59,5 +58,23 @@ class ArchBlueprint:
         for descend in descends:
             imported_mods = self.graph.find_modules_directly_imported_by(descend)
             result.update(imported_mods)
+
+        return result
+
+    @staticmethod
+    def _exclude_sub_modules(modules: set[str]) -> set[str]:
+        """Filter out names that are namespaces of other modules in the set."""
+        sorted_names = sorted(modules, key=len, reverse=True)
+        result: set[str] = set()
+
+        for name in sorted_names:
+            is_namespace = False
+            for longer_name in list(result):
+                if name in longer_name:
+                    is_namespace = True
+                    break
+
+            if not is_namespace:
+                result.add(name)
 
         return result
