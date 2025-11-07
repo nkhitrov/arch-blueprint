@@ -11,7 +11,7 @@ def main() -> None:
     parser.add_argument(
         "root",
         type=str,
-        help="Name of root python module in project (example: 'myapp'",
+        help="Name of root python module in project (example: 'myapp')",
     )
     parser.add_argument(
         "--modules",
