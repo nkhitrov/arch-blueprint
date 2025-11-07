@@ -16,6 +16,7 @@ def main() -> None:
     parser.add_argument(
         "--modules",
         "-m",
+        required=True,
         type=str,
         nargs="*",
         action="extend",
