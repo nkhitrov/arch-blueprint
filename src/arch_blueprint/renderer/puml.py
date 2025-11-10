@@ -1,28 +1,13 @@
 import textwrap
-from collections.abc import Sequence
-from typing import Optional
 
 from arch_blueprint.modules import BlueprintModule
+from arch_blueprint.renderer.base import BlueprintRenderer
 
 
-class PlantUmlRenderer:
+class PlantUmlRenderer(BlueprintRenderer):
     """Renders PlantUML diagrams from blueprint modules."""
 
-    def __init__(self, colors: Optional[Sequence[str]] = None) -> None:
-        self.colors = colors or [
-            "#E74C3C",
-            "#3498DB",
-            "#2ECC71",
-            "#1ABC9C",
-            "#F39C12",
-            "#9B59B6",
-            "#27AE60",
-            "#34495E",
-            "#E67E22",
-            "#8E44AD",
-        ]
-
-    def render(self, target_modules: list[BlueprintModule]) -> None:
+    def render(self, target_modules: list[BlueprintModule]) -> str:
         header = textwrap.dedent("""\
             @startuml
             !theme amiga
@@ -39,13 +24,12 @@ class PlantUmlRenderer:
             @enduml
         """)
 
-        text = header + body + footer
-        print(text)  # noqa: T201
+        return header + body + footer
 
     def _render_classes(self, blueprint_modules: list[BlueprintModule]) -> str:
         class_lines = []
         for blueprint_module in blueprint_modules:
-            color = self.generate_color_code(blueprint_module.name)
+            color = self.get_color_for_depth(blueprint_module.depth)
             text = f"class {blueprint_module.name} <<(M, {color})>>\n"
             class_lines.append(text)
 
@@ -64,7 +48,3 @@ class PlantUmlRenderer:
             text += f"{from_} {arrow} {to_}\n"
 
         return text
-
-    def generate_color_code(self, module: str) -> str:
-        depth = len(module.rsplit("."))
-        return self.colors[depth]

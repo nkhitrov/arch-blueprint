@@ -46,3 +46,7 @@ class BlueprintModule:
                 break
 
         return ".".join(path_from), ".".join(path_to)
+
+    @property
+    def depth(self) -> int:
+        return len(self.name.rsplit("."))
