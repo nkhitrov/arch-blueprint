@@ -1,35 +1,72 @@
+from __future__ import annotations
+
+from collections import defaultdict
 from dataclasses import dataclass
-from typing import Tuple
+from functools import cached_property
+
+from arch_blueprint.models import ModuleEdge, NamespaceLink
 
 
 @dataclass
 class BlueprintModule:
-    """Represents a module in the architecture blueprint."""
+    """Module in the architecture blueprint with its dependencies."""
 
     name: str
     dependencies: set[str]
     selected_modules: set[str]
 
+    @cached_property
+    def namespace(self) -> str:
+        return self._get_namespace_of_module(self.name)
+
+    @cached_property
+    def depth(self) -> int:
+        return len(self.name.split("."))
+
     def get_namespace(self) -> str:
-        return self.get_namespace_of_module(self.name)
+        return self.namespace
 
-    def find_dependencies_namespace_to_namespaces(self) -> set[Tuple[str, str]]:
-        res = set()
+    def find_namespace_links(self) -> set[NamespaceLink]:
+        """Find namespace links with full module edge information."""
+        edges_by_namespace: dict[tuple[str, str], set[ModuleEdge]] = defaultdict(set)
 
+        prefixes = [(m, m + ".") for m in self.selected_modules]
         for dep in self.dependencies:
-            for selected_module in self.selected_modules:
-                if selected_module in dep:
-                    from_, to_ = self.extract_namespaces_with_same_depth(dep)
-                    if from_ != to_:
-                        res.add((from_, to_))
+            for selected_module, prefix in prefixes:
+                if dep == selected_module or dep.startswith(prefix):
+                    source_ns, target_ns = self.extract_namespaces_with_same_depth(dep)
+                    if source_ns != target_ns:
+                        edge = ModuleEdge(
+                            source_module=self.name,
+                            target_module=dep,
+                            source_namespace=source_ns,
+                            target_namespace=target_ns,
+                        )
+                        edges_by_namespace[(source_ns, target_ns)].add(edge)
 
-        return res
+        return {
+            NamespaceLink(
+                source_namespace=ns_pair[0],
+                target_namespace=ns_pair[1],
+                edges=frozenset(edges),
+            )
+            for ns_pair, edges in edges_by_namespace.items()
+        }
+
+    def find_dependencies_namespace_to_namespaces(self) -> set[tuple[str, str]]:
+        """Find namespace-level dependencies (backward compatible)."""
+        return {
+            (link.source_namespace, link.target_namespace)
+            for link in self.find_namespace_links()
+        }
 
     def is_same_namespace(self, other: str) -> bool:
-        namespace = self.get_namespace_of_module(other)
-        return self.get_namespace() == namespace
+        other_namespace = self._get_namespace_of_module(other)
+        return self.namespace == other_namespace
 
-    def get_namespace_of_module(self, module: str) -> str:
+    def _get_namespace_of_module(self, module: str) -> str:
+        if "." not in module:
+            return module
         namespace, _ = module.rsplit(".", maxsplit=1)
         return namespace
 
@@ -46,7 +83,3 @@ class BlueprintModule:
                 break
 
         return ".".join(path_from), ".".join(path_to)
-
-    @property
-    def depth(self) -> int:
-        return len(self.name.rsplit("."))

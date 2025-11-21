@@ -3,10 +3,15 @@ from types import MappingProxyType
 from typing import Final
 
 from arch_blueprint.blueprint import ArchBlueprint
+from arch_blueprint.renderer.base import (
+    DEFAULT_OPTIONS,
+    BlueprintRenderer,
+    RendererOptions,
+)
 from arch_blueprint.renderer.d2 import D2LangRenderer
 from arch_blueprint.renderer.puml import PlantUmlRenderer
 
-_RENDERERS: Final = MappingProxyType(
+_RENDERERS: Final[MappingProxyType[str, type[BlueprintRenderer]]] = MappingProxyType(
     {
         "puml": PlantUmlRenderer,
         "d2": D2LangRenderer,
@@ -17,7 +22,7 @@ _RENDERERS: Final = MappingProxyType(
 def main() -> None:
     """Main entry point for the arch_blueprint CLI."""
     parser = argparse.ArgumentParser(
-        description="Generate component diagrams in plantuml for python applications",
+        description="Generate architecture diagrams for Python applications",
     )
     parser.add_argument(
         "project_dir",
@@ -45,10 +50,25 @@ def main() -> None:
         choices=_RENDERERS.keys(),
         help=f"Output format. Possible values: {_RENDERERS.keys()}",
     )
+    parser.add_argument(
+        "--no-cycle-details",
+        action="store_false",
+        dest="cycle_details",
+        default=True,
+        help="Hide detailed module-level information for cyclic dependencies",
+    )
     args = parser.parse_args()
-    renderer = _RENDERERS[args.format]()
-    result = ArchBlueprint(project_dir=args.project_dir, target_names=args.modules, renderer=renderer).run()
-    print(result)
+    options = RendererOptions(
+        depth_colors=DEFAULT_OPTIONS.depth_colors,
+        show_cycle_details=args.cycle_details,
+    )
+    renderer = _RENDERERS[args.format](options=options)
+    result = ArchBlueprint(
+        project_dir=args.project_dir,
+        target_names=args.modules,
+        renderer=renderer,
+    ).run()
+    print(result)  # noqa: T201
 
 
 if __name__ == "__main__":

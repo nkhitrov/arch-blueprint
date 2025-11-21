@@ -1,50 +1,66 @@
-import textwrap
+from __future__ import annotations
 
+import textwrap
+from string import Template
+from typing import Final
+
+from arch_blueprint.models import CyclicDependency
 from arch_blueprint.modules import BlueprintModule
-from arch_blueprint.renderer.base import BlueprintRenderer
+from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, BlueprintRenderer
+
+_HEADER: Final = textwrap.dedent(
+    """\
+    @startuml
+    !theme amiga
+
+    top to bottom direction
+    hide empty members
+
+    """,
+)
+
+_CYCLE_NOTE_TEMPLATE: Final = Template(
+    textwrap.dedent(
+        """\
+        note on link
+          **$ns_a -> $ns_b:**
+        $forward_details
+          **$ns_b -> $ns_a:**
+        $backward_details
+        end note
+        """,
+    ).rstrip(),
+)
 
 
 class PlantUmlRenderer(BlueprintRenderer):
-    """Renders PlantUML diagrams from blueprint modules."""
+    """PlantUML diagram renderer."""
 
-    def render(self, target_modules: list[BlueprintModule]) -> str:
-        header = textwrap.dedent("""\
-            @startuml
-            !theme amiga
+    def _format_module(self, module: BlueprintModule, color: str) -> str:
+        return f"class {module.name} <<(M, {color})>>"
 
-            top to bottom direction
-            hide empty members
+    def _format_link(self, source: str, target: str) -> str:
+        return f"{source} ---> {target}"
 
-            """)
+    def _format_cycle(self, cycle: CyclicDependency) -> str:
+        color = CYCLE_HIGHLIGHT_COLOR
+        link = f"{cycle.namespace_from} <-[{color},bold]-> {cycle.namespace_to}"
 
-        body = self._render_classes(target_modules)
-        body += self._render_links(target_modules)
+        if not self.options.show_cycle_details:
+            return link
 
-        footer = textwrap.dedent("""\
-            @enduml
-        """)
+        forward_details = "\n".join(self._format_edges(cycle.forward_edges))
+        backward_details = "\n".join(self._format_edges(cycle.backward_edges))
 
-        return header + body + footer
+        note = _CYCLE_NOTE_TEMPLATE.substitute(
+            ns_a=cycle.namespace_from,
+            ns_b=cycle.namespace_to,
+            forward_details=textwrap.indent(forward_details, "  "),
+            backward_details=textwrap.indent(backward_details, "  "),
+        )
+        return f"{link}\n{note}"
 
-    def _render_classes(self, blueprint_modules: list[BlueprintModule]) -> str:
-        class_lines = []
-        for blueprint_module in blueprint_modules:
-            color = self.get_color_for_depth(blueprint_module.depth)
-            text = f"class {blueprint_module.name} <<(M, {color})>>\n"
-            class_lines.append(text)
-
-        return "\n".join(class_lines)
-
-    def _render_links(self, blueprint_modules: list[BlueprintModule]) -> str:
-        links = set()
-        for blueprint_module in blueprint_modules:
-            _links = blueprint_module.find_dependencies_namespace_to_namespaces()
-            for link in _links:
-                links.add(link)
-
-        text = ""
-        arrow = "--->"
-        for from_, to_ in links:
-            text += f"{from_} {arrow} {to_}\n"
-
-        return text
+    def _combine_output(self, modules: list[str], links: list[str]) -> str:
+        modules_section = "\n".join(modules)
+        links_section = "\n".join(links) + "\n" if links else ""
+        return f"{_HEADER}{modules_section}\n\n{links_section}@enduml\n"
