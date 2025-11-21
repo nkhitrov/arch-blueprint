@@ -1,10 +1,9 @@
 from collections.abc import Sequence
-from typing import Optional
 
 import grimp
 
 from arch_blueprint.modules import BlueprintModule
-from arch_blueprint.puml import PlantUmlRenderer
+from arch_blueprint.renderer.base import BlueprintRenderer
 
 
 class ArchBlueprint:
@@ -14,16 +13,17 @@ class ArchBlueprint:
         self,
         root: str,
         target_names: Sequence[str],
-        renderer: Optional[PlantUmlRenderer] = None,
+        renderer: BlueprintRenderer,
     ) -> None:
         self.root = root
         self.target_names = target_names
         self.graph = grimp.build_graph(self.root)
-        self.renderer = renderer or PlantUmlRenderer()
+        self.renderer = renderer
 
     def run(self) -> None:
         blueprint_modules = self.collect_modules()
-        self.renderer.render(blueprint_modules)
+        result = self.renderer.render(blueprint_modules)
+        print(result)  # noqa: T201
 
     def collect_modules(self) -> list[BlueprintModule]:
         module_names = self.prepare_modules_list()
