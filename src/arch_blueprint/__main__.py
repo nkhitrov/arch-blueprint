@@ -20,9 +20,9 @@ def main() -> None:
         description="Generate component diagrams in plantuml for python applications",
     )
     parser.add_argument(
-        "root",
+        "project_dir",
         type=str,
-        help="Name of root python module in project (example: 'myapp')",
+        help="Path to root directory of target project",
     )
     parser.add_argument(
         "--modules",
@@ -47,7 +47,8 @@ def main() -> None:
     )
     args = parser.parse_args()
     renderer = _RENDERERS[args.format]()
-    ArchBlueprint(root=args.root, target_names=args.modules, renderer=renderer).run()
+    result = ArchBlueprint(project_dir=args.project_dir, target_names=args.modules, renderer=renderer).run()
+    print(result)
 
 
 if __name__ == "__main__":

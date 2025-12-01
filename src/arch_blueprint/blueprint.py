@@ -1,29 +1,49 @@
+import importlib
 from collections.abc import Sequence
+from typing import Optional
 
 import grimp
+from grimp import ImportGraph
 
 from arch_blueprint.modules import BlueprintModule
 from arch_blueprint.renderer.base import BlueprintRenderer
+import sys
 
 
 class ArchBlueprint:
     """Generates architecture blueprints for Python applications."""
+    graph: ImportGraph
 
     def __init__(
         self,
-        root: str,
+        project_dir: str,
         target_names: Sequence[str],
         renderer: BlueprintRenderer,
+        sys_path: Optional[list[str]] = None
     ) -> None:
-        self.root = root
+        self.project_dir = project_dir
+        self.sys_path = sys_path or sys.path
         self.target_names = target_names
-        self.graph = grimp.build_graph(self.root)
         self.renderer = renderer
 
-    def run(self) -> None:
+    def run(self) -> str:
+        self.sys_path.append(self.project_dir)
+
+        top_level_module = self._get_top_level_package(self.target_names[0])
+        self.graph = grimp.build_graph(top_level_module)
+
         blueprint_modules = self.collect_modules()
-        result = self.renderer.render(blueprint_modules)
-        print(result)  # noqa: T201
+        return self.renderer.render(blueprint_modules)
+
+    @staticmethod
+    def _get_top_level_package(module_name: str) -> str:
+        components = module_name.split(".")
+        for level in range(len(components)):
+            candidate_name = ".".join(components[: level + 1])
+            candidate = importlib.import_module(candidate_name)
+            if candidate.__file__:
+                return candidate_name
+        raise ImportError(f"Can't import module '{module_name}'. Is it on the Python path?")
 
     def collect_modules(self) -> list[BlueprintModule]:
         module_names = self.prepare_modules_list()
