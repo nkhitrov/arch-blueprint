@@ -15,6 +15,7 @@ Homepage = "https://github.com/nkhitrov/arch-blueprint"
 Repository = "https://github.com/nkhitrov/arch-blueprint"
 
 [project.scripts]
+arch-blueprint = "arch_blueprint.__main__:main"
 arch_blueprint = "arch_blueprint.__main__:main"
 
 [build-system]
@@ -34,7 +35,7 @@ explicit = true
 dev = [
   "mypy>=1.18.2",
   "pre-commit>=4.3.0",
-	"ruff>=0.14.3",
+  "ruff>=0.14.3",
 ]
 
 [tool.isort]

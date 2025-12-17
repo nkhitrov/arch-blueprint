@@ -1,4 +1,5 @@
 import importlib
+import sys
 from collections.abc import Sequence
 from typing import Optional
 
@@ -7,11 +8,11 @@ from grimp import ImportGraph
 
 from arch_blueprint.modules import BlueprintModule
 from arch_blueprint.renderer.base import BlueprintRenderer
-import sys
 
 
 class ArchBlueprint:
     """Generates architecture blueprints for Python applications."""
+
     graph: ImportGraph
 
     def __init__(
@@ -19,7 +20,7 @@ class ArchBlueprint:
         project_dir: str,
         target_names: Sequence[str],
         renderer: BlueprintRenderer,
-        sys_path: Optional[list[str]] = None
+        sys_path: Optional[list[str]] = None,
     ) -> None:
         self.project_dir = project_dir
         self.sys_path = sys_path or sys.path
@@ -43,7 +44,9 @@ class ArchBlueprint:
             candidate = importlib.import_module(candidate_name)
             if candidate.__file__:
                 return candidate_name
-        raise ImportError(f"Can't import module '{module_name}'. Is it on the Python path?")
+        raise ImportError(
+            f"Can't import module '{module_name}'. Is it on the Python path?",
+        )
 
     def collect_modules(self) -> list[BlueprintModule]:
         module_names = self.prepare_modules_list()
@@ -88,12 +91,9 @@ class ArchBlueprint:
         result: set[str] = set()
 
         for name in sorted_names:
-            is_namespace = False
-            for longer_name in list(result):
-                if name in longer_name:
-                    is_namespace = True
-                    break
-
+            is_namespace = any(
+                longer_name.startswith(name + ".") for longer_name in result
+            )
             if not is_namespace:
                 result.add(name)
 
