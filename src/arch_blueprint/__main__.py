@@ -39,7 +39,7 @@ def main() -> None:
         help=(
             "Selected modules for rendering "
             "(examples: 'myapp.somemodule', "
-            "'myapp.somemodule.*', 'myapp.somemodule.**')"
+            "'myapp.somemodule.*', 'myapp.*.*.models.*', 'myapp.somemodule.**')"
         ),
     )
     parser.add_argument(
