@@ -32,7 +32,7 @@ options:
 # Examples
 
 ## FastAPI
-[commit](https://github.com/fastapi/fastapi/commit/9348a5e2cf55440ff3da3bd4b7876acd3b3f57e5)
+[Commit](https://github.com/fastapi/fastapi/commit/9348a5e2cf55440ff3da3bd4b7876acd3b3f57e5)
 
 Command:
 ```shell
@@ -162,7 +162,7 @@ fastapi.utils ---> fastapi.exceptions
 ```
 
 ## Taskiq
-
+[Commit](https://github.com/taskiq-python/taskiq/commit/eb29304a697f151439c12132480c4c5b8247bfa4)
 Command:
 ```shell
 arch-blueprint . -m 'taskiq.*' '*.brokers.*' '*.scheduler.*'
