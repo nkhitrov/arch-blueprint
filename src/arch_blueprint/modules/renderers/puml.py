@@ -4,9 +4,12 @@ import textwrap
 from string import Template
 from typing import Final
 
-from arch_blueprint.models import CyclicDependency
-from arch_blueprint.modules import BlueprintModule
-from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, BlueprintRenderer
+from arch_blueprint.modules.models import CyclicDependency
+from arch_blueprint.modules.module import BlueprintModule
+from arch_blueprint.modules.renderers import (
+    CYCLE_HIGHLIGHT_COLOR,
+    BlueprintModuleRenderer,
+)
 
 _HEADER: Final = textwrap.dedent(
     """\
@@ -33,7 +36,7 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
 )
 
 
-class PlantUmlRenderer(BlueprintRenderer):
+class PlantUmlModuleRenderer(BlueprintModuleRenderer):
     """PlantUML diagram renderer."""
 
     def _format_module(self, module: BlueprintModule, color: str) -> str:

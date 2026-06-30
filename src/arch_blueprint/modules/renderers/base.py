@@ -5,9 +5,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, final
 
-from arch_blueprint.analyzer import CycleAnalyzer
-from arch_blueprint.models import CyclicDependency, ModuleEdge, NamespaceLink
-from arch_blueprint.modules import BlueprintModule
+from arch_blueprint.modules.analyzer import CycleAnalyzer
+from arch_blueprint.modules.models import CyclicDependency, ModuleEdge, NamespaceLink
+from arch_blueprint.modules.module import BlueprintModule
 
 CYCLE_HIGHLIGHT_COLOR: Final = "#E74C3C"
 
@@ -46,7 +46,7 @@ DEFAULT_OPTIONS: Final = RendererOptions(
 )
 
 
-class BlueprintRenderer(ABC):
+class BlueprintModuleRenderer(ABC):
     """ABC using Template Method pattern for rendering architecture diagrams."""
 
     def __init__(self, options: RendererOptions | None = None) -> None:

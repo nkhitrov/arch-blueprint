@@ -7,7 +7,7 @@ import grimp
 from grimp import ImportGraph
 
 from arch_blueprint.modules import BlueprintModule
-from arch_blueprint.renderer.base import BlueprintRenderer
+from arch_blueprint.modules.renderers import BlueprintModuleRenderer
 
 
 class ArchBlueprint:
@@ -19,7 +19,7 @@ class ArchBlueprint:
         self,
         project_dir: str,
         target_names: Sequence[str],
-        renderer: BlueprintRenderer,
+        renderer: BlueprintModuleRenderer,
         sys_path: Optional[list[str]] = None,
     ) -> None:
         self.project_dir = project_dir
@@ -41,10 +41,14 @@ class ArchBlueprint:
         components = module_name.split(".")
         for level in range(len(components)):
             candidate_name = ".".join(components[: level + 1])
-            candidate = importlib.import_module(candidate_name)
+            try:
+                candidate = importlib.import_module(candidate_name)
+            except ModuleNotFoundError:
+                raise ValueError(f"module not found: {candidate_name}")
             if candidate.__file__:
                 return candidate_name
-        raise ImportError(
+
+        raise ValueError(
             f"Can't import module '{module_name}'. Is it on the Python path?",
         )
 

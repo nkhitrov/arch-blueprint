@@ -214,3 +214,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Idea files
+.idea/
+
+# Local file for debug render
+out*

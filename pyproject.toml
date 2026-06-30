@@ -7,8 +7,12 @@ readme = "README.md"
 keywords = ["graphs", "plantuml", "architecture", "diagrams"]
 classifiers = ["Topic :: Multimedia :: Graphics", "Topic :: Utilities"]
 
-requires-python = ">=3.9"
-dependencies = ["grimp>=3.13"]
+requires-python = ">=3.11"
+dependencies = [
+    "gitmatch>=0.2.1",
+    "grimp>=3.13",
+    "libcst>=1.8.6",
+]
 
 [project.urls]
 Homepage = "https://github.com/nkhitrov/arch-blueprint"
@@ -38,10 +42,6 @@ dev = [
   "ruff>=0.14.3",
 ]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-
 [tool.mypy]
 strict = true
 ignore_missing_imports = true
@@ -54,10 +54,8 @@ allow_untyped_decorators = true
 
 [tool.pytest.ini_options]
 log_level = 'INFO'
-anyio_mode = "auto"
 
 [tool.ruff]
-target-version = "py39"
 # List of enabled rulsets.
 # See https://docs.astral.sh/ruff/rules/ for more information.
 lint.select = [
@@ -121,9 +119,6 @@ ignore-decorators = ["typing.overload"]
 
 [tool.ruff.lint.pylint]
 allow-magic-value-types = ["int", "str", "float"]
-
-[tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["taskiq_dependencies.Depends", "taskiq.TaskiqDepends"]
 
 [tool.typos.files]
 extend-exclude = [

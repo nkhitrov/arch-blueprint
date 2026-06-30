@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from arch_blueprint.models import CyclicDependency, ModuleEdge, NamespaceLink
+from .models import CyclicDependency, ModuleEdge, NamespaceLink
 
 
 class CycleAnalyzer:

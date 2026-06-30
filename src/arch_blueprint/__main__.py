@@ -3,19 +3,21 @@ from types import MappingProxyType
 from typing import Final
 
 from arch_blueprint.blueprint import ArchBlueprint
-from arch_blueprint.renderer.base import (
+from arch_blueprint.modules.renderers import (
     DEFAULT_OPTIONS,
-    BlueprintRenderer,
+    BlueprintModuleRenderer,
     RendererOptions,
 )
-from arch_blueprint.renderer.d2 import D2LangRenderer
-from arch_blueprint.renderer.puml import PlantUmlRenderer
+from arch_blueprint.modules.renderers import D2ModuleRenderer
+from arch_blueprint.modules.renderers import PlantUmlModuleRenderer
 
-_RENDERERS: Final[MappingProxyType[str, type[BlueprintRenderer]]] = MappingProxyType(
-    {
-        "puml": PlantUmlRenderer,
-        "d2": D2LangRenderer,
-    },
+_RENDERERS: Final[MappingProxyType[str, type[BlueprintModuleRenderer]]] = (
+    MappingProxyType(
+        {
+            "puml": PlantUmlModuleRenderer,
+            "d2": D2ModuleRenderer,
+        },
+    )
 )
 
 
@@ -39,7 +41,7 @@ def main() -> None:
         help=(
             "Selected modules for rendering "
             "(examples: 'myapp.somemodule', "
-            "'myapp.somemodule.*', 'myapp.somemodule.**')"
+            "'myapp.somemodule.*', 'myapp.*.*.models.*', 'myapp.somemodule.**')"
         ),
     )
     parser.add_argument(
@@ -63,12 +65,17 @@ def main() -> None:
         show_cycle_details=args.cycle_details,
     )
     renderer = _RENDERERS[args.format](options=options)
-    result = ArchBlueprint(
-        project_dir=args.project_dir,
-        target_names=args.modules,
-        renderer=renderer,
-    ).run()
+    try:
+        result = ArchBlueprint(
+            project_dir=args.project_dir,
+            target_names=args.modules,
+            renderer=renderer,
+        ).run()
+    except ValueError as e:
+        result = "Error: {}".format(e)
+
     print(result)  # noqa: T201
+    exit(1)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
 
-from arch_blueprint.models import ModuleEdge, NamespaceLink
+from arch_blueprint.modules.models import NamespaceLink, ModuleEdge
 
 
 @dataclass

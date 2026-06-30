@@ -4,11 +4,11 @@ import textwrap
 from string import Template
 from typing import Final
 
-from arch_blueprint.models import CyclicDependency
-from arch_blueprint.modules import BlueprintModule
-from arch_blueprint.renderer.base import (
+from arch_blueprint.modules.models import CyclicDependency
+from arch_blueprint.modules.module import BlueprintModule
+from arch_blueprint.modules.renderers.base import (
     CYCLE_HIGHLIGHT_COLOR,
-    BlueprintRenderer,
+    BlueprintModuleRenderer,
     RendererOptions,
 )
 
@@ -78,7 +78,7 @@ _CYCLE_CONTAINER_TEMPLATE: Final = Template(
 )
 
 
-class D2LangRenderer(BlueprintRenderer):
+class D2ModuleRenderer(BlueprintModuleRenderer):
     """D2 diagram renderer."""
 
     def __init__(self, options: RendererOptions | None = None) -> None:
