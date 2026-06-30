@@ -1,4 +1,5 @@
 import importlib
+import pkgutil
 import sys
 from collections.abc import Sequence
 from typing import Optional
@@ -30,11 +31,25 @@ class ArchBlueprint:
     def run(self) -> str:
         self.sys_path.append(self.project_dir)
 
-        top_level_module = self._get_top_level_package(self.target_names[0])
-        self.graph = grimp.build_graph(top_level_module)
+        packages = self._resolve_grimp_packages()
+        if not packages:
+            raise ImportError(
+                "None of the given --modules patterns resolve to an analyzable "
+                "source package.",
+            )
+        self.graph = grimp.build_graph(*packages)
 
         blueprint_modules = self.collect_modules()
         return self.renderer.render(blueprint_modules)
+
+    def _resolve_grimp_packages(self) -> list[str]:
+        packages: list[str] = []
+        for name in self.target_names:
+            top_level = self._get_top_level_package(name)
+            for graphable in self._expand_to_graphable(top_level):
+                if graphable not in packages:
+                    packages.append(graphable)
+        return packages
 
     @staticmethod
     def _get_top_level_package(module_name: str) -> str:
@@ -42,11 +57,30 @@ class ArchBlueprint:
         for level in range(len(components)):
             candidate_name = ".".join(components[: level + 1])
             candidate = importlib.import_module(candidate_name)
-            if candidate.__file__:
+            if getattr(candidate, "__file__", None) or hasattr(candidate, "__path__"):
                 return candidate_name
         raise ImportError(
             f"Can't import module '{module_name}'. Is it on the Python path?",
         )
+
+    @classmethod
+    def _expand_to_graphable(cls, package: str) -> list[str]:
+        module = importlib.import_module(package)
+        if getattr(module, "__file__", None):
+            return [package]  # regular package: grimp can build it directly
+
+        # PEP 420 namespace package — grimp can't build it; expand to its
+        # regular sub-packages (the graph-able portions).
+        graphable: list[str] = []
+        for info in pkgutil.iter_modules(module.__path__):
+            if info.ispkg:
+                graphable.extend(cls._expand_to_graphable(f"{package}.{info.name}"))
+        if not graphable:
+            sys.stderr.write(
+                f"warning: '{package}' is a namespace package with no analyzable "
+                f"source; skipping.\n",
+            )
+        return graphable
 
     def collect_modules(self) -> list[BlueprintModule]:
         module_names = self.prepare_modules_list()
