@@ -4,9 +4,15 @@ import textwrap
 from string import Template
 from typing import Final
 
-from arch_blueprint.models import CyclicDependency
-from arch_blueprint.modules import BlueprintModule
-from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, BlueprintRenderer
+from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.domain.node import Node, NodeKind
+from arch_blueprint.metrics import BlockBuilder
+from arch_blueprint.renderer.base import (
+    CYCLE_HIGHLIGHT_COLOR,
+    BlueprintRenderer,
+    CycleRender,
+)
+from arch_blueprint.renderer.cycles import cycle_detail_sections
 
 _HEADER: Final = textwrap.dedent(
     """\
@@ -32,35 +38,56 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
     ).rstrip(),
 )
 
+# PlantUML stereotype spot letter per node kind.
+_SPOT_LETTER: Final = {NodeKind.MODULE: "M"}
+
+
+class _PumlBlockBuilder:
+    """Renders metric rows as PlantUML class members."""
+
+    def row(self, label: str, value: str) -> str:
+        return f"{label}: {value}"
+
 
 class PlantUmlRenderer(BlueprintRenderer):
     """PlantUML diagram renderer."""
 
-    def _format_module(self, module: BlueprintModule, color: str) -> str:
-        return f"class {module.name} <<(M, {color})>>"
+    def _block_builder(self) -> BlockBuilder:
+        return _PumlBlockBuilder()
+
+    def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
+        spot = _SPOT_LETTER[node.kind]
+        head = f"class {node.id} <<({spot}, {color})>>"
+        if not blocks:
+            return head
+        body = "\n".join(f"  {block}" for block in blocks)
+        return f"{head} {{\n{body}\n}}"
 
     def _format_link(self, source: str, target: str) -> str:
         return f"{source} ---> {target}"
 
-    def _format_cycle(self, cycle: CyclicDependency) -> str:
+    def _format_cycle(self, cycle: Cycle) -> CycleRender:
         color = CYCLE_HIGHLIGHT_COLOR
         link = f"{cycle.namespace_from} <-[{color},bold]-> {cycle.namespace_to}"
 
         if not self.options.show_cycle_details:
-            return link
+            return CycleRender(inline=link)
 
-        forward_details = "\n".join(self._format_edges(cycle.forward_edges))
-        backward_details = "\n".join(self._format_edges(cycle.backward_edges))
-
+        forward_details, backward_details = cycle_detail_sections(cycle)
         note = _CYCLE_NOTE_TEMPLATE.substitute(
             ns_a=cycle.namespace_from,
             ns_b=cycle.namespace_to,
-            forward_details=textwrap.indent(forward_details, "  "),
-            backward_details=textwrap.indent(backward_details, "  "),
+            forward_details=forward_details,
+            backward_details=backward_details,
         )
-        return f"{link}\n{note}"
+        return CycleRender(inline=f"{link}\n{note}")
 
-    def _combine_output(self, modules: list[str], links: list[str]) -> str:
-        modules_section = "\n".join(modules)
+    def _combine_output(
+        self,
+        nodes: list[str],
+        links: list[str],
+        deferred: list[str],
+    ) -> str:
+        nodes_section = "\n".join(nodes)
         links_section = "\n".join(links) + "\n" if links else ""
-        return f"{_HEADER}{modules_section}\n\n{links_section}@enduml\n"
+        return f"{_HEADER}{nodes_section}\n\n{links_section}@enduml\n"

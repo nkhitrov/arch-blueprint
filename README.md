@@ -12,8 +12,10 @@ pip install arch-blueprint
 
 Commands
 ```shell
-python arch-blueprint --help
-usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2}] [--no-cycle-details] project_dir
+arch-blueprint --help
+usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2}]
+                      [--metric NAME] [--no-cycle-details]
+                      project_dir
 
 Generate architecture diagrams for Python applications
 
@@ -22,11 +24,32 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --modules [MODULES ...], -m [MODULES ...]
-                        Selected modules for rendering (examples: 'myapp.somemodule', 'myapp.somemodule.*', 'myapp.*.*.models.*', 'myapp.somemodule.**')
-  --format {puml,d2}, -f {puml,d2}
-                        Output format. Possible values: dict_keys(['puml', 'd2'])
-  --no-cycle-details    Hide detailed module-level information for cyclic dependencies
+  --modules, -m [MODULES ...]
+                        Selected modules for rendering (examples:
+                        'myapp.somemodule', 'myapp.somemodule.*',
+                        'myapp.*.*.models.*', 'myapp.somemodule.**')
+  --format, -f {puml,d2}
+                        Output format. Possible values: ['puml', 'd2']
+  --metric NAME         Show a metric block on each node (repeatable). e.g.
+                        --metric fan_in
+  --no-cycle-details    Hide detailed information for cyclic dependencies
+```
+
+### Metrics
+
+- `--metric NAME` adds a per-node metric block (repeatable). Built-in metrics:
+  `fan_in`, `fan_out`, `instability`. New metrics are added as self-contained
+  plugins under `src/arch_blueprint/metrics/` and registered in
+  `metrics/__init__.py` — no changes to the extractor or renderers are needed.
+
+## Development
+
+This project uses [`uv`](https://docs.astral.sh/uv/).
+
+```shell
+uv sync                       # install deps
+uv run pytest                 # run the test suite
+uv run pre-commit run -a      # lint, format, type-check, test (what CI runs)
 ```
 
 # Examples
@@ -342,6 +365,5 @@ taskiq.task ---> taskiq.abc
 taskiq.task ---> taskiq.compat
 taskiq.task ---> taskiq.exceptions
 taskiq.task ---> taskiq.result
-@enduml
 @enduml
 ```

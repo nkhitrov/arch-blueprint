@@ -13,7 +13,8 @@ which constructs the import graph.
 This project uses `uv` for environment and dependency management.
 
 - Install/sync deps: `uv sync` (CI uses `uv sync --locked`)
-- Run all checks (what CI runs): `uv run pre-commit run -a`
+- Run all checks (what CI runs): `uv run pre-commit run -a` (lint, format, mypy, pytest)
+- Run the test suite only: `uv run pytest`
 - Format: `uv run ruff format`
 - Lint (with autofix): `uv run ruff check --fix src`
 - Type-check (strict mypy): `uv run mypy ./src`
@@ -25,12 +26,20 @@ This project uses `uv` for environment and dependency management.
     packages (e.g. `-m 'app1.*' -m 'app2.*'`). A cross-package link is drawn only when both
     endpoints are in the selected set.
   - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
+  - `--metric NAME` (repeatable) shows a per-node metric block (`fan_in`, `fan_out`, `instability`).
 - Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
-CI (`.github/workflows/test.yml`) runs `pre-commit` across Python 3.9–3.14. There is currently
-**no pytest test suite** in the repo (the `pyproject.toml` pytest/`tests/*` config is aspirational);
-verification is done via the linters/type-checker and by running the CLI.
+CI (`.github/workflows/test.yml`) has two jobs: a single-version `lint` job (`pre-commit`, skipping
+pytest) and a `test` matrix running `pytest` across Python 3.9–3.14, on push to `master` and on PRs.
+
+### Tests
+
+`tests/` holds the suite. `tests/test_golden.py` runs the CLI as a subprocess over fixtures and
+asserts byte-exact output against snapshots in `tests/golden/` — the regression guard; when output
+*intentionally* changes, regenerate the affected golden file. `tests/test_units.py` covers the
+domain, metrics, analyzer, and extractors. Fixtures: `examples/project_root` (multi-root + namespace
+packages) and `tests/fixtures/cyclic` (a module cycle).
 
 ## Git conventions
 
@@ -40,35 +49,45 @@ verification is done via the linters/type-checker and by running the CLI.
 
 ## Architecture
 
-`ArchBlueprint.run()` (`src/arch_blueprint/blueprint.py`) drives a three-stage pipeline:
+`ArchBlueprint.run()` (`src/arch_blueprint/blueprint.py`) is a thin orchestrator over four layers:
 
-1. **Build the import graph** — appends `project_dir` to `sys.path` (so the target project is
-   importable without manual `PYTHONPATH`), then resolves **every** `--modules` pattern to a
-   top-level package via `_resolve_grimp_packages()` and calls `grimp.build_graph(*packages)` with
-   all of them (multiple roots are supported). `_expand_to_graphable()` handles PEP 420 namespace
-   packages (no `__init__.py`), which grimp cannot build directly: it expands a namespace package to
-   its regular sub-packages, and skips one that has no analyzable source (with a stderr warning)
-   instead of crashing.
-2. **Collect modules** — expands the `--modules` patterns against the graph, drops parent
-   namespaces of already-selected modules (`_exclude_sub_modules`), and builds `BlueprintModule`s
-   (`modules.py`). Each module derives its `namespace`/`depth` and aggregates its imports into
-   `NamespaceLink`s via `find_namespace_links()`. Data classes live in `models.py`
-   (`ModuleEdge`, `NamespaceLink`, `CyclicDependency`).
-3. **Render** — a `BlueprintRenderer` turns modules + links into the output string.
+1. **Source** (`extract/source.py`) — `GrimpSource` owns all grimp/`sys.path` mechanics: it appends
+   `project_dir` to `sys.path`, resolves every `--modules` pattern to a top-level package, and builds
+   the grimp graph (multiple roots supported). It handles PEP 420 namespace packages grimp can't
+   build directly (expands them, skips ones with no analyzable source with a stderr warning). It
+   exposes `selected_modules()` and `imports_of(module)`.
+2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`) turns the source
+   into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected module. An extractor
+   assigns each `Node` its `NodeKind` and namespace, so a new node kind is added by writing another
+   extractor — the domain, metrics, and renderers do not change.
+3. **Domain + metrics** — `domain/` holds the data model: `Node` (id, `NodeKind`, namespace — frozen
+   and hashable, **no metric fields**), `Edge`, `Link`, `Cycle`, and `BlueprintGraph` (aggregates
+   edges into `Link`s via `build_links`, stores metrics in side maps keyed by id/namespace-pair).
+   `analyze/cycles.py` (`CycleAnalyzer`) finds bidirectional namespace dependencies — agnostic to
+   node kind. Metrics are **self-contained plugins** (`metrics/`): each implements `compute(graph)`
+   and `render_block(value, builder)`; `MetricRegistry.compute_all` fills `graph.node_metrics`.
+4. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
+
+### Adding a metric (Open/Closed)
+
+Add one file under `src/arch_blueprint/metrics/` implementing the `Metric` protocol (`name`,
+`applies_to`, `compute`, `render_block`) and register it in `metrics/__init__.py:default_registry`.
+The extractor and renderer cores do not change. `depth` drives node fill color; the demo metrics
+`fan_in`/`fan_out`/`instability` render as additive node blocks when requested via `--metric`.
 
 ### Renderers (Template Method pattern)
 
-`BlueprintRenderer` (`src/arch_blueprint/renderer/base.py`) defines the fixed `render()` algorithm
-and four abstract hooks: `_format_module`, `_format_link`, `_format_cycle`, `_combine_output`.
-Cycle detection is shared: `CycleAnalyzer.detect_cycles` (`analyzer.py`) finds bidirectional
-namespace dependencies, which renderers draw as highlighted cycles (`CYCLE_HIGHLIGHT_COLOR`).
-`RendererOptions` controls depth colors and whether cycle details are shown.
+`BlueprintRenderer` (`renderer/base.py`) defines the fixed, **stateless** `render(graph)` algorithm
+and abstract hooks: `_block_builder`, `_format_node`, `_format_link`, `_format_cycle`,
+`_combine_output`. `_format_cycle` returns a `CycleRender(inline, deferred)` so a renderer that must
+place cycle details elsewhere (D2) carries them out-of-band without mutating instance state. Shared
+cycle-detail formatting lives in `renderer/cycles.py`. `RendererOptions` controls depth colors,
+cycle details, the color metric, and which metric blocks are shown. Cycles are highlighted with
+`CYCLE_HIGHLIGHT_COLOR` (kept distinct from every `depth_colors` entry).
 
 To add a new output format:
-1. Subclass `BlueprintRenderer` in a new `src/arch_blueprint/renderer/<name>.py` and implement the
-   four abstract methods.
-2. Register it in the `_RENDERERS` mapping in `src/arch_blueprint/__main__.py`.
+1. Subclass `BlueprintRenderer` in a new `renderer/<name>.py` and implement the abstract hooks.
+2. Register it in the `_RENDERERS` mapping in `__main__.py`.
 
 Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer/d2.py`
-(`D2LangRenderer` — stateful: it accumulates `_cycle_notes` and resets them at the start of each
-`render()`).
+(`D2LangRenderer`). Both are stateless and reuse the shared helpers.

@@ -3,6 +3,8 @@ from types import MappingProxyType
 from typing import Final
 
 from arch_blueprint.blueprint import ArchBlueprint
+from arch_blueprint.extract.module_extractor import ModuleExtractor
+from arch_blueprint.metrics import default_registry
 from arch_blueprint.renderer.base import (
     DEFAULT_OPTIONS,
     BlueprintRenderer,
@@ -48,25 +50,38 @@ def main() -> None:
         required=False,
         default="puml",
         choices=_RENDERERS.keys(),
-        help=f"Output format. Possible values: {_RENDERERS.keys()}",
+        help=f"Output format. Possible values: {list(_RENDERERS.keys())}",
+    )
+    parser.add_argument(
+        "--metric",
+        action="append",
+        default=[],
+        dest="metrics",
+        metavar="NAME",
+        help="Show a metric block on each node (repeatable). e.g. --metric fan_in",
     )
     parser.add_argument(
         "--no-cycle-details",
         action="store_false",
         dest="cycle_details",
         default=True,
-        help="Hide detailed module-level information for cyclic dependencies",
+        help="Hide detailed information for cyclic dependencies",
     )
     args = parser.parse_args()
+
     options = RendererOptions(
         depth_colors=DEFAULT_OPTIONS.depth_colors,
         show_cycle_details=args.cycle_details,
+        shown_metrics=tuple(args.metrics),
     )
-    renderer = _RENDERERS[args.format](options=options)
+    registry = default_registry()
+    renderer = _RENDERERS[args.format](options=options, registry=registry)
     result = ArchBlueprint(
         project_dir=args.project_dir,
         target_names=args.modules,
         renderer=renderer,
+        extractor_cls=ModuleExtractor,
+        registry=registry,
     ).run()
     print(result)  # noqa: T201
 
