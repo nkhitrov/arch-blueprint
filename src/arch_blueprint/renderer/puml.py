@@ -6,11 +6,11 @@ from typing import Final
 
 from arch_blueprint.domain.graph import Cycle
 from arch_blueprint.domain.node import Node, NodeKind
-from arch_blueprint.metrics import BlockBuilder
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
     BlueprintRenderer,
     CycleRender,
+    LinkDecoration,
 )
 from arch_blueprint.renderer.cycles import cycle_detail_sections
 
@@ -42,18 +42,10 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
 _SPOT_LETTER: Final = {NodeKind.MODULE: "M"}
 
 
-class _PumlBlockBuilder:
-    """Renders metric rows as PlantUML class members."""
-
-    def row(self, label: str, value: str) -> str:
-        return f"{label}: {value}"
-
-
 class PlantUmlRenderer(BlueprintRenderer):
     """PlantUML diagram renderer."""
 
-    def _block_builder(self) -> BlockBuilder:
-        return _PumlBlockBuilder()
+    fmt = "puml"
 
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
         spot = _SPOT_LETTER[node.kind]
@@ -63,8 +55,17 @@ class PlantUmlRenderer(BlueprintRenderer):
         body = "\n".join(f"  {block}" for block in blocks)
         return f"{head} {{\n{body}\n}}"
 
-    def _format_link(self, source: str, target: str) -> str:
-        return f"{source} ---> {target}"
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        decoration: LinkDecoration,
+    ) -> str:
+        arrow = f"-[{','.join(decoration.styles)}]->" if decoration.styles else "--->"
+        link = f"{source} {arrow} {target}"
+        if decoration.labels:
+            link = f"{link} : {' '.join(decoration.labels)}"
+        return link
 
     def _format_cycle(self, cycle: Cycle) -> CycleRender:
         color = CYCLE_HIGHLIGHT_COLOR

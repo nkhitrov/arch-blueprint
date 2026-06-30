@@ -5,7 +5,8 @@ from typing import Optional
 
 from arch_blueprint.domain.graph import BlueprintGraph, MetricValue
 from arch_blueprint.domain.node import NodeKind
-from arch_blueprint.metrics.base import BlockBuilder
+from arch_blueprint.metrics.base import MetricKey
+from arch_blueprint.metrics.render import MetricTarget
 
 _ALL_KINDS = frozenset(NodeKind)
 
@@ -18,9 +19,11 @@ class InstabilityMetric:
     """
 
     name = "instability"
+    target = MetricTarget.NODE
     applies_to = _ALL_KINDS
+    render: Optional[str] = "text_row"
 
-    def compute(self, graph: BlueprintGraph) -> Mapping[str, MetricValue]:
+    def compute(self, graph: BlueprintGraph) -> Mapping[MetricKey, MetricValue]:
         fan_in: dict[str, int] = {node.id: 0 for node in graph.nodes}
         fan_out: dict[str, int] = {node.id: 0 for node in graph.nodes}
         for edge in graph.edges:
@@ -29,11 +32,8 @@ class InstabilityMetric:
             if edge.target in fan_in:
                 fan_in[edge.target] += 1
 
-        result: dict[str, MetricValue] = {}
+        result: dict[MetricKey, MetricValue] = {}
         for node in graph.nodes:
             total = fan_in[node.id] + fan_out[node.id]
             result[node.id] = round(fan_out[node.id] / total, 2) if total else 0.0
         return result
-
-    def render_block(self, value: MetricValue, builder: BlockBuilder) -> Optional[str]:
-        return builder.row("instability", str(value))

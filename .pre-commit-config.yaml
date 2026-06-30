@@ -6,8 +6,10 @@ repos:
     hooks:
       - id: check-ast
       - id: trailing-whitespace
+        exclude: ^tests/golden/
       - id: check-toml
       - id: end-of-file-fixer
+        exclude: ^tests/golden/
 
   - repo: local
     hooks:

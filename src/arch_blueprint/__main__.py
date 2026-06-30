@@ -4,7 +4,7 @@ from typing import Final
 
 from arch_blueprint.blueprint import ArchBlueprint
 from arch_blueprint.extract.module_extractor import ModuleExtractor
-from arch_blueprint.metrics import default_registry
+from arch_blueprint.metrics import MetricDisplay, default_registry, default_renders
 from arch_blueprint.renderer.base import (
     DEFAULT_OPTIONS,
     BlueprintRenderer,
@@ -58,7 +58,11 @@ def main() -> None:
         default=[],
         dest="metrics",
         metavar="NAME",
-        help="Show a metric block on each node (repeatable). e.g. --metric fan_in",
+        help=(
+            "Display a metric (repeatable). A node metric renders as a block on "
+            "each node (e.g. --metric fan_in); a link metric renders as a label "
+            "on each connection (e.g. --metric edge_weight)."
+        ),
     )
     parser.add_argument(
         "--no-cycle-details",
@@ -72,10 +76,14 @@ def main() -> None:
     options = RendererOptions(
         depth_colors=DEFAULT_OPTIONS.depth_colors,
         show_cycle_details=args.cycle_details,
-        shown_metrics=tuple(args.metrics),
     )
     registry = default_registry()
-    renderer = _RENDERERS[args.format](options=options, registry=registry)
+    renderer = _RENDERERS[args.format](
+        options=options,
+        registry=registry,
+        renders=default_renders(),
+        display=MetricDisplay(shown=tuple(args.metrics)),
+    )
     result = ArchBlueprint(
         project_dir=args.project_dir,
         target_names=args.modules,

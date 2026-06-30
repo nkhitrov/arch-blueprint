@@ -1,0 +1,23 @@
+direction: right
+app1.models: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app2.service: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+plugins.auth.backend: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+}
+app2 -> app1: edge_weight=1
+app2 -> plugins: edge_weight=1

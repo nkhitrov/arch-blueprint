@@ -26,7 +26,9 @@ This project uses `uv` for environment and dependency management.
     packages (e.g. `-m 'app1.*' -m 'app2.*'`). A cross-package link is drawn only when both
     endpoints are in the selected set.
   - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
-  - `--metric NAME` (repeatable) shows a per-node metric block (`fan_in`, `fan_out`, `instability`).
+  - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
+    `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
+    on each connection.
 - Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
@@ -64,26 +66,49 @@ packages) and `tests/fixtures/cyclic` (a module cycle).
    and hashable, **no metric fields**), `Edge`, `Link`, `Cycle`, and `BlueprintGraph` (aggregates
    edges into `Link`s via `build_links`, stores metrics in side maps keyed by id/namespace-pair).
    `analyze/cycles.py` (`CycleAnalyzer`) finds bidirectional namespace dependencies — agnostic to
-   node kind. Metrics are **self-contained plugins** (`metrics/`): each implements `compute(graph)`
-   and `render_block(value, builder)`; `MetricRegistry.compute_all` fills `graph.node_metrics`.
+   node kind. Metrics are **compute-only plugins** (`metrics/`): each declares a `target`
+   (`MetricTarget.NODE`/`LINK`), names a render plugin (`render`), and implements `compute(graph)`.
+   `MetricRegistry.compute_all` routes results by target into `graph.node_metrics` (keyed by node id)
+   or `graph.link_metrics` (keyed by namespace pair). **Render plugins** (`metrics/render.py`) are a
+   separate, registerable layer: each implements the `RenderPlugin` protocol (`name`, `attaches_to`,
+   `render(ctx, label, value) -> RenderFragment`) and is format-aware via `RenderContext.fmt`, so it
+   can emit node-block text, edge labels, or edge shapes/colors. New render types are added without
+   changing library code. `MetricDisplay` (`metrics/display.py`) is the separate config selecting
+   which metrics to display.
 4. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
 
 ### Adding a metric (Open/Closed)
 
 Add one file under `src/arch_blueprint/metrics/` implementing the `Metric` protocol (`name`,
-`applies_to`, `compute`, `render_block`) and register it in `metrics/__init__.py:default_registry`.
-The extractor and renderer cores do not change. `depth` drives node fill color; the demo metrics
-`fan_in`/`fan_out`/`instability` render as additive node blocks when requested via `--metric`.
+`target`, `applies_to`, `render`, `compute`) and register it in
+`metrics/__init__.py:default_registry`. The extractor and renderer cores do not change. A node metric
+sets `target = MetricTarget.NODE` and a `render` plugin name like `"text_row"`; a link metric sets
+`target = MetricTarget.LINK` and e.g. `"edge_label"` (its `compute` is keyed by `(src_ns, tgt_ns)`).
+`depth` is compute-only (`render = None`): it drives node fill color and is never displayed. Demo
+metrics: `fan_in`/`fan_out`/`instability` (node blocks) and `edge_weight` (link label), shown when
+requested via `--metric`. Link-metric labels apply to ordinary directed links; cyclic connections
+keep their own cycle rendering.
+
+### Adding a render type (plugin)
+
+Implement the `RenderPlugin` protocol in a new class (`name`, `attaches_to`,
+`render(ctx, label, value)` returning a `RenderFragment(text, style)`) and register it on a
+`RenderRegistry` (add to `metrics/render.py:default_renders` for a built-in, or register on a
+registry you construct — no library change needed). Branch on `ctx.fmt` (`"puml"`/`"d2"`) to emit
+format-specific output; `text` becomes a node line / edge label, `style` is injected into the edge's
+style slot by the renderer.
 
 ### Renderers (Template Method pattern)
 
 `BlueprintRenderer` (`renderer/base.py`) defines the fixed, **stateless** `render(graph)` algorithm
-and abstract hooks: `_block_builder`, `_format_node`, `_format_link`, `_format_cycle`,
-`_combine_output`. `_format_cycle` returns a `CycleRender(inline, deferred)` so a renderer that must
+and abstract hooks: `_format_node`, `_format_link(source, target, decoration)`, `_format_cycle`,
+`_combine_output` (plus a `fmt` class attribute). The core resolves each shown metric's render plugin
+itself and passes node-block text to `_format_node` and a `LinkDecoration(labels, styles)` to
+`_format_link`. `_format_cycle` returns a `CycleRender(inline, deferred)` so a renderer that must
 place cycle details elsewhere (D2) carries them out-of-band without mutating instance state. Shared
 cycle-detail formatting lives in `renderer/cycles.py`. `RendererOptions` controls depth colors,
-cycle details, the color metric, and which metric blocks are shown. Cycles are highlighted with
-`CYCLE_HIGHLIGHT_COLOR` (kept distinct from every `depth_colors` entry).
+cycle details, and the color metric; metric *selection* is the separate `MetricDisplay` argument.
+Cycles are highlighted with `CYCLE_HIGHLIGHT_COLOR` (kept distinct from every `depth_colors` entry).
 
 To add a new output format:
 1. Subclass `BlueprintRenderer` in a new `renderer/<name>.py` and implement the abstract hooks.

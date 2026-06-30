@@ -6,11 +6,11 @@ from typing import Final
 
 from arch_blueprint.domain.graph import Cycle
 from arch_blueprint.domain.node import Node
-from arch_blueprint.metrics import BlockBuilder
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
     BlueprintRenderer,
     CycleRender,
+    LinkDecoration,
 )
 from arch_blueprint.renderer.cycles import cycle_detail_sections
 
@@ -67,18 +67,10 @@ _CYCLE_CONTAINER_TEMPLATE: Final = Template(
 )
 
 
-class _D2BlockBuilder:
-    """Renders metric rows as D2 fields inside a node block."""
-
-    def row(self, label: str, value: str) -> str:
-        return f"{label}: {value}"
-
-
 class D2LangRenderer(BlueprintRenderer):
     """D2 diagram renderer (stateless: cycle notes flow through CycleRender)."""
 
-    def _block_builder(self) -> BlockBuilder:
-        return _D2BlockBuilder()
+    fmt = "d2"
 
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
         lines = [
@@ -92,8 +84,18 @@ class D2LangRenderer(BlueprintRenderer):
         lines.append("}")
         return "\n".join(lines)
 
-    def _format_link(self, source: str, target: str) -> str:
-        return f"{source} -> {target}"
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        decoration: LinkDecoration,
+    ) -> str:
+        link = f"{source} -> {target}"
+        if decoration.labels:
+            link = f"{link}: {'; '.join(decoration.labels)}"
+        if decoration.styles:
+            link = f"{link} {{{'; '.join(decoration.styles)}}}"
+        return link
 
     def _format_cycle(self, cycle: Cycle) -> CycleRender:
         connection = _CYCLE_CONNECTION_TEMPLATE.substitute(

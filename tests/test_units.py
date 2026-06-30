@@ -8,10 +8,17 @@ from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.extract.base import common_depth_namespaces, parent_namespace
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
-from arch_blueprint.metrics import default_registry
+from arch_blueprint.metrics import (
+    RenderContext,
+    RenderFragment,
+    default_registry,
+    default_renders,
+)
+from arch_blueprint.metrics.edge_weight import EdgeWeightMetric
 from arch_blueprint.metrics.fan_in import FanInMetric
 from arch_blueprint.metrics.fan_out import FanOutMetric
 from arch_blueprint.metrics.instability import InstabilityMetric
+from arch_blueprint.metrics.render import EdgeLabelRender, TextRowRender
 from arch_blueprint.renderer.base import RendererOptions
 from tests.conftest import CYCLIC_PROJECT
 
@@ -105,6 +112,56 @@ def test_registry_compute_all_populates_graph():
     assert graph.node_metrics["a.core"]["depth"] == 2
     assert graph.node_metrics["a.core"]["fan_out"] == 1
     assert graph.node_metrics["b.util"]["fan_in"] == 1
+
+
+def _multi_edge_graph() -> BlueprintGraph:
+    nodes = [
+        Node(id="a.core", kind=NodeKind.MODULE, namespace="a"),
+        Node(id="a.api", kind=NodeKind.MODULE, namespace="a"),
+        Node(id="b.util", kind=NodeKind.MODULE, namespace="b"),
+    ]
+    edges = {
+        _edge("a.core", "b.util", "a", "b"),
+        _edge("a.api", "b.util", "a", "b"),
+    }
+    return BlueprintGraph(nodes=nodes, edges=edges)
+
+
+def test_edge_weight_computes_per_link():
+    graph = _multi_edge_graph()
+    weights = EdgeWeightMetric().compute(graph)
+    assert weights == {("a", "b"): 2}
+
+
+def test_compute_all_routes_by_target():
+    graph = _multi_edge_graph()
+    default_registry().compute_all(graph)
+    # LINK metric lands in link_metrics, keyed by namespace pair.
+    assert graph.link_metrics[("a", "b")]["edge_weight"] == 2
+    # NODE metrics still land in node_metrics, keyed by node id.
+    assert graph.node_metrics["b.util"]["fan_in"] == 2
+    assert ("a", "b") not in graph.node_metrics
+
+
+# --- render plugins -------------------------------------------------------
+
+
+def test_edge_label_render():
+    fragment = EdgeLabelRender().render(RenderContext(fmt="puml"), "edge_weight", 3)
+    assert fragment == RenderFragment(text="edge_weight=3")
+
+
+def test_text_row_render():
+    fragment = TextRowRender().render(RenderContext(fmt="d2"), "fan_in", 2)
+    assert fragment == RenderFragment(text="fan_in: 2")
+
+
+def test_render_registry_lookup():
+    renders = default_renders()
+    edge_label = renders.get("edge_label")
+    assert edge_label is not None
+    assert edge_label.name == "edge_label"
+    assert renders.get("missing") is None
 
 
 # --- renderer options -----------------------------------------------------

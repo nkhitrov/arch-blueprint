@@ -8,7 +8,16 @@ from typing import Final, Optional, final
 from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.domain.graph import BlueprintGraph, Cycle, MetricValue
 from arch_blueprint.domain.node import Node
-from arch_blueprint.metrics import COLOR_METRIC, BlockBuilder, MetricRegistry
+from arch_blueprint.metrics import (
+    COLOR_METRIC,
+    MetricDisplay,
+    MetricRegistry,
+    MetricTarget,
+    RenderContext,
+    RenderFragment,
+    RenderRegistry,
+    default_renders,
+)
 
 # A distinct danger red for cycles; intentionally not one of DEFAULT_OPTIONS'
 # depth_colors so a cycle never visually collides with a node's depth color.
@@ -18,12 +27,11 @@ CYCLE_HIGHLIGHT_COLOR: Final = "#C0392B"
 @dataclass(frozen=True)
 @final
 class RendererOptions:
-    """Configuration options for diagram renderers."""
+    """Styling options for diagram renderers (metric *selection* is separate)."""
 
     depth_colors: Sequence[str]
     show_cycle_details: bool = False
     color_metric: str = COLOR_METRIC
-    shown_metrics: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.depth_colors:
@@ -64,16 +72,36 @@ class CycleRender:
     deferred: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class LinkDecoration:
+    """Render-plugin output attached to a single directed link.
+
+    ``labels`` are text fragments shown on the arrow; ``styles`` are raw,
+    format-specific style payloads the renderer injects into the edge.
+    """
+
+    labels: tuple[str, ...] = ()
+    styles: tuple[str, ...] = ()
+
+
 class BlueprintRenderer(ABC):
     """ABC using Template Method pattern for rendering architecture diagrams."""
+
+    #: Output format id (``"puml"`` / ``"d2"``) passed to render plugins.
+    #: Concrete renderers must set this.
+    fmt: str
 
     def __init__(
         self,
         options: Optional[RendererOptions] = None,
         registry: Optional[MetricRegistry] = None,
+        renders: Optional[RenderRegistry] = None,
+        display: Optional[MetricDisplay] = None,
     ) -> None:
         self.options = options or DEFAULT_OPTIONS
         self.registry = registry
+        self.renders = renders or default_renders()
+        self.display = display or MetricDisplay()
 
     def render(self, graph: BlueprintGraph) -> str:
         """Template method: orchestrates the rendering algorithm."""
@@ -98,17 +126,17 @@ class BlueprintRenderer(ABC):
     ) -> list[str]:
         if self.registry is None:
             return []
-        builder = self._block_builder()
+        ctx = RenderContext(fmt=self.fmt)
         blocks: list[str] = []
-        for name in self.options.shown_metrics:
+        for name in self.display.shown:
             metric = self.registry.get(name)
-            if metric is None or node.kind not in metric.applies_to:
+            if metric is None or metric.target is not MetricTarget.NODE:
                 continue
-            if name not in metrics:
+            if node.kind not in metric.applies_to or name not in metrics:
                 continue
-            block = metric.render_block(metrics[name], builder)
-            if block is not None:
-                blocks.append(block)
+            fragment = self._render_metric(ctx, metric.render, name, metrics[name])
+            if fragment is not None and fragment.text:
+                blocks.append(fragment.text)
         return blocks
 
     def _render_links(self, graph: BlueprintGraph) -> tuple[list[str], list[str]]:
@@ -137,15 +165,52 @@ class BlueprintRenderer(ABC):
                 processed.add(pair)
                 processed.add((pair[1], pair[0]))
             else:
-                links.append(self._format_link(pair[0], pair[1]))
+                decoration = self._link_decoration(graph, pair)
+                links.append(self._format_link(pair[0], pair[1], decoration))
                 processed.add(pair)
 
         return links, deferred
 
-    @abstractmethod
-    def _block_builder(self) -> BlockBuilder:
-        """Return the format-specific helper metrics use to render their blocks."""
-        ...
+    def _link_decoration(
+        self,
+        graph: BlueprintGraph,
+        pair: tuple[str, str],
+    ) -> LinkDecoration:
+        if self.registry is None:
+            return LinkDecoration()
+        metrics = graph.link_metrics.get(pair, {})
+        ctx = RenderContext(fmt=self.fmt)
+        labels: list[str] = []
+        styles: list[str] = []
+        for name in self.display.shown:
+            metric = self.registry.get(name)
+            if metric is None or metric.target is not MetricTarget.LINK:
+                continue
+            if name not in metrics:
+                continue
+            fragment = self._render_metric(ctx, metric.render, name, metrics[name])
+            if fragment is None:
+                continue
+            if fragment.text:
+                labels.append(fragment.text)
+            if fragment.style:
+                styles.append(fragment.style)
+        return LinkDecoration(labels=tuple(labels), styles=tuple(styles))
+
+    def _render_metric(
+        self,
+        ctx: RenderContext,
+        render_name: Optional[str],
+        label: str,
+        value: MetricValue,
+    ) -> Optional[RenderFragment]:
+        """Resolve and invoke the metric's render plugin; return its fragment."""
+        if render_name is None:
+            return None
+        plugin = self.renders.get(render_name)
+        if plugin is None:
+            return None
+        return plugin.render(ctx, label, value)
 
     @abstractmethod
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
@@ -153,8 +218,13 @@ class BlueprintRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_link(self, source: str, target: str) -> str:
-        """Format a unidirectional link between namespaces."""
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        decoration: LinkDecoration,
+    ) -> str:
+        """Format a unidirectional link between namespaces, with any decoration."""
         ...
 
     @abstractmethod

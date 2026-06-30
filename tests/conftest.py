@@ -14,6 +14,7 @@ CYCLIC_PROJECT = _FIXTURES / "cyclic"
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
 CYCLIC_MODULES = ["-m", "pkg_a.*", "-m", "pkg_b.*"]
 SHOW_METRICS = ["--metric", "fan_in", "--metric", "fan_out", "--metric", "instability"]
+SHOW_LINK_METRIC = ["--metric", "edge_weight"]
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ SCENARIOS = [
         "cyclic_nodetails", CYCLIC_PROJECT, [*CYCLIC_MODULES, "--no-cycle-details"]
     ),
     Scenario("metrics", CYCLIC_PROJECT, [*CYCLIC_MODULES, *SHOW_METRICS]),
+    Scenario("link_metrics", EXAMPLE_PROJECT, [*EXAMPLE_MODULES, *SHOW_LINK_METRIC]),
 ]
 
 
