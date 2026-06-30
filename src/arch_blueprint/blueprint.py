@@ -1,7 +1,7 @@
 import importlib
-import pkgutil
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
+from pathlib import Path
 from typing import Optional
 
 import grimp
@@ -65,22 +65,44 @@ class ArchBlueprint:
 
     @classmethod
     def _expand_to_graphable(cls, package: str) -> list[str]:
-        module = importlib.import_module(package)
-        if getattr(module, "__file__", None):
-            return [package]  # regular package: grimp can build it directly
-
-        # PEP 420 namespace package — grimp can't build it; expand to its
-        # regular sub-packages (the graph-able portions).
-        graphable: list[str] = []
-        for info in pkgutil.iter_modules(module.__path__):
-            if info.ispkg:
-                graphable.extend(cls._expand_to_graphable(f"{package}.{info.name}"))
+        graphable = cls._find_graphable_packages(package)
         if not graphable:
             sys.stderr.write(
                 f"warning: '{package}' is a namespace package with no analyzable "
                 f"source; skipping.\n",
             )
         return graphable
+
+    @classmethod
+    def _find_graphable_packages(cls, package: str) -> list[str]:
+        module = importlib.import_module(package)
+        if getattr(module, "__file__", None):
+            return [package]  # regular package: grimp can build it directly
+
+        # PEP 420 namespace package — grimp can't build it. Descend through its
+        # directories (including nested namespace dirs) to reach regular packages.
+        graphable: list[str] = []
+        for child in cls._child_package_dirs(module.__path__):
+            graphable.extend(cls._find_graphable_packages(f"{package}.{child}"))
+        return graphable
+
+    @staticmethod
+    def _child_package_dirs(search_paths: Iterable[str]) -> list[str]:
+        names: list[str] = []
+        seen: set[str] = set()
+        for path in search_paths:
+            try:
+                entries = sorted(Path(path).iterdir())
+            except OSError:
+                continue
+            for entry in entries:
+                name = entry.name
+                if name in seen or name == "__pycache__" or not name.isidentifier():
+                    continue
+                if entry.is_dir():
+                    seen.add(name)
+                    names.append(name)
+        return names
 
     def collect_modules(self) -> list[BlueprintModule]:
         module_names = self.prepare_modules_list()
