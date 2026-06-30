@@ -32,6 +32,12 @@ CI (`.github/workflows/test.yml`) runs `pre-commit` across Python 3.9–3.14. Th
 **no pytest test suite** in the repo (the `pyproject.toml` pytest/`tests/*` config is aspirational);
 verification is done via the linters/type-checker and by running the CLI.
 
+## Git conventions
+
+- Do **not** add self-references to commit messages or PR bodies — no `Co-Authored-By: Claude`
+  trailers, no "Generated with Claude Code" lines, no mention of the assistant. Keep commit
+  messages about the change only.
+
 ## Architecture
 
 `ArchBlueprint.run()` (`src/arch_blueprint/blueprint.py`) drives a three-stage pipeline:
