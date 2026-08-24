@@ -76,7 +76,7 @@ class _CapturingRenderer(BlueprintRenderer):
     ) -> str:
         return ""
 
-    def _format_cycle(self, cycle: Cycle) -> CycleRender:
+    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
         return CycleRender(inline="")
 
     def _combine_output(
@@ -177,6 +177,22 @@ def test_pipeline_fills_in_the_cycles() -> None:
         renderer=renderer,
     ).run()
     assert len(renderer.captured.cycles) == 1
+
+
+def test_cycle_label_carries_both_directions() -> None:
+    """A cycle is one connection standing for two links, so it has two values."""
+    graph = make_graph(
+        ["a.core", "a.api", "b.util"],
+        [
+            make_edge("a.core", "b.util", "a", "b"),
+            make_edge("a.api", "b.util", "a", "b"),
+            make_edge("b.util", "a.core", "b", "a"),
+        ],
+    )
+    default_registry().compute_all(graph)
+    graph.cycles = CycleAnalyzer.detect_cycles(graph.links)
+    output = PlantUmlRenderer(plan=_plan("puml", "edge_weight")).render(graph)
+    assert "a <-[#C0392B,bold]-> b : edge_weight=2/1" in output
 
 
 def test_d2_defers_cycle_details_to_a_separate_block() -> None:

@@ -15,8 +15,20 @@ from arch_blueprint.renderer.base import (
 from arch_blueprint.renderer.cycles import cycle_detail_sections
 
 _CYCLE_CONNECTION_TEMPLATE: Final = Template(
-    '$ns_a <-> $ns_b: CYCLE {style.stroke: "$color"; style.stroke-width: 4}',
+    '$ns_a <-> $ns_b: $label {style.stroke: "$color"; style.stroke-width: 4}',
 )
+
+#: Characters that end or nest a D2 statement, so a bare label cannot contain them.
+_LABEL_SPECIALS: Final = frozenset(';{}|#"')
+
+
+def _quote_label(label: str) -> str:
+    """Quote a connection label that would otherwise terminate the statement."""
+    if not _LABEL_SPECIALS.intersection(label):
+        return label
+    escaped = label.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
 
 _CYCLE_NOTE_COLOR: Final = "#FADBD8"
 _CYCLE_CONTAINER_FILL: Final = "#FEF9E7"
@@ -92,15 +104,19 @@ class D2LangRenderer(BlueprintRenderer):
     ) -> str:
         link = f"{source} -> {target}"
         if decoration.labels:
-            link = f"{link}: {'; '.join(decoration.labels)}"
+            link = f"{link}: {_quote_label(', '.join(decoration.labels))}"
         if decoration.styles:
             link = f"{link} {{{'; '.join(decoration.styles)}}}"
         return link
 
-    def _format_cycle(self, cycle: Cycle) -> CycleRender:
+    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+        label = "CYCLE"
+        if decoration.labels:
+            label = f"{label} {' '.join(decoration.labels)}"
         connection = _CYCLE_CONNECTION_TEMPLATE.substitute(
             ns_a=cycle.namespace_from,
             ns_b=cycle.namespace_to,
+            label=_quote_label(label),
             color=CYCLE_HIGHLIGHT_COLOR,
         )
         if not self.options.show_cycle_details:
