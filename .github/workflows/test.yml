@@ -26,16 +26,22 @@ jobs:
 
   test:
     name: Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        # One Windows leg: its console is not UTF-8, and diagram output contains
+        # arrows. Without it an encoding regression is invisible here.
+        include:
+          - os: windows-latest
+            python-version: '3.12'
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
