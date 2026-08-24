@@ -40,6 +40,12 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
 
 # PlantUML stereotype spot letter per node kind.
 _SPOT_LETTER: Final = {NodeKind.MODULE: "M"}
+_DEFAULT_SPOT: Final = "M"
+
+#: Spot letter and fill for a namespace container. The color is deliberately
+#: outside DEFAULT_OPTIONS.depth_colors so a container never reads as a node.
+_GROUP_SPOT: Final = "P"
+_GROUP_COLOR: Final = "#95A5A6"
 
 
 class PlantUmlRenderer(BlueprintRenderer):
@@ -48,12 +54,22 @@ class PlantUmlRenderer(BlueprintRenderer):
     fmt = "puml"
 
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
-        spot = _SPOT_LETTER[node.kind]
+        spot = _SPOT_LETTER.get(node.kind, _DEFAULT_SPOT)
         head = f"class {node.id} <<({spot}, {color})>>"
         if not blocks:
             return head
         body = "\n".join(f"  {block}" for block in blocks)
         return f"{head} {{\n{body}\n}}"
+
+    def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
+        """Declare the namespace as a package so links can point at something.
+
+        Without it PlantUML invents an empty element for every arrow endpoint
+        that no class is named after.
+        """
+        body = "\n".join(f"  {line}" for node in nodes for line in node.splitlines())
+        head = f"package {namespace} <<({_GROUP_SPOT}, {_GROUP_COLOR})>> {{"
+        return [f"{head}\n{body}\n}}"]
 
     def _format_link(
         self,

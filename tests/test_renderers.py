@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from arch_blueprint.analyze.cycles import CycleAnalyzer
+from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.blueprint import ArchBlueprint
 from arch_blueprint.domain.graph import BlueprintGraph, Cycle
 from arch_blueprint.domain.node import Node
@@ -202,3 +203,29 @@ def test_d2_defers_cycle_details_to_a_separate_block() -> None:
     output = D2LangRenderer(plan=_plan("d2"), options=options).render(graph)
     assert "a <-> b: CYCLE" in output
     assert '"Cycle Details"' in output
+
+
+def test_puml_wraps_grouped_nodes_in_a_package() -> None:
+    graph = _computed_graph()
+    graph.groups = GroupAnalyzer.build(graph)
+    output = PlantUmlRenderer(plan=_plan("puml")).render(graph)
+    assert "package a <<(P, #95A5A6)>> {\n  class a.core" in output
+
+
+def test_d2_leaves_grouping_to_its_own_nesting() -> None:
+    """D2 nests by dotted name already: ``a.core`` lands in container ``a``."""
+    graph = _computed_graph()
+    graph.groups = GroupAnalyzer.build(graph)
+    output = D2LangRenderer(plan=_plan("d2")).render(graph)
+    assert "package" not in output
+    assert output.startswith("direction: right\na.core: {")
+
+
+def test_pipeline_fills_in_the_groups() -> None:
+    renderer = _CapturingRenderer(plan=_plan("puml"))
+    ArchBlueprint(
+        project_dir=str(CYCLIC_PROJECT),
+        target_names=["pkg_a.*", "pkg_b.*"],
+        renderer=renderer,
+    ).run()
+    assert {group.namespace for group in renderer.captured.groups} == {"pkg_a", "pkg_b"}

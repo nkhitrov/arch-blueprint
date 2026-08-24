@@ -33,6 +33,19 @@ class Link:
 
 
 @dataclass(frozen=True)
+class Group:
+    """Nodes a renderer may draw inside one namespace container.
+
+    A group exists only for a namespace that links point at but no node is named
+    after; a namespace that *is* a node id needs no container, and wrapping a
+    node in a container of its own name is a PlantUML syntax error.
+    """
+
+    namespace: str
+    members: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Cycle:
     """A bidirectional dependency between two namespaces with both directions."""
 
@@ -60,16 +73,17 @@ class BlueprintGraph:
     Metrics are stored beside identity (keyed by node id / namespace pair) so new
     metrics never change node/edge hashing or the extractor.
 
-    ``links`` and ``cycles`` are derived: ``links`` is aggregated from ``edges``
-    once at construction, and ``cycles`` is filled by the analyze step of the
-    pipeline. ``edges`` is a frozenset so those derivations cannot silently go
-    stale behind a mutation.
+    ``links``, ``cycles`` and ``groups`` are derived: ``links`` is aggregated
+    from ``edges`` once at construction, the other two are filled by the analyze
+    step of the pipeline. ``edges`` is a frozenset so those derivations cannot
+    silently go stale behind a mutation.
     """
 
     nodes: list[Node]
     edges: frozenset[Edge]
     links: set[Link] = field(init=False)
     cycles: list[Cycle] = field(init=False, default_factory=list)
+    groups: list[Group] = field(init=False, default_factory=list)
     node_metrics: dict[str, dict[str, MetricValue]] = field(
         init=False,
         default_factory=dict,

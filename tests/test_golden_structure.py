@@ -41,24 +41,21 @@ def _read(scenario: Scenario) -> str:
 def test_no_package_wraps_a_class_of_its_own_name(scenario: Scenario) -> None:
     """``package a.b { class a.b }`` is a PlantUML syntax error ("Bad name").
 
-    Nothing declares packages yet, so this holds trivially — it is here to stop
-    namespace grouping from introducing that shape, which it would whenever a
-    link endpoint happens to equal a node id.
+    Grouping would produce exactly that shape whenever a link endpoint equals a
+    node id — which it does for 18 of 23 endpoints when this project graphs
+    itself, so the analyzer declines to build a container for those.
     """
     classes, packages = _declared(_read(scenario))
     assert packages & classes == set()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="links aggregate to namespaces that are never declared as nodes",
-)
 @pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda s: s.name)
 def test_every_link_endpoint_is_declared(scenario: Scenario) -> None:
     """An arrow to an undeclared name makes PlantUML invent an empty box.
 
     The metric-carrying nodes then sit unconnected beside it. Namespace grouping
-    is what gives these endpoints a declaration.
+    is what gives these endpoints a declaration: either a package of their own,
+    or a class already carrying that exact name.
     """
     source = _read(scenario)
     classes, packages = _declared(source)

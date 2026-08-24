@@ -4,8 +4,12 @@
 top to bottom direction
 hide empty members
 
-class api.handlers <<(M, #2ECC71)>>
-class services.engine <<(M, #2ECC71)>>
+package api <<(P, #95A5A6)>> {
+  class api.handlers <<(M, #2ECC71)>>
+}
+package services <<(P, #95A5A6)>> {
+  class services.engine <<(M, #2ECC71)>>
+}
 
 api ---> services
 @enduml

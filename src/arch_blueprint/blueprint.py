@@ -4,6 +4,7 @@ from collections.abc import Callable, Iterable, Sequence
 from typing import Optional
 
 from arch_blueprint.analyze.cycles import CycleAnalyzer
+from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.domain.graph import BlueprintGraph
 from arch_blueprint.extract.base import GraphExtractor
 from arch_blueprint.extract.module_extractor import ModuleExtractor
@@ -47,6 +48,7 @@ class ArchBlueprint:
         graph = self.extractor_factory(source).extract()
         self.registry.compute(graph, self.metric_names)
         graph.cycles = CycleAnalyzer.detect_cycles(graph.links)
+        graph.groups = GroupAnalyzer.build(graph)
         return graph
 
     def render(self, graph: BlueprintGraph) -> str:
