@@ -20,11 +20,11 @@ class ModuleExtractor:
         modules = self.source.selected_modules()
         nodes = [Node(id=name, kind=NodeKind.MODULE) for name in modules]
 
-        prefixes = [(name, name + ".") for name in modules]
+        selected = set(modules)
         edges: set[Edge] = set()
         for name in modules:
             for dep in self.source.imports_of(name):
-                if not self._is_selected(dep, prefixes):
+                if not self._is_selected(dep, selected):
                     continue
                 source_ns, target_ns = common_depth_namespaces(name, dep)
                 if source_ns != target_ns:
@@ -40,7 +40,18 @@ class ModuleExtractor:
         return BlueprintGraph(nodes=nodes, edges=frozenset(edges))
 
     @staticmethod
-    def _is_selected(dep: str, prefixes: list[tuple[str, str]]) -> bool:
-        return any(
-            dep == selected or dep.startswith(prefix) for selected, prefix in prefixes
-        )
+    def _is_selected(dep: str, selected: set[str]) -> bool:
+        """True when ``dep`` is a selected module or lives under one.
+
+        Walking ``dep``'s own dotted ancestors costs its depth, rather than a
+        scan of every selected name.
+        """
+        if dep in selected:
+            return True
+        cutoff = dep.rfind(".")
+        while cutoff != -1:
+            dep = dep[:cutoff]
+            if dep in selected:
+                return True
+            cutoff = dep.rfind(".")
+        return False

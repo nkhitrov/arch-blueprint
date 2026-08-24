@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Optional
 
 from arch_blueprint.analyze.cycles import CycleAnalyzer
@@ -23,24 +23,22 @@ class ArchBlueprint:
         project_dir: str,
         target_names: Sequence[str],
         renderer: BlueprintRenderer,
-        extractor_cls: type[GraphExtractor] = ModuleExtractor,
+        extractor_factory: Callable[[GrimpSource], GraphExtractor] = ModuleExtractor,
         registry: Optional[MetricRegistry] = None,
         metric_names: Optional[Iterable[str]] = None,
-        sys_path: Optional[list[str]] = None,
     ) -> None:
         self.project_dir = project_dir
         self.target_names = target_names
         self.renderer = renderer
-        self.extractor_cls = extractor_cls
+        self.extractor_factory = extractor_factory
         self.registry = registry or default_registry()
         # None means "every registered metric"; the CLI narrows this to what the
         # render plan actually needs, color metric included.
         self.metric_names = metric_names
-        self.sys_path = sys_path
 
     def run(self) -> str:
-        source = GrimpSource(self.project_dir, self.target_names, self.sys_path)
-        extractor = self.extractor_cls(source)
+        source = GrimpSource(self.project_dir, self.target_names)
+        extractor = self.extractor_factory(source)
         graph = extractor.extract()
         self.registry.compute(graph, self.metric_names)
         graph.cycles = CycleAnalyzer.detect_cycles(graph.links)

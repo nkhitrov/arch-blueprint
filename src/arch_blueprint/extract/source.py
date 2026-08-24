@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-import importlib
+import importlib.util
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import Optional
 
@@ -15,17 +17,19 @@ class GrimpSource:
 
     Encapsulates all the sys.path / package-resolution mechanics so extractors
     can work against a clean interface (the selected modules and their imports).
+
+    Resolution never executes the target project's code: packages are located
+    through ``importlib.util.find_spec``, and the interpreter state borrowed to
+    do it (``sys.path``, ``sys.modules``) is handed back afterwards.
     """
 
     def __init__(
         self,
         project_dir: str,
         target_names: Sequence[str],
-        sys_path: Optional[list[str]] = None,
     ) -> None:
         self.project_dir = project_dir
         self.target_names = target_names
-        self.sys_path = sys_path if sys_path is not None else sys.path
         self._graph: Optional[ImportGraph] = None
 
     @property
@@ -35,15 +39,34 @@ class GrimpSource:
         return self._graph
 
     def _build(self) -> ImportGraph:
-        if self.project_dir not in self.sys_path:
-            self.sys_path.append(self.project_dir)
-        packages = self._resolve_grimp_packages()
-        if not packages:
-            raise ImportError(
-                "None of the given --modules patterns resolve to an analyzable "
-                "source package.",
-            )
-        return grimp.build_graph(*packages)
+        with self._project_importable():
+            packages = self._resolve_grimp_packages()
+            if not packages:
+                raise ImportError(
+                    "None of the given --modules patterns resolve to an analyzable "
+                    "source package.",
+                )
+            return grimp.build_graph(*packages)
+
+    @contextmanager
+    def _project_importable(self) -> Iterator[None]:
+        """Put the project on ``sys.path``, then undo every trace of it.
+
+        Without the undo, a second run in the same process resolves against the
+        first project's leftovers: ``sys.modules`` is consulted before
+        ``sys.path``, so restoring the path alone would not be enough.
+        """
+        added = self.project_dir not in sys.path
+        if added:
+            sys.path.append(self.project_dir)
+        imported_before = set(sys.modules)
+        try:
+            yield
+        finally:
+            if added and self.project_dir in sys.path:
+                sys.path.remove(self.project_dir)
+            for name in set(sys.modules) - imported_before:
+                del sys.modules[name]
 
     def selected_modules(self) -> list[str]:
         """Modules matching the target patterns, with parents of others removed."""
@@ -72,13 +95,15 @@ class GrimpSource:
                     packages.append(graphable)
         return packages
 
-    @staticmethod
-    def _get_top_level_package(module_name: str) -> str:
+    @classmethod
+    def _get_top_level_package(cls, module_name: str) -> str:
         components = module_name.split(".")
         for level in range(len(components)):
             candidate_name = ".".join(components[: level + 1])
-            candidate = importlib.import_module(candidate_name)
-            if getattr(candidate, "__file__", None) or hasattr(candidate, "__path__"):
+            spec = cls._find_spec(candidate_name)
+            if spec is not None and (
+                spec.origin is not None or spec.submodule_search_locations is not None
+            ):
                 return candidate_name
         raise ImportError(
             f"Can't import module '{module_name}'. Is it on the Python path?",
@@ -96,16 +121,26 @@ class GrimpSource:
 
     @classmethod
     def _find_graphable_packages(cls, package: str) -> list[str]:
-        module = importlib.import_module(package)
-        if getattr(module, "__file__", None):
+        spec = cls._find_spec(package)
+        if spec is None:
+            return []
+        if spec.origin is not None:
             return [package]  # regular package: grimp can build it directly
 
         # PEP 420 namespace package — grimp can't build it. Descend through its
         # directories (including nested namespace dirs) to reach regular packages.
         graphable: list[str] = []
-        for child in cls._child_package_dirs(module.__path__):
+        for child in cls._child_package_dirs(spec.submodule_search_locations or ()):
             graphable.extend(cls._find_graphable_packages(f"{package}.{child}"))
         return graphable
+
+    @staticmethod
+    def _find_spec(name: str) -> Optional[ModuleSpec]:
+        """Locate ``name`` without executing it, or None if it isn't importable."""
+        try:
+            return importlib.util.find_spec(name)
+        except (ImportError, ValueError):
+            return None
 
     @staticmethod
     def _child_package_dirs(search_paths: Iterable[str]) -> list[str]:

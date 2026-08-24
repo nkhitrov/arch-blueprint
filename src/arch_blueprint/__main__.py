@@ -94,7 +94,7 @@ def main() -> None:
         project_dir=args.project_dir,
         target_names=args.modules,
         renderer=renderer_cls(plan=plan, options=options),
-        extractor_cls=ModuleExtractor,
+        extractor_factory=ModuleExtractor,
         registry=registry,
         metric_names=plan.required_metrics,
     ).run()
