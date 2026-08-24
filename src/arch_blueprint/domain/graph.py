@@ -42,7 +42,7 @@ class Cycle:
     backward_edges: frozenset[Edge]
 
 
-def build_links(edges: set[Edge]) -> set[Link]:
+def build_links(edges: frozenset[Edge]) -> set[Link]:
     """Aggregate edges into one Link per (source_namespace, target_namespace)."""
     edges_by_pair: dict[tuple[str, str], set[Edge]] = defaultdict(set)
     for edge in edges:
@@ -59,11 +59,17 @@ class BlueprintGraph:
 
     Metrics are stored beside identity (keyed by node id / namespace pair) so new
     metrics never change node/edge hashing or the extractor.
+
+    ``links`` and ``cycles`` are derived: ``links`` is aggregated from ``edges``
+    once at construction, and ``cycles`` is filled by the analyze step of the
+    pipeline. ``edges`` is a frozenset so those derivations cannot silently go
+    stale behind a mutation.
     """
 
     nodes: list[Node]
-    edges: set[Edge]
+    edges: frozenset[Edge]
     links: set[Link] = field(init=False)
+    cycles: list[Cycle] = field(init=False, default_factory=list)
     node_metrics: dict[str, dict[str, MetricValue]] = field(
         init=False,
         default_factory=dict,

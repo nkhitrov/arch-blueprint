@@ -40,7 +40,7 @@ class ModuleExtractor:
                         ),
                     )
 
-        return BlueprintGraph(nodes=nodes, edges=edges)
+        return BlueprintGraph(nodes=nodes, edges=frozenset(edges))
 
     @staticmethod
     def _is_selected(dep: str, prefixes: list[tuple[str, str]]) -> bool:

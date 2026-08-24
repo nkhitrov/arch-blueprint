@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Optional
 
+from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.extract.base import GraphExtractor
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
@@ -14,7 +15,7 @@ class ArchBlueprint:
     """Generates architecture blueprints for Python applications.
 
     Drives the pipeline: build the import source, extract a graph, compute
-    metrics, and render.
+    metrics, analyze it, and render.
     """
 
     def __init__(
@@ -38,4 +39,5 @@ class ArchBlueprint:
         extractor = self.extractor_cls(source)
         graph = extractor.extract()
         self.registry.compute_all(graph)
+        graph.cycles = CycleAnalyzer.detect_cycles(graph.links)
         return self.renderer.render(graph)

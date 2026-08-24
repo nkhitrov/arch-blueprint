@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Optional, final
 
-from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.domain.graph import BlueprintGraph, Cycle, MetricValue
 from arch_blueprint.domain.node import Node
 from arch_blueprint.metrics import (
@@ -141,8 +140,9 @@ class BlueprintRenderer(ABC):
 
     def _render_links(self, graph: BlueprintGraph) -> tuple[list[str], list[str]]:
         all_links = graph.links
-        cycles = CycleAnalyzer.detect_cycles(all_links)
-        cycle_map = {frozenset({c.namespace_from, c.namespace_to}): c for c in cycles}
+        cycle_map = {
+            frozenset({c.namespace_from, c.namespace_to}): c for c in graph.cycles
+        }
 
         links: list[str] = []
         deferred: list[str] = []
