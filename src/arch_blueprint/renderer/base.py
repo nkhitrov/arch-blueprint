@@ -149,7 +149,11 @@ class BlueprintRenderer(ABC):
 
             cycle_key = frozenset(pair)
             if cycle_key in cycle_map:
-                rendered = self._format_cycle(cycle_map[cycle_key])
+                cycle = cycle_map[cycle_key]
+                rendered = self._format_cycle(
+                    cycle,
+                    self._cycle_decoration(graph, cycle),
+                )
                 links.append(rendered.inline)
                 if rendered.deferred is not None:
                     deferred.append(rendered.deferred)
@@ -167,14 +171,43 @@ class BlueprintRenderer(ABC):
         graph: BlueprintGraph,
         pair: tuple[str, str],
     ) -> LinkDecoration:
-        metrics = graph.link_metrics.get(pair, {})
+        return self._decorate(graph.link_metrics.get(pair, {}))
+
+    def _cycle_decoration(
+        self,
+        graph: BlueprintGraph,
+        cycle: Cycle,
+    ) -> LinkDecoration:
+        """Decorate a cycle with both directions' values, forward first.
+
+        A cycle is one drawn connection standing for two links, so a link metric
+        has two values. Showing one of them would make the golden freeze an
+        arbitrary choice; they are combined as ``forward/backward``, matching the
+        order the cycle's own detail block lists them in.
+        """
+        forward = graph.link_metrics.get((cycle.namespace_from, cycle.namespace_to), {})
+        backward = graph.link_metrics.get(
+            (cycle.namespace_to, cycle.namespace_from),
+            {},
+        )
+        combined: dict[str, MetricValue] = {}
+        for name in {*forward, *backward}:
+            if name in forward and name in backward:
+                combined[name] = f"{forward[name]}/{backward[name]}"
+            elif name in forward:
+                combined[name] = forward[name]
+            else:
+                combined[name] = backward[name]
+        return self._decorate(combined)
+
+    def _decorate(self, values: Mapping[str, MetricValue]) -> LinkDecoration:
         ctx = RenderContext(fmt=self.plan.fmt)
         labels: list[str] = []
         styles: list[str] = []
         for item in self.plan.link_items:
-            if item.name not in metrics:
+            if item.name not in values:
                 continue
-            fragment = item.plugin.render(ctx, item.name, metrics[item.name])
+            fragment = item.plugin.render(ctx, item.name, values[item.name])
             if fragment is None:
                 continue
             if fragment.text:
@@ -199,8 +232,8 @@ class BlueprintRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_cycle(self, cycle: Cycle) -> CycleRender:
-        """Format a bidirectional cycle between namespaces."""
+    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+        """Format a bidirectional cycle between namespaces, with any decoration."""
         ...
 
     @abstractmethod

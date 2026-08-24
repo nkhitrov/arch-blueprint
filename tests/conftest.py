@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
 from arch_blueprint.domain.node import Node, NodeKind
@@ -67,6 +69,12 @@ SCENARIOS = [
     # Single root with deep namespaces: link endpoints collide byte-for-byte with node
     # ids and nest inside one another — the two cases that break naive grouping.
     Scenario("deep", DEEP_PROJECT, DEEP_MODULES),
+    # A link metric on a connection that is a cycle: two directions, two values.
+    Scenario(
+        "cyclic_link_metrics",
+        CYCLIC_PROJECT,
+        [*CYCLIC_MODULES, *SHOW_LINK_METRIC],
+    ),
 ]
 
 
@@ -84,7 +92,12 @@ class CliResult:
     returncode: int
 
 
-def run_cli(project_dir: Path, *args: str, check: bool = True) -> CliResult:
+def run_cli(
+    project_dir: Path,
+    *args: str,
+    check: bool = True,
+    extra_env: Optional[dict[str, str]] = None,
+) -> CliResult:
     """Run the arch-blueprint CLI end-to-end.
 
     Invoked as a subprocess so a run is isolated from whatever the CLI does to
@@ -98,6 +111,7 @@ def run_cli(project_dir: Path, *args: str, check: bool = True) -> CliResult:
         encoding="utf-8",
         check=check,
         cwd=REPO_ROOT,
+        env={**os.environ, **extra_env} if extra_env else None,
     )
     return CliResult(
         stdout=result.stdout,

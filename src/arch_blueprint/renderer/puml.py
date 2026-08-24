@@ -67,9 +67,11 @@ class PlantUmlRenderer(BlueprintRenderer):
             link = f"{link} : {' '.join(decoration.labels)}"
         return link
 
-    def _format_cycle(self, cycle: Cycle) -> CycleRender:
+    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
         color = CYCLE_HIGHLIGHT_COLOR
         link = f"{cycle.namespace_from} <-[{color},bold]-> {cycle.namespace_to}"
+        if decoration.labels:
+            link = f"{link} : {' '.join(decoration.labels)}"
 
         if not self.options.show_cycle_details:
             return CycleRender(inline=link)
