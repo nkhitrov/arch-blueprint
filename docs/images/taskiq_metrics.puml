@@ -1,0 +1,291 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class taskiq.__main__ <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 1
+  instability: 1.0
+}
+class taskiq.abc <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 13
+  instability: 1.0
+}
+class taskiq.acks <<(M, #2ECC71)>> {
+  fan_in: 5
+  fan_out: 1
+  instability: 0.17
+}
+class taskiq.api <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 5
+  instability: 1.0
+}
+class taskiq.brokers <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 9
+  instability: 1.0
+}
+class taskiq.cli <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 7
+  instability: 1.0
+}
+class taskiq.compat <<(M, #2ECC71)>> {
+  fan_in: 8
+  fan_out: 0
+  instability: 0.0
+}
+class taskiq.context <<(M, #2ECC71)>> {
+  fan_in: 1
+  fan_out: 5
+  instability: 0.83
+}
+class taskiq.decor <<(M, #2ECC71)>> {
+  fan_in: 2
+  fan_out: 6
+  instability: 0.75
+}
+class taskiq.error <<(M, #2ECC71)>> {
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+class taskiq.events <<(M, #2ECC71)>> {
+  fan_in: 2
+  fan_out: 0
+  instability: 0.0
+}
+class taskiq.exceptions <<(M, #2ECC71)>> {
+  fan_in: 10
+  fan_out: 1
+  instability: 0.09
+}
+class taskiq.formatters <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 4
+  instability: 1.0
+}
+class taskiq.funcs <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 3
+  instability: 1.0
+}
+class taskiq.instrumentation <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 3
+  instability: 1.0
+}
+class taskiq.kicker <<(M, #2ECC71)>> {
+  fan_in: 4
+  fan_out: 11
+  instability: 0.73
+}
+class taskiq.labels <<(M, #2ECC71)>> {
+  fan_in: 2
+  fan_out: 0
+  instability: 0.0
+}
+class taskiq.message <<(M, #2ECC71)>> {
+  fan_in: 7
+  fan_out: 1
+  instability: 0.12
+}
+class taskiq.middlewares <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 6
+  instability: 1.0
+}
+class taskiq.package <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 0
+  instability: 0.0
+}
+class taskiq.receiver <<(M, #2ECC71)>> {
+  fan_in: 2
+  fan_out: 10
+  instability: 0.83
+}
+class taskiq.result <<(M, #2ECC71)>> {
+  fan_in: 6
+  fan_out: 2
+  instability: 0.25
+}
+class taskiq.result_backends <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 2
+  instability: 1.0
+}
+class taskiq.schedule_sources <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 3
+  instability: 1.0
+}
+class taskiq.scheduler <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 7
+  instability: 1.0
+}
+class taskiq.serialization <<(M, #2ECC71)>> {
+  fan_in: 1
+  fan_out: 2
+  instability: 0.67
+}
+class taskiq.serializers <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 1
+  instability: 1.0
+}
+class taskiq.state <<(M, #2ECC71)>> {
+  fan_in: 3
+  fan_out: 0
+  instability: 0.0
+}
+class taskiq.task <<(M, #2ECC71)>> {
+  fan_in: 4
+  fan_out: 4
+  instability: 0.5
+}
+class taskiq.utils <<(M, #2ECC71)>> {
+  fan_in: 6
+  fan_out: 0
+  instability: 0.0
+}
+class taskiq.warnings <<(M, #2ECC71)>> {
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+taskiq.__main__ ---> taskiq.abc
+taskiq.abc ---> taskiq.acks
+taskiq.abc <-[#C0392B,bold]-> taskiq.decor
+note on link
+  **taskiq.abc -> taskiq.decor:**
+  - taskiq.abc → taskiq.decor
+  **taskiq.decor -> taskiq.abc:**
+  - taskiq.decor → broker
+  - taskiq.decor → schedule_source
+end note
+taskiq.abc ---> taskiq.events
+taskiq.abc ---> taskiq.exceptions
+taskiq.abc <-[#C0392B,bold]-> taskiq.formatters
+note on link
+  **taskiq.abc -> taskiq.formatters:**
+  - taskiq.abc → proxy_formatter
+  **taskiq.formatters -> taskiq.abc:**
+  - taskiq.formatters → broker
+  - taskiq.formatters → formatter
+end note
+taskiq.abc ---> taskiq.message
+taskiq.abc ---> taskiq.result
+taskiq.abc <-[#C0392B,bold]-> taskiq.result_backends
+note on link
+  **taskiq.abc -> taskiq.result_backends:**
+  - taskiq.abc → dummy
+  **taskiq.result_backends -> taskiq.abc:**
+  - taskiq.result_backends → result_backend
+end note
+taskiq.abc <-[#C0392B,bold]-> taskiq.scheduler
+note on link
+  **taskiq.abc -> taskiq.scheduler:**
+  - taskiq.abc → scheduled_task
+  **taskiq.scheduler -> taskiq.abc:**
+  - taskiq.scheduler → broker
+  - taskiq.scheduler → schedule_source
+end note
+taskiq.abc <-[#C0392B,bold]-> taskiq.serializers
+note on link
+  **taskiq.abc -> taskiq.serializers:**
+  - taskiq.abc → json_serializer
+  **taskiq.serializers -> taskiq.abc:**
+  - taskiq.serializers → serializer
+end note
+taskiq.abc ---> taskiq.state
+taskiq.abc ---> taskiq.utils
+taskiq.abc ---> taskiq.warnings
+taskiq.acks ---> taskiq.utils
+taskiq.api ---> taskiq.abc
+taskiq.api ---> taskiq.acks
+taskiq.api ---> taskiq.cli
+taskiq.api ---> taskiq.receiver
+taskiq.api ---> taskiq.scheduler
+taskiq.brokers ---> taskiq.abc
+taskiq.brokers ---> taskiq.decor
+taskiq.brokers ---> taskiq.events
+taskiq.brokers ---> taskiq.exceptions
+taskiq.brokers ---> taskiq.kicker
+taskiq.brokers ---> taskiq.message
+taskiq.brokers ---> taskiq.receiver
+taskiq.brokers ---> taskiq.utils
+taskiq.cli ---> taskiq.abc
+taskiq.cli ---> taskiq.acks
+taskiq.cli ---> taskiq.receiver
+taskiq.cli ---> taskiq.scheduler
+taskiq.context ---> taskiq.abc
+taskiq.context ---> taskiq.acks
+taskiq.context ---> taskiq.exceptions
+taskiq.context ---> taskiq.message
+taskiq.context ---> taskiq.state
+taskiq.decor ---> taskiq.kicker
+taskiq.decor ---> taskiq.scheduler
+taskiq.decor ---> taskiq.task
+taskiq.exceptions ---> taskiq.error
+taskiq.formatters ---> taskiq.compat
+taskiq.formatters ---> taskiq.message
+taskiq.funcs ---> taskiq.exceptions
+taskiq.funcs ---> taskiq.result
+taskiq.funcs ---> taskiq.task
+taskiq.instrumentation ---> taskiq.cli
+taskiq.instrumentation ---> taskiq.middlewares
+taskiq.kicker ---> taskiq.abc
+taskiq.kicker ---> taskiq.compat
+taskiq.kicker ---> taskiq.exceptions
+taskiq.kicker ---> taskiq.labels
+taskiq.kicker ---> taskiq.message
+taskiq.kicker <-[#C0392B,bold]-> taskiq.scheduler
+note on link
+  **taskiq.kicker -> taskiq.scheduler:**
+  - taskiq.kicker → created_schedule
+  - taskiq.kicker → scheduled_task
+  **taskiq.scheduler -> taskiq.kicker:**
+  - taskiq.scheduler → taskiq.kicker
+end note
+taskiq.kicker ---> taskiq.task
+taskiq.kicker ---> taskiq.utils
+taskiq.message ---> taskiq.labels
+taskiq.middlewares ---> taskiq.abc
+taskiq.middlewares ---> taskiq.compat
+taskiq.middlewares ---> taskiq.exceptions
+taskiq.middlewares ---> taskiq.kicker
+taskiq.middlewares ---> taskiq.message
+taskiq.middlewares ---> taskiq.result
+taskiq.receiver ---> taskiq.abc
+taskiq.receiver ---> taskiq.acks
+taskiq.receiver ---> taskiq.compat
+taskiq.receiver ---> taskiq.context
+taskiq.receiver ---> taskiq.exceptions
+taskiq.receiver ---> taskiq.message
+taskiq.receiver ---> taskiq.result
+taskiq.receiver ---> taskiq.state
+taskiq.receiver ---> taskiq.utils
+taskiq.result ---> taskiq.compat
+taskiq.result ---> taskiq.serialization
+taskiq.result_backends ---> taskiq.result
+taskiq.schedule_sources ---> taskiq.abc
+taskiq.schedule_sources ---> taskiq.scheduler
+taskiq.scheduler ---> taskiq.compat
+taskiq.scheduler ---> taskiq.exceptions
+taskiq.scheduler ---> taskiq.task
+taskiq.scheduler ---> taskiq.utils
+taskiq.serialization ---> taskiq.compat
+taskiq.serialization ---> taskiq.exceptions
+taskiq.task ---> taskiq.abc
+taskiq.task ---> taskiq.compat
+taskiq.task ---> taskiq.exceptions
+taskiq.task ---> taskiq.result
+@enduml
+
