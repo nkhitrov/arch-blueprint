@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -9,19 +10,20 @@ from tests.conftest import SCENARIOS, golden_path
 
 _PLANTUML = shutil.which("plantuml")
 
-#: ``plantuml -syntax`` exits 0 when every diagram on stdin parses.
+#: ``plantuml -checkonly`` exits 0 when every diagram it was given parses.
 _SYNTAX_OK = 0
 
 
-def _syntax_check(diagrams: str) -> subprocess.CompletedProcess[str]:
-    """Parse-check one or more concatenated diagrams.
+def _check(paths: list[Path]) -> subprocess.CompletedProcess[str]:
+    """Parse-check diagrams without generating images.
 
-    ``-syntax`` reads stdin and ignores file arguments, so every diagram is fed
-    through a single invocation — each JVM start costs more than a second.
+    ``-checkonly`` takes file arguments, so every golden goes through a single
+    invocation — each JVM start costs more than a second. It is used in
+    preference to ``-syntax``, which reads stdin and whose behaviour differs
+    between the distro builds this runs on.
     """
     return subprocess.run(
-        [str(_PLANTUML), "-syntax"],
-        input=diagrams,
+        [str(_PLANTUML), "-checkonly", *(str(p) for p in paths)],
         capture_output=True,
         text=True,
         check=False,
@@ -35,17 +37,14 @@ def test_puml_goldens_are_parseable() -> None:
     Byte-comparison alone cannot tell a valid diagram from a broken one — it only
     pins whatever the renderer currently emits.
     """
-    sources = {
-        scenario.name: golden_path("puml", scenario.name).read_text(encoding="utf-8")
-        for scenario in SCENARIOS
-    }
-    if _syntax_check("".join(sources.values())).returncode == _SYNTAX_OK:
+    goldens = [golden_path("puml", scenario.name) for scenario in SCENARIOS]
+    if _check(goldens).returncode == _SYNTAX_OK:
         return
 
     # Slow path only: re-check one at a time to name the offenders.
     broken = {}
-    for name, source in sources.items():
-        result = _syntax_check(source)
+    for golden in goldens:
+        result = _check([golden])
         if result.returncode != _SYNTAX_OK:
-            broken[name] = result.stdout.strip()
+            broken[golden.name] = (result.stdout + result.stderr).strip()
     pytest.fail(f"plantuml rejected {len(broken)} golden(s): {broken}")

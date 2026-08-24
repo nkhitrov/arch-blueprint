@@ -27,7 +27,9 @@ jobs:
       # The parse check skips itself without this binary, so the guard that
       # catches an unrenderable diagram would be silently absent in CI.
       - name: Install PlantUML
-        run: sudo apt-get update && sudo apt-get install -y plantuml
+        run: |
+          sudo apt-get update && sudo apt-get install -y plantuml
+          plantuml -version | head -2
 
       - name: Check golden diagrams parse
         run: uv run pytest tests/test_golden_syntax.py -q
