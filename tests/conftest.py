@@ -20,6 +20,9 @@ DEEP_PROJECT = _FIXTURES / "deep_ns"
 INIT_IMPORTS_PROJECT = _FIXTURES / "init_imports"
 ANCESTOR_DEP_PROJECT = _FIXTURES / "ancestor_dep"
 
+INIT_IMPORTS_MODULES = ["-m", "writer", "-m", "storage.*"]
+ANCESTOR_DEP_MODULES = ["-m", "api.*", "-m", "services.*"]
+
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
 CYCLIC_MODULES = ["-m", "pkg_a.*", "-m", "pkg_b.*"]
 SHOW_METRICS = ["--metric", "fan_in", "--metric", "fan_out", "--metric", "instability"]
@@ -75,6 +78,12 @@ SCENARIOS = [
         CYCLIC_PROJECT,
         [*CYCLIC_MODULES, *SHOW_LINK_METRIC],
     ),
+    # A package whose __init__.py imports a sibling: the edge exists only if a
+    # module's own imports survive alongside its descendants'.
+    Scenario("init_imports", INIT_IMPORTS_PROJECT, INIT_IMPORTS_MODULES),
+    # An import of a package facade whose children are selected: the edge exists
+    # only if selection matches upward as well as down.
+    Scenario("ancestor_dep", ANCESTOR_DEP_PROJECT, ANCESTOR_DEP_MODULES),
 ]
 
 
