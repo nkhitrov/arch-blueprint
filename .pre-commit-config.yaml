@@ -29,6 +29,7 @@ repos:
           - "check"
           - "--fix"
           - "src"
+          - "tests"
 
       - id: mypy
         name: Validate types with MyPy
@@ -38,12 +39,15 @@ repos:
         types: [python]
         args:
           - ./src
+          - ./tests
 
       - id: pytest
         name: Run tests
         entry: uv run pytest
         language: system
         pass_filenames: false
-        types: [python]
+        # Deliberately not restricted to python files: a commit touching only
+        # tests/golden/** is exactly when the regression guard must run.
+        always_run: true
         args:
           - "-q"

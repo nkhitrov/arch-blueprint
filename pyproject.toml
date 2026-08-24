@@ -41,6 +41,14 @@ dev = [
 
 [tool.mypy]
 strict = true
+# tests/ has no __init__.py but is imported as the `tests` package (see
+# tool.pytest pythonpath), so mypy needs the repo root as the package base or it
+# sees conftest.py under two names.
+mypy_path = "src"
+explicit_package_bases = true
+namespace_packages = true
+# Fixture projects are analysis subjects, not code we ship (ruff excludes them too).
+exclude = ['^tests/fixtures/']
 ignore_missing_imports = true
 allow_subclassing_any = true
 allow_untyped_calls = true
@@ -109,6 +117,7 @@ line-length = 88
 	"D103",   # Missing docstring in public function
 	"SLF001", # Private member accessed
 	"S311",   # Standard pseudo-random generators are not suitable for security/cryptographic purposes
+	"S603",   # subprocess call — the harness exists to invoke our own CLI
 	"D101",   # Missing docstring in public class
 	"D102",   # Missing docstring in public method
 ]
