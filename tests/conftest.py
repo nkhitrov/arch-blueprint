@@ -10,11 +10,24 @@ GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 EXAMPLE_PROJECT = REPO_ROOT / "examples" / "project_root"
 _FIXTURES = Path(__file__).resolve().parent / "fixtures"
 CYCLIC_PROJECT = _FIXTURES / "cyclic"
+DEEP_PROJECT = _FIXTURES / "deep_ns"
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
 CYCLIC_MODULES = ["-m", "pkg_a.*", "-m", "pkg_b.*"]
 SHOW_METRICS = ["--metric", "fan_in", "--metric", "fan_out", "--metric", "instability"]
 SHOW_LINK_METRIC = ["--metric", "edge_weight"]
+DEEP_MODULES = ["-m", "deep.**"]
+# Deliberately not the order metrics are registered in ``default_registry`` — this pins
+# that metric blocks follow CLI argument order, which ``SHOW_METRICS`` cannot detect
+# because it happens to match registration order.
+SHOW_METRICS_REORDERED = [
+    "--metric",
+    "instability",
+    "--metric",
+    "fan_out",
+    "--metric",
+    "fan_in",
+]
 
 
 @dataclass(frozen=True)
@@ -38,6 +51,14 @@ SCENARIOS = [
     ),
     Scenario("metrics", CYCLIC_PROJECT, [*CYCLIC_MODULES, *SHOW_METRICS]),
     Scenario("link_metrics", EXAMPLE_PROJECT, [*EXAMPLE_MODULES, *SHOW_LINK_METRIC]),
+    Scenario(
+        "metrics_reordered",
+        CYCLIC_PROJECT,
+        [*CYCLIC_MODULES, *SHOW_METRICS_REORDERED],
+    ),
+    # Single root with deep namespaces: link endpoints collide byte-for-byte with node
+    # ids and nest inside one another — the two cases that break naive grouping.
+    Scenario("deep", DEEP_PROJECT, DEEP_MODULES),
 ]
 
 
