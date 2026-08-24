@@ -1,0 +1,12 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class api.handlers <<(M, #2ECC71)>>
+class services.engine <<(M, #2ECC71)>>
+
+api ---> services
+@enduml
+

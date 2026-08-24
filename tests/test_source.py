@@ -98,20 +98,12 @@ def test_module_extractor_builds_cycle() -> None:
     assert len(CycleAnalyzer.detect_cycles(graph.links)) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="imports_of drops a module's own imports when it has descendants",
-)
 def test_package_init_imports_become_edges() -> None:
     """``writer/__init__.py`` imports storage.backend; ``writer`` has a submodule."""
     edges = _edges_of(INIT_IMPORTS_PROJECT, ["writer", "storage.*"])
     assert ("writer", "storage.backend") in edges
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="_is_selected never matches a dependency on a selected module's ancestor",
-)
 def test_import_of_package_facade_becomes_edge() -> None:
     """``api.handlers`` imports the ``services`` package, whose child is selected."""
     edges = _edges_of(ANCESTOR_DEP_PROJECT, ["api.*", "services.*"])

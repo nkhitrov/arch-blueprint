@@ -76,13 +76,14 @@ class GrimpSource:
         return sorted(self._exclude_sub_modules(module_names))
 
     def imports_of(self, module: str) -> set[str]:
-        """All modules imported by ``module`` or any of its descendants."""
-        descendants = self.graph.find_descendants(module)
-        if not descendants:
-            return set(self.graph.find_modules_directly_imported_by(module))
+        """All modules imported by ``module`` or any of its descendants.
 
-        result: set[str] = set()
-        for descendant in descendants:
+        ``find_descendants`` excludes the module itself, so a package's own
+        ``__init__.py`` imports have to be unioned in explicitly — dropping them
+        hides every dependency a re-exporting package declares.
+        """
+        result = set(self.graph.find_modules_directly_imported_by(module))
+        for descendant in self.graph.find_descendants(module):
             result.update(self.graph.find_modules_directly_imported_by(descendant))
         return result
 
