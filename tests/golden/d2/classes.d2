@@ -1,0 +1,52 @@
+direction: right
+shop.billing.Payment: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+}
+
+shop.models.Customer: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+}
+
+shop.models.Order: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+}
+shop.billing <-> shop.models: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
+"Cycle Details": {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.stroke-width: 2
+  style.border-radius: 12
+
+  grid: {
+    label: ""
+    grid-rows: 1
+    grid-gap: 32
+    style.stroke: transparent
+    style.fill: transparent
+
+    cycle_shop_billing_shop_models: |md
+      ### shop.billing ↔ shop.models
+
+      **shop.billing → shop.models:**
+
+      - Payment → Order
+
+      **shop.models → shop.billing:**
+
+      - Order → Payment
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+  }
+}

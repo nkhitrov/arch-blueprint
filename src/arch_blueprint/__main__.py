@@ -3,6 +3,8 @@ from types import MappingProxyType
 from typing import Final
 
 from arch_blueprint.blueprint import ArchBlueprint
+from arch_blueprint.extract.base import GraphExtractor
+from arch_blueprint.extract.class_extractor import ClassExtractor
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.metrics import MetricDisplay, default_registry, default_renders
 from arch_blueprint.renderer.base import (
@@ -17,6 +19,13 @@ _RENDERERS: Final[MappingProxyType[str, type[BlueprintRenderer]]] = MappingProxy
     {
         "puml": PlantUmlRenderer,
         "d2": D2LangRenderer,
+    },
+)
+
+_EXTRACTORS: Final[MappingProxyType[str, type[GraphExtractor]]] = MappingProxyType(
+    {
+        "module": ModuleExtractor,
+        "class": ClassExtractor,
     },
 )
 
@@ -51,6 +60,17 @@ def main() -> None:
         default="puml",
         choices=_RENDERERS.keys(),
         help=f"Output format. Possible values: {list(_RENDERERS.keys())}",
+    )
+    parser.add_argument(
+        "--nodes",
+        "-n",
+        required=False,
+        default="module",
+        choices=_EXTRACTORS.keys(),
+        help=(
+            "What each node represents. 'module' graphs module-level imports; "
+            "'class' graphs classes (grouped under their modules)."
+        ),
     )
     parser.add_argument(
         "--metric",
@@ -88,7 +108,7 @@ def main() -> None:
         project_dir=args.project_dir,
         target_names=args.modules,
         renderer=renderer,
-        extractor_cls=ModuleExtractor,
+        extractor_cls=_EXTRACTORS[args.nodes],
         registry=registry,
     ).run()
     print(result)  # noqa: T201

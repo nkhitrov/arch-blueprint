@@ -26,6 +26,7 @@ This project uses `uv` for environment and dependency management.
     packages (e.g. `-m 'app1.*' -m 'app2.*'`). A cross-package link is drawn only when both
     endpoints are in the selected set.
   - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
+  - `--nodes`/`-n` (`module` default, or `class`) selects what a node represents.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection.
@@ -41,7 +42,7 @@ pytest) and a `test` matrix running `pytest` across Python 3.9–3.14, on push t
 asserts byte-exact output against snapshots in `tests/golden/` — the regression guard; when output
 *intentionally* changes, regenerate the affected golden file. `tests/test_units.py` covers the
 domain, metrics, analyzer, and extractors. Fixtures: `examples/project_root` (multi-root + namespace
-packages) and `tests/fixtures/cyclic` (a module cycle).
+packages), `tests/fixtures/cyclic` (a module cycle), `tests/fixtures/classes` (a class cycle).
 
 ## Git conventions
 
@@ -57,11 +58,12 @@ packages) and `tests/fixtures/cyclic` (a module cycle).
    `project_dir` to `sys.path`, resolves every `--modules` pattern to a top-level package, and builds
    the grimp graph (multiple roots supported). It handles PEP 420 namespace packages grimp can't
    build directly (expands them, skips ones with no analyzable source with a stderr warning). It
-   exposes `selected_modules()` and `imports_of(module)`.
+   exposes `selected_modules()`, `imports_of(module)`, and `module_file(module)`.
 2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`) turns the source
-   into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected module. An extractor
-   assigns each `Node` its `NodeKind` and namespace, so a new node kind is added by writing another
-   extractor — the domain, metrics, and renderers do not change.
+   into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected module; `ClassExtractor`
+   parses module source with `ast` and emits one node per class (grouped under its module). Both
+   produce the same `Node`/`Edge` types, so everything downstream is shared. The CLI picks one via
+   the `_EXTRACTORS` map in `__main__.py` (`--nodes`).
 3. **Domain + metrics** — `domain/` holds the data model: `Node` (id, `NodeKind`, namespace — frozen
    and hashable, **no metric fields**), `Edge`, `Link`, `Cycle`, and `BlueprintGraph` (aggregates
    edges into `Link`s via `build_links`, stores metrics in side maps keyed by id/namespace-pair).

@@ -13,8 +13,8 @@ from arch_blueprint.renderer.base import BlueprintRenderer
 class ArchBlueprint:
     """Generates architecture blueprints for Python applications.
 
-    Drives the pipeline: build the import source, extract a graph, compute
-    metrics, and render.
+    Drives the pipeline: build the import source, extract a graph (modules or
+    classes), compute metrics, and render.
     """
 
     def __init__(

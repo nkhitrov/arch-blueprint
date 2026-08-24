@@ -10,9 +10,11 @@ GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 EXAMPLE_PROJECT = REPO_ROOT / "examples" / "project_root"
 _FIXTURES = Path(__file__).resolve().parent / "fixtures"
 CYCLIC_PROJECT = _FIXTURES / "cyclic"
+CLASSES_PROJECT = _FIXTURES / "classes"
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
 CYCLIC_MODULES = ["-m", "pkg_a.*", "-m", "pkg_b.*"]
+CLASSES_MODULES = ["-m", "shop.*"]
 SHOW_METRICS = ["--metric", "fan_in", "--metric", "fan_out", "--metric", "instability"]
 SHOW_LINK_METRIC = ["--metric", "edge_weight"]
 
@@ -36,6 +38,7 @@ SCENARIOS = [
     Scenario(
         "cyclic_nodetails", CYCLIC_PROJECT, [*CYCLIC_MODULES, "--no-cycle-details"]
     ),
+    Scenario("classes", CLASSES_PROJECT, [*CLASSES_MODULES, "--nodes", "class"]),
     Scenario("metrics", CYCLIC_PROJECT, [*CYCLIC_MODULES, *SHOW_METRICS]),
     Scenario("link_metrics", EXAMPLE_PROJECT, [*EXAMPLE_MODULES, *SHOW_LINK_METRIC]),
 ]
