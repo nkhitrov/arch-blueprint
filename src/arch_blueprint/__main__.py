@@ -4,7 +4,12 @@ from typing import Final
 
 from arch_blueprint.blueprint import ArchBlueprint
 from arch_blueprint.extract.module_extractor import ModuleExtractor
-from arch_blueprint.metrics import MetricDisplay, default_registry, default_renders
+from arch_blueprint.metrics import (
+    MetricDisplay,
+    build_render_plan,
+    default_registry,
+    default_renders,
+)
 from arch_blueprint.renderer.base import (
     DEFAULT_OPTIONS,
     BlueprintRenderer,
@@ -78,18 +83,20 @@ def main() -> None:
         show_cycle_details=args.cycle_details,
     )
     registry = default_registry()
-    renderer = _RENDERERS[args.format](
-        options=options,
+    renderer_cls = _RENDERERS[args.format]
+    plan = build_render_plan(
         registry=registry,
         renders=default_renders(),
         display=MetricDisplay(shown=tuple(args.metrics)),
+        fmt=renderer_cls.fmt,
     )
     result = ArchBlueprint(
         project_dir=args.project_dir,
         target_names=args.modules,
-        renderer=renderer,
+        renderer=renderer_cls(plan=plan, options=options),
         extractor_cls=ModuleExtractor,
         registry=registry,
+        metric_names=plan.required_metrics,
     ).run()
     print(result)  # noqa: T201
 

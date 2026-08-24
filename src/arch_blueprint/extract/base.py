@@ -22,14 +22,6 @@ class GraphExtractor(Protocol):
         ...
 
 
-def parent_namespace(module: str) -> str:
-    """The dotted parent of a module, or the module itself when top-level."""
-    if "." not in module:
-        return module
-    namespace, _ = module.rsplit(".", maxsplit=1)
-    return namespace
-
-
 def common_depth_namespaces(source: str, target: str) -> tuple[str, str]:
     """Split two dotted names at their first differing component.
 

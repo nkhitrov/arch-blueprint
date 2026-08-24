@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
 from arch_blueprint.domain.node import Node, NodeKind
-from arch_blueprint.extract.base import common_depth_namespaces, parent_namespace
+from arch_blueprint.extract.base import common_depth_namespaces
 from arch_blueprint.extract.source import GrimpSource
 
 
@@ -18,10 +18,7 @@ class ModuleExtractor:
 
     def extract(self) -> BlueprintGraph:
         modules = self.source.selected_modules()
-        nodes = [
-            Node(id=name, kind=NodeKind.MODULE, namespace=parent_namespace(name))
-            for name in modules
-        ]
+        nodes = [Node(id=name, kind=NodeKind.MODULE) for name in modules]
 
         prefixes = [(name, name + ".") for name in modules]
         edges: set[Edge] = set()
