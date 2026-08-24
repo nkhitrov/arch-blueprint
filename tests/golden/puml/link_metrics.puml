@@ -4,9 +4,15 @@
 top to bottom direction
 hide empty members
 
-class app1.models <<(M, #2ECC71)>>
-class app2.service <<(M, #2ECC71)>>
-class plugins.auth.backend <<(M, #1ABC9C)>>
+package app1 <<(P, #95A5A6)>> {
+  class app1.models <<(M, #2ECC71)>>
+}
+package app2 <<(P, #95A5A6)>> {
+  class app2.service <<(M, #2ECC71)>>
+}
+package plugins <<(P, #95A5A6)>> {
+  class plugins.auth.backend <<(M, #1ABC9C)>>
+}
 
 app2 ---> app1 : edge_weight=1
 app2 ---> plugins : edge_weight=1

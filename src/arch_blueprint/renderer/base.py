@@ -105,13 +105,40 @@ class BlueprintRenderer(ABC):
         return self._combine_output(nodes_output, links_output, deferred)
 
     def _render_nodes(self, graph: BlueprintGraph) -> list[str]:
-        result: list[str] = []
+        """Render every node, wrapping those the analyzer assigned to a group.
+
+        A group's block takes the position of its first member, so nodes keep
+        appearing in the order the extractor produced them.
+        """
+        group_of = {
+            member: group.namespace
+            for group in graph.groups
+            for member in group.members
+        }
+        rendered: list[tuple[Optional[str], str]] = []
+        members: dict[str, list[str]] = {}
         for node in graph.nodes:
             metrics = graph.node_metrics.get(node.id, {})
             depth = int(metrics.get(self.plan.color_metric, 0))
             color = self.options.get_color_for_depth(depth)
-            blocks = self._render_metric_blocks(node, metrics)
-            result.append(self._format_node(node, color, blocks))
+            text = self._format_node(
+                node,
+                color,
+                self._render_metric_blocks(node, metrics),
+            )
+            namespace = group_of.get(node.id)
+            rendered.append((namespace, text))
+            if namespace is not None:
+                members.setdefault(namespace, []).append(text)
+
+        result: list[str] = []
+        emitted: set[str] = set()
+        for namespace, text in rendered:
+            if namespace is None:
+                result.append(text)
+            elif namespace not in emitted:
+                emitted.add(namespace)
+                result.extend(self._format_group(namespace, members[namespace]))
         return result
 
     def _render_metric_blocks(
@@ -215,6 +242,16 @@ class BlueprintRenderer(ABC):
             if fragment.style:
                 styles.append(fragment.style)
         return LinkDecoration(labels=tuple(labels), styles=tuple(styles))
+
+    def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
+        """Wrap the nodes belonging to one namespace; by default, do not wrap.
+
+        Deliberately concrete rather than abstract: a format whose own syntax
+        already nests by dotted name (D2 does) needs no container, and adding an
+        abstract method would break every renderer outside this package — the
+        extension point the docs advertise.
+        """
+        return nodes
 
     @abstractmethod
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
