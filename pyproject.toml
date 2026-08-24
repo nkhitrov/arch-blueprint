@@ -35,12 +35,9 @@ explicit = true
 dev = [
   "mypy>=1.18.2",
   "pre-commit>=4.3.0",
+  "pytest>=8.0.0",
   "ruff>=0.14.3",
 ]
-
-[tool.isort]
-profile = "black"
-multi_line_output = 3
 
 [tool.mypy]
 strict = true
@@ -54,7 +51,8 @@ allow_untyped_decorators = true
 
 [tool.pytest.ini_options]
 log_level = 'INFO'
-anyio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py39"
@@ -101,7 +99,7 @@ lint.ignore = [
 	"D102",    # Missing docstring in public method
 ]
 lint.mccabe = { max-complexity = 10 }
-exclude = [".venv/"]
+exclude = [".venv/", "tests/fixtures/"]
 line-length = 88
 
 [tool.ruff.lint.per-file-ignores]
@@ -121,11 +119,3 @@ ignore-decorators = ["typing.overload"]
 
 [tool.ruff.lint.pylint]
 allow-magic-value-types = ["int", "str", "float"]
-
-[tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["taskiq_dependencies.Depends", "taskiq.TaskiqDepends"]
-
-[tool.typos.files]
-extend-exclude = [
-	"docs/README.md", # because of identifier in head section
-]

@@ -4,26 +4,15 @@ import textwrap
 from string import Template
 from typing import Final
 
-from arch_blueprint.models import CyclicDependency
-from arch_blueprint.modules import BlueprintModule
+from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.domain.node import Node
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
     BlueprintRenderer,
-    RendererOptions,
+    CycleRender,
+    LinkDecoration,
 )
-
-_MODULE_TEMPLATE: Final = Template(
-    textwrap.dedent(
-        """\
-        $name: {
-          shape: class
-          style: {
-            fill: "$fill_color"
-          }
-        }
-        """,
-    ).rstrip(),
-)
+from arch_blueprint.renderer.cycles import cycle_detail_sections
 
 _CYCLE_CONNECTION_TEMPLATE: Final = Template(
     '$ns_a <-> $ns_b: CYCLE {style.stroke: "$color"; style.stroke-width: 4}',
@@ -79,64 +68,75 @@ _CYCLE_CONTAINER_TEMPLATE: Final = Template(
 
 
 class D2LangRenderer(BlueprintRenderer):
-    """D2 diagram renderer."""
+    """D2 diagram renderer (stateless: cycle notes flow through CycleRender)."""
 
-    def __init__(self, options: RendererOptions | None = None) -> None:
-        super().__init__(options)
-        self._cycle_notes: list[str] = []
+    fmt = "d2"
 
-    def render(self, target_modules: list[BlueprintModule]) -> str:
-        """Override to reset cycle notes state before rendering."""
-        self._cycle_notes = []
-        return super().render(target_modules)
+    def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
+        lines = [
+            f"{node.id}: {{",
+            "  shape: class",
+            "  style: {",
+            f'    fill: "{color}"',
+            "  }",
+        ]
+        lines.extend(f"  {block}" for block in blocks)
+        lines.append("}")
+        return "\n".join(lines)
 
-    def _format_module(self, module: BlueprintModule, color: str) -> str:
-        return _MODULE_TEMPLATE.substitute(name=module.name, fill_color=color)
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        decoration: LinkDecoration,
+    ) -> str:
+        link = f"{source} -> {target}"
+        if decoration.labels:
+            link = f"{link}: {'; '.join(decoration.labels)}"
+        if decoration.styles:
+            link = f"{link} {{{'; '.join(decoration.styles)}}}"
+        return link
 
-    def _format_link(self, source: str, target: str) -> str:
-        return f"{source} -> {target}"
-
-    def _format_cycle(self, cycle: CyclicDependency) -> str:
+    def _format_cycle(self, cycle: Cycle) -> CycleRender:
         connection = _CYCLE_CONNECTION_TEMPLATE.substitute(
             ns_a=cycle.namespace_from,
             ns_b=cycle.namespace_to,
             color=CYCLE_HIGHLIGHT_COLOR,
         )
+        if not self.options.show_cycle_details:
+            return CycleRender(inline=connection)
+        return CycleRender(inline=connection, deferred=self._format_cycle_note(cycle))
 
-        if self.options.show_cycle_details:
-            self._cycle_notes.append(self._format_cycle_note(cycle))
-
-        return connection
-
-    def _format_cycle_note(self, cycle: CyclicDependency) -> str:
-        """Format cycle details as a separate note block."""
-        forward_details = "\n".join(self._format_edges(cycle.forward_edges))
-        backward_details = "\n".join(self._format_edges(cycle.backward_edges))
+    def _format_cycle_note(self, cycle: Cycle) -> str:
+        """Format cycle details as a separate note block (D2 needs them deferred)."""
+        forward_details, backward_details = cycle_detail_sections(cycle)
         ns_a_safe = cycle.namespace_from.replace(".", "_")
         ns_b_safe = cycle.namespace_to.replace(".", "_")
-
         return _CYCLE_NOTE_TEMPLATE.substitute(
             ns_a=cycle.namespace_from,
             ns_b=cycle.namespace_to,
             note_id=f"cycle_{ns_a_safe}_{ns_b_safe}",
-            forward_details=textwrap.indent(forward_details, "  "),
-            backward_details=textwrap.indent(backward_details, "  "),
+            forward_details=forward_details,
+            backward_details=backward_details,
             note_color=_CYCLE_NOTE_COLOR,
             stroke_color=CYCLE_HIGHLIGHT_COLOR,
         )
 
-    def _combine_output(self, modules: list[str], links: list[str]) -> str:
-        sections = ["direction: right", "\n\n".join(modules), "\n".join(links)]
-
-        if self._cycle_notes:
-            cycle_notes_container = self._format_cycle_notes_container()
-            sections.append(cycle_notes_container)
-
+    def _combine_output(
+        self,
+        nodes: list[str],
+        links: list[str],
+        deferred: list[str],
+    ) -> str:
+        sections = ["direction: right", "\n\n".join(nodes), "\n".join(links)]
+        if deferred:
+            sections.append(self._format_cycle_notes_container(deferred))
         return "\n".join(sections)
 
-    def _format_cycle_notes_container(self) -> str:
+    @staticmethod
+    def _format_cycle_notes_container(notes: list[str]) -> str:
         """Wrap cycle notes in a styled box with grid layout."""
-        notes_content = "\n\n".join(self._cycle_notes)
+        notes_content = "\n\n".join(notes)
         indented_notes = textwrap.indent(notes_content, "    ")
         return _CYCLE_CONTAINER_TEMPLATE.substitute(
             fill=_CYCLE_CONTAINER_FILL,

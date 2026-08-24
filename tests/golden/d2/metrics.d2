@@ -1,0 +1,62 @@
+direction: right
+pkg_a.core: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+
+pkg_a.services: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 0
+  fan_out: 1
+  instability: 1.0
+}
+
+pkg_b.util: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 2
+  fan_out: 1
+  instability: 0.33
+}
+pkg_a <-> pkg_b: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
+"Cycle Details": {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.stroke-width: 2
+  style.border-radius: 12
+
+  grid: {
+    label: ""
+    grid-rows: 1
+    grid-gap: 32
+    style.stroke: transparent
+    style.fill: transparent
+
+    cycle_pkg_a_pkg_b: |md
+      ### pkg_a ↔ pkg_b
+
+      **pkg_a → pkg_b:**
+
+      - core → util
+      - services → util
+
+      **pkg_b → pkg_a:**
+
+      - util → core
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+  }
+}

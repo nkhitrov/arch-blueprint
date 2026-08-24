@@ -1,0 +1,32 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class pkg_a.core <<(M, #2ECC71)>> {
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+class pkg_a.services <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 1
+  instability: 1.0
+}
+class pkg_b.util <<(M, #2ECC71)>> {
+  fan_in: 2
+  fan_out: 1
+  instability: 0.33
+}
+
+pkg_a <-[#C0392B,bold]-> pkg_b
+note on link
+  **pkg_a -> pkg_b:**
+  - core → util
+  - services → util
+  **pkg_b -> pkg_a:**
+  - util → core
+end note
+@enduml
+

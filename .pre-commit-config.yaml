@@ -2,17 +2,19 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.4.0
+    rev: v5.0.0
     hooks:
       - id: check-ast
       - id: trailing-whitespace
+        exclude: ^tests/golden/
       - id: check-toml
       - id: end-of-file-fixer
+        exclude: ^tests/golden/
 
   - repo: local
     hooks:
       - id: format
-        name: Format with Black
+        name: Format with Ruff
         entry: uv run ruff format
         language: system
         types: [python]
@@ -36,3 +38,12 @@ repos:
         types: [python]
         args:
           - ./src
+
+      - id: pytest
+        name: Run tests
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        types: [python]
+        args:
+          - "-q"

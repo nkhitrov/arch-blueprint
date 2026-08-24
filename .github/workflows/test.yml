@@ -1,10 +1,31 @@
-name: Testing package
+name: CI
 
 on:
+  push:
+    branches: [master]
   pull_request:
 
 jobs:
+  lint:
+    name: Lint, format & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
+      - name: Run pre-commit (lint, format, types)
+        run: |
+          uv sync --locked
+          SKIP=pytest uv run pre-commit run -a
+
   test:
+    name: Tests
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -20,7 +41,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install the latest version of uv
         uses: astral-sh/setup-uv@v7
-      - name: Run pre-commit check
+      - name: Run tests
         run: |
           uv sync --locked
-          uv run pre-commit run -a
+          uv run pytest -q
