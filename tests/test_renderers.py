@@ -209,7 +209,7 @@ def test_puml_wraps_grouped_nodes_in_a_package() -> None:
     graph = _computed_graph()
     graph.groups = GroupAnalyzer.build(graph)
     output = PlantUmlRenderer(plan=_plan("puml")).render(graph)
-    assert "package a <<(P, #95A5A6)>> {\n  class a.core" in output
+    assert "package a {\n  class a.core" in output
 
 
 def test_d2_leaves_grouping_to_its_own_nesting() -> None:

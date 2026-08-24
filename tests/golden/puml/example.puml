@@ -4,13 +4,13 @@
 top to bottom direction
 hide empty members
 
-package app1 <<(P, #95A5A6)>> {
+package app1 {
   class app1.models <<(M, #2ECC71)>>
 }
-package app2 <<(P, #95A5A6)>> {
+package app2 {
   class app2.service <<(M, #2ECC71)>>
 }
-package plugins <<(P, #95A5A6)>> {
+package plugins {
   class plugins.auth.backend <<(M, #1ABC9C)>>
 }
 

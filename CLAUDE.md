@@ -142,9 +142,12 @@ style slot by the renderer.
 ### Namespace grouping
 
 Links aggregate to namespaces while nodes are modules, so most arrow endpoints are names no node
-carries; without a declaration PlantUML invents an empty box and the real nodes sit unconnected
-beside it. `GroupAnalyzer.build` produces a `Group` per endpoint that needs one, under three rules —
-each earned by a case that breaks otherwise:
+carries. PlantUML resolves them anyway — it infers a container from the dotted class names, and the
+rendered picture is the same either way (verified by diffing renders before and after grouping).
+Declaring them is about the emitted source naming everything it points at, and about being able to
+style or label a container; it is **not** a fix for a broken image. `GroupAnalyzer.build` produces a
+`Group` per endpoint that needs one, under three rules — each earned by a case that breaks
+otherwise:
 
 1. A namespace that **is** a node id gets no group: the endpoint is already declared, and
    `package a.b { class a.b }` is a PlantUML syntax error. Not an edge case — 18 of 23 endpoints hit
@@ -166,8 +169,9 @@ Abstract hooks: `_format_node`, `_format_link(source, target, decoration)`,
 would break every renderer outside this package. `_format_cycle` returns a
 `CycleRender(inline, deferred)` so a renderer that must place cycle details elsewhere (D2) carries
 them out-of-band without mutating instance state. Shared cycle-detail formatting lives in
-`renderer/cycles.py`. Cycles use `CYCLE_HIGHLIGHT_COLOR`, containers `#95A5A6` — both kept distinct
-from every `depth_colors` entry.
+`renderer/cycles.py`. Cycles use `CYCLE_HIGHLIGHT_COLOR`, kept distinct from every
+`depth_colors` entry. Containers carry **no** stereotype: PlantUML draws one on a package as literal
+text inside the frame rather than as a colored spot, which is noise on every container.
 
 To add a new output format:
 1. Subclass `BlueprintRenderer` in a new `renderer/<name>.py`, set `fmt`, implement the abstract
