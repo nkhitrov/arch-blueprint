@@ -29,7 +29,7 @@ def _syntax_check(diagrams: str) -> subprocess.CompletedProcess[str]:
 
 
 @pytest.mark.skipif(_PLANTUML is None, reason="plantuml binary not installed")
-def test_puml_goldens_are_parseable():
+def test_puml_goldens_are_parseable() -> None:
     """Every stored PlantUML golden must be a diagram PlantUML can actually parse.
 
     Byte-comparison alone cannot tell a valid diagram from a broken one — it only

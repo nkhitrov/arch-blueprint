@@ -15,12 +15,12 @@ FORMAT = "puml"
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda s: s.name)
-def test_puml_output_matches_golden(scenario: Scenario):
+def test_puml_output_matches_golden(scenario: Scenario) -> None:
     assert_scenario_matches_golden(scenario, FORMAT)
 
 
-def test_output_is_deterministic():
+def test_output_is_deterministic() -> None:
     """Node declaration order must be stable across runs (default format)."""
     first = run_cli(EXAMPLE_PROJECT, *EXAMPLE_MODULES)
     second = run_cli(EXAMPLE_PROJECT, *EXAMPLE_MODULES)
-    assert first == second
+    assert first.stdout == second.stdout
