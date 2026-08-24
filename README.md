@@ -10,7 +10,6 @@ pip install arch-blueprint
 
 # Usage
 
-Commands
 ```shell
 arch-blueprint --help
 usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2}]
@@ -30,17 +29,82 @@ options:
                         'myapp.*.*.models.*', 'myapp.somemodule.**')
   --format, -f {puml,d2}
                         Output format. Possible values: ['puml', 'd2']
-  --metric NAME         Show a metric block on each node (repeatable). e.g.
-                        --metric fan_in
+  --metric NAME         Display a metric (repeatable). A node metric renders
+                        as a block on each node (e.g. --metric fan_in); a link
+                        metric renders as a label on each connection (e.g.
+                        --metric edge_weight).
   --no-cycle-details    Hide detailed information for cyclic dependencies
+```
+
+A run against the bundled example project:
+
+```shell
+arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'
+```
+
+```puml
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+package app1 <<(P, #95A5A6)>> {
+  class app1.models <<(M, #2ECC71)>>
+}
+package app2 <<(P, #95A5A6)>> {
+  class app2.service <<(M, #2ECC71)>>
+}
+package plugins <<(P, #95A5A6)>> {
+  class plugins.auth.backend <<(M, #1ABC9C)>>
+}
+
+app2 ---> app1
+app2 ---> plugins
+@enduml
+```
+
+### How the diagram is built
+
+A **node** is a module. A **link** is aggregated to the namespace where two modules first differ, so
+`app2.service` importing `app1.models` is drawn as `app2 ---> app1`. Those endpoints are declared as
+packages, and the modules under them are drawn inside — otherwise PlantUML would invent an empty
+element for every arrow. A namespace that is itself a module (`writer` importing `storage.backend`)
+stays a plain class: wrapping a class in a package of the same name is a syntax error.
+
+`-m` is repeatable, which is how you graph sibling packages under a root that has no `__init__.py`
+of its own. A link is drawn when both endpoints belong to the selected set — including a dependency
+*on* a package whose children were selected, since `pkg.*` never selects `pkg` itself.
+
+### Errors
+
+Bad input is reported on stderr and exits 2; an analysis that cannot finish exits 1. Nothing fails
+silently — a mistyped metric name is an error listing the valid ones, and a pattern matching no
+modules is an error rather than an empty diagram.
+
+```shell
+$ arch-blueprint examples/project_root -m 'app1.*' --metric fanin
+arch-blueprint: unknown metric 'fanin'. Available: depth, edge_weight, fan_in, fan_out, instability
 ```
 
 ### Metrics
 
-- `--metric NAME` adds a per-node metric block (repeatable). Built-in metrics:
-  `fan_in`, `fan_out`, `instability`. New metrics are added as self-contained
-  plugins under `src/arch_blueprint/metrics/` and registered in
-  `metrics/__init__.py` — no changes to the extractor or renderers are needed.
+`--metric NAME` is repeatable and displays a metric. Where it is drawn depends on what it measures:
+
+| Metric | Kind | Drawn as |
+| --- | --- | --- |
+| `fan_in` | node | a row in the node's block |
+| `fan_out` | node | a row in the node's block |
+| `instability` | node | a row in the node's block — `fan_out / (fan_in + fan_out)` |
+| `edge_weight` | link | a label on the connection: how many imports it stands for |
+
+Blocks appear in the order you asked for them. A cycle is one connection standing for two links, so
+a link metric shows both values there as `forward/backward`, matching the order of the cycle's own
+detail block.
+
+New metrics are self-contained plugins under `src/arch_blueprint/metrics/`, registered in
+`metrics/__init__.py` — no changes to the extractor or renderers are needed. See `CLAUDE.md` for the
+protocols.
 
 ## Development
 
@@ -53,6 +117,10 @@ uv run pre-commit run -a      # lint, format, type-check, test (what CI runs)
 ```
 
 # Examples
+
+> The sample output below was generated before modules were grouped into their namespace packages,
+> so the arrows are the same but the `package` blocks are missing. Regenerate with the command shown
+> under each heading.
 
 ## FastAPI
 [Commit](https://github.com/fastapi/fastapi/commit/9348a5e2cf55440ff3da3bd4b7876acd3b3f57e5)
@@ -367,3 +435,7 @@ taskiq.task ---> taskiq.exceptions
 taskiq.task ---> taskiq.result
 @enduml
 ```
+
+# License
+
+MIT — see [LICENSE](LICENSE).

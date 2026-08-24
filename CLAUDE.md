@@ -16,32 +16,56 @@ This project uses `uv` for environment and dependency management.
 - Run all checks (what CI runs): `uv run pre-commit run -a` (lint, format, mypy, pytest)
 - Run the test suite only: `uv run pytest`
 - Format: `uv run ruff format`
-- Lint (with autofix): `uv run ruff check --fix src`
-- Type-check (strict mypy): `uv run mypy ./src`
+- Lint (with autofix): `uv run ruff check --fix src tests`
+- Type-check (strict mypy): `uv run mypy ./src ./tests`
 - Run the CLI against a project: `uv run arch-blueprint <project_dir> -m '<pattern>' [-f puml|d2]`
-  - Example: `uv run arch-blueprint . -m 'arch_blueprint.*'`
+  - Example: `uv run arch-blueprint src -m 'arch_blueprint.*'`
+  - Graphing **this** project is a special case: `arch_blueprint` is already in `sys.modules`
+    (the CLI *is* it), so `find_spec` resolves to the running copy whatever `<project_dir>` says.
+    To graph a different checkout, put it first on `PYTHONPATH` so that copy is the one running.
   - `--modules`/`-m` accepts grimp glob patterns (`pkg.*`, `pkg.**`, `pkg.*.*.models.*`).
   - `-m` can be **repeated** to graph several top-level packages at once and draw the links
     between them — useful when `<project_dir>` is a root with no `__init__.py` containing sibling
     packages (e.g. `-m 'app1.*' -m 'app2.*'`). A cross-package link is drawn only when both
-    endpoints are in the selected set.
+    endpoints belong to the selected set — which includes a dependency *on* a package whose
+    children were selected, since `pkg.*` never selects `pkg` itself.
   - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
-    on each connection.
+    on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
+    not a silent no-op.
 - Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
 CI (`.github/workflows/test.yml`) has two jobs: a single-version `lint` job (`pre-commit`, skipping
-pytest) and a `test` matrix running `pytest` across Python 3.9–3.14, on push to `master` and on PRs.
+pytest) and a `test` matrix running `pytest` across Python 3.9–3.14 on Linux plus one
+`windows-latest` leg — that console is not UTF-8, and diagram output contains arrows, so an encoding
+regression is invisible on Linux alone. Runs on push to `master` and on PRs.
 
 ### Tests
 
-`tests/` holds the suite. `tests/test_golden.py` runs the CLI as a subprocess over fixtures and
-asserts byte-exact output against snapshots in `tests/golden/` — the regression guard; when output
-*intentionally* changes, regenerate the affected golden file. `tests/test_units.py` covers the
-domain, metrics, analyzer, and extractors. Fixtures: `examples/project_root` (multi-root + namespace
-packages) and `tests/fixtures/cyclic` (a module cycle).
+`tests/` holds the suite, one file per layer under test:
+
+- `test_domain.py` — link aggregation, `CycleAnalyzer`, `GroupAnalyzer`.
+- `test_metrics.py` — metric computation, registry routing, render plugins, `RenderPlan` validation.
+- `test_renderers.py` — both renderers **in-process** (build a graph, render it, assert on the text).
+- `test_source.py` — `GrimpSource`, interpreter-state hygiene, extraction.
+- `test_cli.py` — exit codes, stderr messages, output encoding.
+- `test_golden_puml.py` / `test_golden_d2.py` — run the CLI as a subprocess over every scenario in
+  `tests/conftest.py:SCENARIOS` and assert byte-exact output against `tests/golden/<fmt>/`. When
+  output changes *intentionally*, regenerate the affected golden.
+- `test_golden_structure.py` — invariants the goldens must satisfy, not just their bytes: every link
+  endpoint is declared, and no package wraps a class of its own name.
+
+A hand-built `BlueprintGraph` has **empty `cycles` and `groups`** until the analyze step fills them.
+A renderer test that needs either must populate them explicitly, or it will silently assert against
+ungrouped nodes and plain arrows.
+
+Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
+(a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
+and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
+`tests/fixtures/ancestor_dep` (an import of a package facade). Fixture projects are excluded from
+ruff and mypy — they are analysis subjects, not code we ship.
 
 ## Git conventions
 
@@ -51,43 +75,60 @@ packages) and `tests/fixtures/cyclic` (a module cycle).
 
 ## Architecture
 
-`ArchBlueprint.run()` (`src/arch_blueprint/blueprint.py`) is a thin orchestrator over four layers:
+`ArchBlueprint` (`src/arch_blueprint/blueprint.py`) is a thin orchestrator: `build()` runs
+everything up to rendering, `render(graph)` draws, and `run()` is the two together. The CLI uses
+`build()`/`render()` separately because it must see the graph — an empty selection is a user error,
+not a diagram.
 
-1. **Source** (`extract/source.py`) — `GrimpSource` owns all grimp/`sys.path` mechanics: it appends
-   `project_dir` to `sys.path`, resolves every `--modules` pattern to a top-level package, and builds
-   the grimp graph (multiple roots supported). It handles PEP 420 namespace packages grimp can't
-   build directly (expands them, skips ones with no analyzable source with a stderr warning). It
-   exposes `selected_modules()` and `imports_of(module)`.
-2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`) turns the source
-   into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected module. An extractor
-   assigns each `Node` its `NodeKind` and namespace, so a new node kind is added by writing another
-   extractor — the domain, metrics, and renderers do not change.
-3. **Domain + metrics** — `domain/` holds the data model: `Node` (id, `NodeKind`, namespace — frozen
-   and hashable, **no metric fields**), `Edge`, `Link`, `Cycle`, and `BlueprintGraph` (aggregates
-   edges into `Link`s via `build_links`, stores metrics in side maps keyed by id/namespace-pair).
-   `analyze/cycles.py` (`CycleAnalyzer`) finds bidirectional namespace dependencies — agnostic to
-   node kind. Metrics are **compute-only plugins** (`metrics/`): each declares a `target`
-   (`MetricTarget.NODE`/`LINK`), names a render plugin (`render`), and implements `compute(graph)`.
-   `MetricRegistry.compute_all` routes results by target into `graph.node_metrics` (keyed by node id)
-   or `graph.link_metrics` (keyed by namespace pair). **Render plugins** (`metrics/render.py`) are a
-   separate, registerable layer: each implements the `RenderPlugin` protocol (`name`, `attaches_to`,
-   `render(ctx, label, value) -> RenderFragment`) and is format-aware via `RenderContext.fmt`, so it
-   can emit node-block text, edge labels, or edge shapes/colors. New render types are added without
-   changing library code. `MetricDisplay` (`metrics/display.py`) is the separate config selecting
-   which metrics to display.
-4. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
+1. **Source** (`extract/source.py`) — `GrimpSource` owns all grimp/`sys.path` mechanics: resolves
+   every `--modules` pattern to a top-level package and builds the grimp graph (multiple roots
+   supported). It handles PEP 420 namespace packages grimp can't build directly (expands them, skips
+   ones with no analyzable source with a stderr warning). It exposes `selected_modules()` and
+   `imports_of(module)` (a module's own imports **and** its descendants').
+   Resolution uses `importlib.util.find_spec`, never `import_module`: analysing a project must not
+   execute it. `sys.path` and `sys.modules` are restored afterwards, which is what makes the library
+   re-runnable in one process — restoring the path alone is not enough, since `sys.modules` is
+   consulted first.
+2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`, no constructor
+   dictated) turns the source into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected
+   module, and an edge when a selected module imports another across a namespace boundary. Selection
+   matches **both directions**: a dependency under a selected module, and a dependency *on* a package
+   whose children are selected (`pkg.*` never selects `pkg`, so a re-exporting facade is otherwise
+   unmatchable).
+3. **Domain** (`domain/`) — `Node` (id + `NodeKind`; frozen, hashable, **no metric or grouping
+   fields** — which group a node belongs to depends on links that do not exist when it is built),
+   `Edge`, `Link`, `Cycle`, `Group`, and `BlueprintGraph`. `edges` is a `frozenset` because `links`,
+   `cycles` and `groups` are all derived from it and would silently go stale behind a mutation.
+   Metrics live in side maps keyed by node id / namespace pair.
+4. **Metrics** (`metrics/`) — compute-only plugins. `NodeMetric` and `LinkMetric` are **separate**
+   protocols (`metrics/base.py`); the registry holds them in separate collections, so the collection
+   a metric sits in *is* its target and results route without a cast. Register with
+   `register_node` / `register_link`. `MetricRegistry.compute(graph, names)` computes only what is
+   asked for. `depth` is compute-only (`render = None`) and drives node fill color.
+5. **Analyze** (`analyze/`) — `CycleAnalyzer.detect_cycles` finds bidirectional namespace
+   dependencies; `GroupAnalyzer.build` decides which link endpoints need a container (see below).
+   Both are agnostic to node kind, and both run in the pipeline — **not** in a renderer.
+6. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
+
+### Render plan
+
+`build_render_plan(registry, renders, display, fmt)` (`metrics/plan.py`) resolves requested metric
+names to render plugins **once**, preserving `display.shown` order (metric blocks follow CLI
+argument order, not registration order — `tests/golden/*/metrics_reordered.*` pins this). It is the
+single place a bad request is rejected, with `MetricConfigError`: unknown metric, compute-only
+metric, missing render plugin, plugin attached to the wrong side, unknown color metric. It also
+reports `required_metrics`, which the pipeline computes — that keeps `color_metric` a single source
+of truth, so a custom one cannot go uncomputed and paint every node `depth_colors[0]`.
 
 ### Adding a metric (Open/Closed)
 
-Add one file under `src/arch_blueprint/metrics/` implementing the `Metric` protocol (`name`,
-`target`, `applies_to`, `render`, `compute`) and register it in
-`metrics/__init__.py:default_registry`. The extractor and renderer cores do not change. A node metric
-sets `target = MetricTarget.NODE` and a `render` plugin name like `"text_row"`; a link metric sets
-`target = MetricTarget.LINK` and e.g. `"edge_label"` (its `compute` is keyed by `(src_ns, tgt_ns)`).
-`depth` is compute-only (`render = None`): it drives node fill color and is never displayed. Demo
-metrics: `fan_in`/`fan_out`/`instability` (node blocks) and `edge_weight` (link label), shown when
-requested via `--metric`. Link-metric labels apply to ordinary directed links; cyclic connections
-keep their own cycle rendering.
+Add one file under `src/arch_blueprint/metrics/` implementing `NodeMetric` (`name`, `applies_to`,
+`render`, `compute` keyed by node id) or `LinkMetric` (`name`, `render`, `compute` keyed by
+`(src_ns, tgt_ns)` — no `applies_to`, a link connects namespaces, not node kinds). Register it in
+`metrics/__init__.py:default_registry` with the matching `register_*` call. The extractor and
+renderer cores do not change. Demo metrics: `fan_in`/`fan_out`/`instability` (node blocks, sharing
+`_degrees.degree_counts`) and `edge_weight` (link label). A cycle is one connection standing for two
+links, so a link metric shows both values there as `forward/backward`.
 
 ### Adding a render type (plugin)
 
@@ -98,21 +139,48 @@ registry you construct — no library change needed). Branch on `ctx.fmt` (`"pum
 format-specific output; `text` becomes a node line / edge label, `style` is injected into the edge's
 style slot by the renderer.
 
+### Namespace grouping
+
+Links aggregate to namespaces while nodes are modules, so most arrow endpoints are names no node
+carries; without a declaration PlantUML invents an empty box and the real nodes sit unconnected
+beside it. `GroupAnalyzer.build` produces a `Group` per endpoint that needs one, under three rules —
+each earned by a case that breaks otherwise:
+
+1. A namespace that **is** a node id gets no group: the endpoint is already declared, and
+   `package a.b { class a.b }` is a PlantUML syntax error. Not an edge case — 18 of 23 endpoints hit
+   it when this project graphs itself.
+2. Namespaces nest, so a node joins the **deepest** one it lies under. Declaring a class in two
+   containers does not error; it silently collapses to one entity.
+3. A node under no endpoint namespace joins no group and is drawn as before.
+
 ### Renderers (Template Method pattern)
 
-`BlueprintRenderer` (`renderer/base.py`) defines the fixed, **stateless** `render(graph)` algorithm
-and abstract hooks: `_format_node`, `_format_link(source, target, decoration)`, `_format_cycle`,
-`_combine_output` (plus a `fmt` class attribute). The core resolves each shown metric's render plugin
-itself and passes node-block text to `_format_node` and a `LinkDecoration(labels, styles)` to
-`_format_link`. `_format_cycle` returns a `CycleRender(inline, deferred)` so a renderer that must
-place cycle details elsewhere (D2) carries them out-of-band without mutating instance state. Shared
-cycle-detail formatting lives in `renderer/cycles.py`. `RendererOptions` controls depth colors,
-cycle details, and the color metric; metric *selection* is the separate `MetricDisplay` argument.
-Cycles are highlighted with `CYCLE_HIGHLIGHT_COLOR` (kept distinct from every `depth_colors` entry).
+`BlueprintRenderer` (`renderer/base.py`) defines the fixed, **stateless** `render(graph)` algorithm.
+It takes a `RenderPlan` (required — a missing one is a `TypeError`, never a silent metric-free
+render) and `RendererOptions` (depth colors, cycle details). `fmt` is a `ClassVar` each renderer must
+set; the constructor rejects a plan built for another format.
+
+Abstract hooks: `_format_node`, `_format_link(source, target, decoration)`,
+`_format_cycle(cycle, decoration)`, `_combine_output`. `_format_group(namespace, nodes)` is
+**concrete**, defaulting to no wrapping — D2 nests by dotted name on its own, and an abstract method
+would break every renderer outside this package. `_format_cycle` returns a
+`CycleRender(inline, deferred)` so a renderer that must place cycle details elsewhere (D2) carries
+them out-of-band without mutating instance state. Shared cycle-detail formatting lives in
+`renderer/cycles.py`. Cycles use `CYCLE_HIGHLIGHT_COLOR`, containers `#95A5A6` — both kept distinct
+from every `depth_colors` entry.
 
 To add a new output format:
-1. Subclass `BlueprintRenderer` in a new `renderer/<name>.py` and implement the abstract hooks.
+1. Subclass `BlueprintRenderer` in a new `renderer/<name>.py`, set `fmt`, implement the abstract
+   hooks, and override `_format_group` if the format does not nest by dotted name.
 2. Register it in the `_RENDERERS` mapping in `__main__.py`.
 
 Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer/d2.py`
 (`D2LangRenderer`). Both are stateless and reuse the shared helpers.
+
+### CLI behaviour
+
+`__main__.py` reports failures as one line on stderr with no traceback: exit **2** for bad input
+(missing project directory, unresolvable pattern, no modules matched, bad `--metric`), exit **1** for
+an analysis that could not finish. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
+details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all
+the work is done.
