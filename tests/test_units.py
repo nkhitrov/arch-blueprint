@@ -6,6 +6,7 @@ from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.domain.graph import BlueprintGraph, Edge, build_links
 from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.extract.base import common_depth_namespaces, parent_namespace
+from arch_blueprint.extract.class_extractor import ClassExtractor
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
 from arch_blueprint.metrics import (
@@ -20,7 +21,7 @@ from arch_blueprint.metrics.fan_out import FanOutMetric
 from arch_blueprint.metrics.instability import InstabilityMetric
 from arch_blueprint.metrics.render import EdgeLabelRender, TextRowRender
 from arch_blueprint.renderer.base import RendererOptions
-from tests.conftest import CYCLIC_PROJECT
+from tests.conftest import CLASSES_PROJECT, CYCLIC_PROJECT
 
 
 def _edge(source: str, target: str, src_ns: str, tgt_ns: str) -> Edge:
@@ -190,3 +191,18 @@ def test_module_extractor_builds_cycle():
     assert all(node.kind is NodeKind.MODULE for node in graph.nodes)
     cycles = CycleAnalyzer.detect_cycles(graph.links)
     assert len(cycles) == 1
+
+
+def test_class_extractor_finds_classes_and_cross_module_edges():
+    source = GrimpSource(str(CLASSES_PROJECT), ["shop.*"])
+    graph = ClassExtractor(source).extract()
+    ids = {node.id for node in graph.nodes}
+    assert ids == {"shop.models.Customer", "shop.models.Order", "shop.billing.Payment"}
+    assert all(node.kind is NodeKind.CLASS for node in graph.nodes)
+    # Order -> Payment (annotation) and Payment -> Order (annotation) form a cycle.
+    cycles = CycleAnalyzer.detect_cycles(graph.links)
+    assert len(cycles) == 1
+    assert {cycles[0].namespace_from, cycles[0].namespace_to} == {
+        "shop.models",
+        "shop.billing",
+    }

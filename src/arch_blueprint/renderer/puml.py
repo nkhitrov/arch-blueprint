@@ -39,7 +39,7 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
 )
 
 # PlantUML stereotype spot letter per node kind.
-_SPOT_LETTER: Final = {NodeKind.MODULE: "M"}
+_SPOT_LETTER: Final = {NodeKind.MODULE: "M", NodeKind.CLASS: "C"}
 
 
 class PlantUmlRenderer(BlueprintRenderer):

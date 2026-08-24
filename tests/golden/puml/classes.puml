@@ -1,0 +1,19 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class shop.billing.Payment <<(C, #1ABC9C)>>
+class shop.models.Customer <<(C, #1ABC9C)>>
+class shop.models.Order <<(C, #1ABC9C)>>
+
+shop.billing <-[#C0392B,bold]-> shop.models
+note on link
+  **shop.billing -> shop.models:**
+  - Payment → Order
+  **shop.models -> shop.billing:**
+  - Order → Payment
+end note
+@enduml
+

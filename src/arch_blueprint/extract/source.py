@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -14,7 +15,8 @@ class GrimpSource:
     """Builds and exposes a grimp import graph for the selected target packages.
 
     Encapsulates all the sys.path / package-resolution mechanics so extractors
-    can work against a clean interface (the selected modules and their imports).
+    can work against a clean interface (selected modules, their imports, and the
+    source file of any module).
     """
 
     def __init__(
@@ -62,6 +64,16 @@ class GrimpSource:
         for descendant in descendants:
             result.update(self.graph.find_modules_directly_imported_by(descendant))
         return result
+
+    def module_file(self, module: str) -> Optional[Path]:
+        """Resolve a module's source file without importing/executing it."""
+        try:
+            spec = importlib.util.find_spec(module)
+        except (ImportError, AttributeError, ValueError):
+            return None
+        if spec is None or spec.origin is None:
+            return None
+        return Path(spec.origin)
 
     def _resolve_grimp_packages(self) -> list[str]:
         packages: list[str] = []

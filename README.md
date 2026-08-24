@@ -14,7 +14,8 @@ Commands
 ```shell
 arch-blueprint --help
 usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2}]
-                      [--metric NAME] [--no-cycle-details]
+                      [--nodes {module,class}] [--metric NAME]
+                      [--no-cycle-details]
                       project_dir
 
 Generate architecture diagrams for Python applications
@@ -30,13 +31,20 @@ options:
                         'myapp.*.*.models.*', 'myapp.somemodule.**')
   --format, -f {puml,d2}
                         Output format. Possible values: ['puml', 'd2']
+  --nodes, -n {module,class}
+                        What each node represents. 'module' graphs module-
+                        level imports; 'class' graphs classes (grouped under
+                        their modules).
   --metric NAME         Show a metric block on each node (repeatable). e.g.
                         --metric fan_in
   --no-cycle-details    Hide detailed information for cyclic dependencies
 ```
 
-### Metrics
+### Node kinds and metrics
 
+- `--nodes module` (default) graphs module-level imports.
+- `--nodes class` graphs classes as nodes, grouped under their defining module;
+  links and cycles are drawn at the module level with class names in the details.
 - `--metric NAME` adds a per-node metric block (repeatable). Built-in metrics:
   `fan_in`, `fan_out`, `instability`. New metrics are added as self-contained
   plugins under `src/arch_blueprint/metrics/` and registered in
