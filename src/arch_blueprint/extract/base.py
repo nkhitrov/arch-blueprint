@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from arch_blueprint.domain.graph import BlueprintGraph
-from arch_blueprint.extract.source import GrimpSource
 
 
 @runtime_checkable
@@ -12,22 +11,14 @@ class GraphExtractor(Protocol):
 
     Implementations decide what a node is (a module, a class, ...) and how edges
     between nodes are derived, while sharing the same downstream link/cycle/metric
-    pipeline.
+    pipeline. How an implementation is constructed is its own business — the
+    pipeline takes a factory, so this abstraction needs no import of any concrete
+    source.
     """
-
-    def __init__(self, source: GrimpSource) -> None: ...
 
     def extract(self) -> BlueprintGraph:
         """Build the graph of nodes and edges for the selected targets."""
         ...
-
-
-def parent_namespace(module: str) -> str:
-    """The dotted parent of a module, or the module itself when top-level."""
-    if "." not in module:
-        return module
-    namespace, _ = module.rsplit(".", maxsplit=1)
-    return namespace
 
 
 def common_depth_namespaces(source: str, target: str) -> tuple[str, str]:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from arch_blueprint.domain.graph import Cycle, Edge, Link
+from arch_blueprint.domain.graph import Cycle, Link
 
 
 class CycleAnalyzer:
@@ -14,18 +14,10 @@ class CycleAnalyzer:
 
     @staticmethod
     def detect_cycles(links: Iterable[Link]) -> list[Cycle]:
-        links_by_pair: dict[tuple[str, str], Link] = {}
-        for link in links:
-            key = (link.source_namespace, link.target_namespace)
-            if key in links_by_pair:
-                merged_edges = links_by_pair[key].edges | link.edges
-                links_by_pair[key] = Link(
-                    source_namespace=link.source_namespace,
-                    target_namespace=link.target_namespace,
-                    edges=merged_edges,
-                )
-            else:
-                links_by_pair[key] = link
+        # build_links already guarantees one Link per namespace pair.
+        links_by_pair = {
+            (link.source_namespace, link.target_namespace): link for link in links
+        }
 
         cycles: list[Cycle] = []
         processed: set[tuple[str, str]] = set()
@@ -49,10 +41,3 @@ class CycleAnalyzer:
                 processed.add(reverse_key)
 
         return cycles
-
-    @staticmethod
-    def collect_all_edges(links: Iterable[Link]) -> set[Edge]:
-        result: set[Edge] = set()
-        for link in links:
-            result.update(link.edges)
-        return result

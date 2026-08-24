@@ -5,7 +5,7 @@ import pytest
 from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.domain.graph import BlueprintGraph, Edge, build_links
 from arch_blueprint.domain.node import Node, NodeKind
-from arch_blueprint.extract.base import common_depth_namespaces, parent_namespace
+from arch_blueprint.extract.base import common_depth_namespaces
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
 from arch_blueprint.metrics import (
@@ -35,12 +35,6 @@ def _edge(source: str, target: str, src_ns: str, tgt_ns: str) -> Edge:
 # --- naming helpers -------------------------------------------------------
 
 
-def test_parent_namespace():
-    assert parent_namespace("app.models") == "app"
-    assert parent_namespace("app") == "app"
-    assert parent_namespace("a.b.c") == "a.b"
-
-
 def test_common_depth_namespaces():
     assert common_depth_namespaces("app2.service", "app1.models") == ("app2", "app1")
     assert common_depth_namespaces("a.b.c", "a.b.d") == ("a.b.c", "a.b.d")
@@ -56,7 +50,7 @@ def test_build_links_groups_by_namespace_pair():
         _edge("a.z", "b.w", "a", "b"),
         _edge("a.x", "c.y", "a", "c"),
     }
-    links = build_links(edges)
+    links = build_links(frozenset(edges))
     by_pair = {(link.source_namespace, link.target_namespace): link for link in links}
     assert set(by_pair) == {("a", "b"), ("a", "c")}
     assert len(by_pair[("a", "b")].edges) == 2
@@ -68,7 +62,7 @@ def test_build_links_groups_by_namespace_pair():
 
 def test_detect_cycles_finds_bidirectional_pair():
     edges = {_edge("a.x", "b.y", "a", "b"), _edge("b.y", "a.x", "b", "a")}
-    cycles = CycleAnalyzer.detect_cycles(build_links(edges))
+    cycles = CycleAnalyzer.detect_cycles(build_links(frozenset(edges)))
     assert len(cycles) == 1
     cycle = cycles[0]
     assert {cycle.namespace_from, cycle.namespace_to} == {"a", "b"}
@@ -76,7 +70,7 @@ def test_detect_cycles_finds_bidirectional_pair():
 
 def test_detect_cycles_ignores_unidirectional():
     edges = {_edge("a.x", "b.y", "a", "b")}
-    assert CycleAnalyzer.detect_cycles(build_links(edges)) == []
+    assert CycleAnalyzer.detect_cycles(build_links(frozenset(edges))) == []
 
 
 # --- metrics --------------------------------------------------------------
@@ -84,10 +78,10 @@ def test_detect_cycles_ignores_unidirectional():
 
 def _sample_graph() -> BlueprintGraph:
     nodes = [
-        Node(id="a.core", kind=NodeKind.MODULE, namespace="a"),
-        Node(id="b.util", kind=NodeKind.MODULE, namespace="b"),
+        Node(id="a.core", kind=NodeKind.MODULE),
+        Node(id="b.util", kind=NodeKind.MODULE),
     ]
-    edges = {_edge("a.core", "b.util", "a", "b")}
+    edges = frozenset({_edge("a.core", "b.util", "a", "b")})
     return BlueprintGraph(nodes=nodes, edges=edges)
 
 
@@ -116,14 +110,16 @@ def test_registry_compute_all_populates_graph():
 
 def _multi_edge_graph() -> BlueprintGraph:
     nodes = [
-        Node(id="a.core", kind=NodeKind.MODULE, namespace="a"),
-        Node(id="a.api", kind=NodeKind.MODULE, namespace="a"),
-        Node(id="b.util", kind=NodeKind.MODULE, namespace="b"),
+        Node(id="a.core", kind=NodeKind.MODULE),
+        Node(id="a.api", kind=NodeKind.MODULE),
+        Node(id="b.util", kind=NodeKind.MODULE),
     ]
-    edges = {
-        _edge("a.core", "b.util", "a", "b"),
-        _edge("a.api", "b.util", "a", "b"),
-    }
+    edges = frozenset(
+        {
+            _edge("a.core", "b.util", "a", "b"),
+            _edge("a.api", "b.util", "a", "b"),
+        }
+    )
     return BlueprintGraph(nodes=nodes, edges=edges)
 
 

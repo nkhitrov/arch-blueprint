@@ -1,23 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final, Optional, final
+from typing import ClassVar, Final, Optional, final
 
-from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.domain.graph import BlueprintGraph, Cycle, MetricValue
 from arch_blueprint.domain.node import Node
-from arch_blueprint.metrics import (
-    COLOR_METRIC,
-    MetricDisplay,
-    MetricRegistry,
-    MetricTarget,
-    RenderContext,
-    RenderFragment,
-    RenderRegistry,
-    default_renders,
-)
+from arch_blueprint.metrics import RenderContext, RenderPlan
 
 # A distinct danger red for cycles; intentionally not one of DEFAULT_OPTIONS'
 # depth_colors so a cycle never visually collides with a node's depth color.
@@ -27,11 +17,14 @@ CYCLE_HIGHLIGHT_COLOR: Final = "#C0392B"
 @dataclass(frozen=True)
 @final
 class RendererOptions:
-    """Styling options for diagram renderers (metric *selection* is separate)."""
+    """Styling options for diagram renderers.
+
+    Which metrics are drawn — and which one drives node color — is the separate
+    :class:`RenderPlan`.
+    """
 
     depth_colors: Sequence[str]
     show_cycle_details: bool = False
-    color_metric: str = COLOR_METRIC
 
     def __post_init__(self) -> None:
         if not self.depth_colors:
@@ -88,20 +81,22 @@ class BlueprintRenderer(ABC):
     """ABC using Template Method pattern for rendering architecture diagrams."""
 
     #: Output format id (``"puml"`` / ``"d2"``) passed to render plugins.
-    #: Concrete renderers must set this.
-    fmt: str
+    #: Concrete renderers must set this; it is what a plan is built against.
+    fmt: ClassVar[str] = ""
 
     def __init__(
         self,
+        plan: RenderPlan,
         options: Optional[RendererOptions] = None,
-        registry: Optional[MetricRegistry] = None,
-        renders: Optional[RenderRegistry] = None,
-        display: Optional[MetricDisplay] = None,
     ) -> None:
+        if not self.fmt:
+            msg = f"{type(self).__name__} must set a non-empty 'fmt'"
+            raise TypeError(msg)
+        if plan.fmt != self.fmt:
+            msg = f"plan was built for '{plan.fmt}', but this renderer is '{self.fmt}'"
+            raise ValueError(msg)
+        self.plan = plan
         self.options = options or DEFAULT_OPTIONS
-        self.registry = registry
-        self.renders = renders or default_renders()
-        self.display = display or MetricDisplay()
 
     def render(self, graph: BlueprintGraph) -> str:
         """Template method: orchestrates the rendering algorithm."""
@@ -113,7 +108,7 @@ class BlueprintRenderer(ABC):
         result: list[str] = []
         for node in graph.nodes:
             metrics = graph.node_metrics.get(node.id, {})
-            depth = int(metrics.get(self.options.color_metric, 0))
+            depth = int(metrics.get(self.plan.color_metric, 0))
             color = self.options.get_color_for_depth(depth)
             blocks = self._render_metric_blocks(node, metrics)
             result.append(self._format_node(node, color, blocks))
@@ -122,27 +117,23 @@ class BlueprintRenderer(ABC):
     def _render_metric_blocks(
         self,
         node: Node,
-        metrics: dict[str, MetricValue],
+        metrics: Mapping[str, MetricValue],
     ) -> list[str]:
-        if self.registry is None:
-            return []
-        ctx = RenderContext(fmt=self.fmt)
+        ctx = RenderContext(fmt=self.plan.fmt)
         blocks: list[str] = []
-        for name in self.display.shown:
-            metric = self.registry.get(name)
-            if metric is None or metric.target is not MetricTarget.NODE:
+        for item in self.plan.node_items:
+            if node.kind not in item.applies_to or item.name not in metrics:
                 continue
-            if node.kind not in metric.applies_to or name not in metrics:
-                continue
-            fragment = self._render_metric(ctx, metric.render, name, metrics[name])
+            fragment = item.plugin.render(ctx, item.name, metrics[item.name])
             if fragment is not None and fragment.text:
                 blocks.append(fragment.text)
         return blocks
 
     def _render_links(self, graph: BlueprintGraph) -> tuple[list[str], list[str]]:
         all_links = graph.links
-        cycles = CycleAnalyzer.detect_cycles(all_links)
-        cycle_map = {frozenset({c.namespace_from, c.namespace_to}): c for c in cycles}
+        cycle_map = {
+            frozenset({c.namespace_from, c.namespace_to}): c for c in graph.cycles
+        }
 
         links: list[str] = []
         deferred: list[str] = []
@@ -176,19 +167,14 @@ class BlueprintRenderer(ABC):
         graph: BlueprintGraph,
         pair: tuple[str, str],
     ) -> LinkDecoration:
-        if self.registry is None:
-            return LinkDecoration()
         metrics = graph.link_metrics.get(pair, {})
-        ctx = RenderContext(fmt=self.fmt)
+        ctx = RenderContext(fmt=self.plan.fmt)
         labels: list[str] = []
         styles: list[str] = []
-        for name in self.display.shown:
-            metric = self.registry.get(name)
-            if metric is None or metric.target is not MetricTarget.LINK:
+        for item in self.plan.link_items:
+            if item.name not in metrics:
                 continue
-            if name not in metrics:
-                continue
-            fragment = self._render_metric(ctx, metric.render, name, metrics[name])
+            fragment = item.plugin.render(ctx, item.name, metrics[item.name])
             if fragment is None:
                 continue
             if fragment.text:
@@ -196,21 +182,6 @@ class BlueprintRenderer(ABC):
             if fragment.style:
                 styles.append(fragment.style)
         return LinkDecoration(labels=tuple(labels), styles=tuple(styles))
-
-    def _render_metric(
-        self,
-        ctx: RenderContext,
-        render_name: Optional[str],
-        label: str,
-        value: MetricValue,
-    ) -> Optional[RenderFragment]:
-        """Resolve and invoke the metric's render plugin; return its fragment."""
-        if render_name is None:
-            return None
-        plugin = self.renders.get(render_name)
-        if plugin is None:
-            return None
-        return plugin.render(ctx, label, value)
 
     @abstractmethod
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:

@@ -1,17 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import Optional, Protocol, runtime_checkable
 
 from arch_blueprint.domain.graph import MetricValue
-
-
-class MetricTarget(Enum):
-    """What a metric is computed and rendered on."""
-
-    NODE = "node"
-    LINK = "link"
+from arch_blueprint.metrics.base import MetricTarget
 
 
 @dataclass(frozen=True)

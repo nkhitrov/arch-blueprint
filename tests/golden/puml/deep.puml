@@ -1,0 +1,16 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class deep.api.v1.handlers <<(M, #F39C12)>>
+class deep.api.v1.schemas <<(M, #F39C12)>>
+class deep.core.models <<(M, #1ABC9C)>>
+class deep.core.services <<(M, #1ABC9C)>>
+
+deep.api ---> deep.core
+deep.api.v1.handlers ---> deep.api.v1.schemas
+deep.core.services ---> deep.core.models
+@enduml
+

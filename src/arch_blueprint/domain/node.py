@@ -16,10 +16,9 @@ class Node:
 
     A node is identified solely by ``id`` (its dotted, importable name), which
     keeps it hashable and lets metrics be stored alongside it without affecting
-    equality. ``namespace`` is assigned by the extractor rather than derived from
-    ``id`` so that different node kinds can group differently.
+    equality. Grouping is deliberately absent: which group a node belongs to
+    depends on the links, which do not exist yet when the extractor builds nodes.
     """
 
     id: str
     kind: NodeKind
-    namespace: str
