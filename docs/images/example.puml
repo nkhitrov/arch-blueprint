@@ -1,0 +1,20 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+package app1 {
+  class app1.models <<(M, #2ECC71)>>
+}
+package app2 {
+  class app2.service <<(M, #2ECC71)>>
+}
+package plugins {
+  class plugins.auth.backend <<(M, #1ABC9C)>>
+}
+
+app2 ---> app1
+app2 ---> plugins
+@enduml
+

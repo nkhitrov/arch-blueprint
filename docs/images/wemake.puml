@@ -1,0 +1,52 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class wemake_python_styleguide.checker <<(M, #2ECC71)>>
+class wemake_python_styleguide.cli <<(M, #2ECC71)>>
+class wemake_python_styleguide.compat <<(M, #2ECC71)>>
+class wemake_python_styleguide.constants <<(M, #2ECC71)>>
+class wemake_python_styleguide.formatter <<(M, #2ECC71)>>
+class wemake_python_styleguide.logic <<(M, #2ECC71)>>
+class wemake_python_styleguide.mcp <<(M, #2ECC71)>>
+class wemake_python_styleguide.options <<(M, #2ECC71)>>
+class wemake_python_styleguide.presets <<(M, #2ECC71)>>
+class wemake_python_styleguide.transformations <<(M, #2ECC71)>>
+class wemake_python_styleguide.types <<(M, #2ECC71)>>
+class wemake_python_styleguide.version <<(M, #2ECC71)>>
+class wemake_python_styleguide.violations <<(M, #2ECC71)>>
+class wemake_python_styleguide.visitors <<(M, #2ECC71)>>
+
+wemake_python_styleguide.checker ---> wemake_python_styleguide.constants
+wemake_python_styleguide.checker ---> wemake_python_styleguide.options
+wemake_python_styleguide.checker ---> wemake_python_styleguide.presets
+wemake_python_styleguide.checker ---> wemake_python_styleguide.transformations
+wemake_python_styleguide.checker ---> wemake_python_styleguide.types
+wemake_python_styleguide.checker ---> wemake_python_styleguide.version
+wemake_python_styleguide.checker ---> wemake_python_styleguide.violations
+wemake_python_styleguide.checker ---> wemake_python_styleguide.visitors
+wemake_python_styleguide.cli ---> wemake_python_styleguide.constants
+wemake_python_styleguide.cli ---> wemake_python_styleguide.violations
+wemake_python_styleguide.compat ---> wemake_python_styleguide.types
+wemake_python_styleguide.formatter ---> wemake_python_styleguide.constants
+wemake_python_styleguide.formatter ---> wemake_python_styleguide.version
+wemake_python_styleguide.logic ---> wemake_python_styleguide.compat
+wemake_python_styleguide.logic ---> wemake_python_styleguide.constants
+wemake_python_styleguide.logic ---> wemake_python_styleguide.options
+wemake_python_styleguide.logic ---> wemake_python_styleguide.types
+wemake_python_styleguide.mcp ---> wemake_python_styleguide.cli
+wemake_python_styleguide.presets ---> wemake_python_styleguide.visitors
+wemake_python_styleguide.transformations ---> wemake_python_styleguide.compat
+wemake_python_styleguide.transformations ---> wemake_python_styleguide.logic
+wemake_python_styleguide.transformations ---> wemake_python_styleguide.types
+wemake_python_styleguide.version ---> wemake_python_styleguide.compat
+wemake_python_styleguide.visitors ---> wemake_python_styleguide.compat
+wemake_python_styleguide.visitors ---> wemake_python_styleguide.constants
+wemake_python_styleguide.visitors ---> wemake_python_styleguide.logic
+wemake_python_styleguide.visitors ---> wemake_python_styleguide.options
+wemake_python_styleguide.visitors ---> wemake_python_styleguide.types
+wemake_python_styleguide.visitors ---> wemake_python_styleguide.violations
+@enduml
+

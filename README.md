@@ -42,6 +42,11 @@ A run against the bundled example project:
 arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'
 ```
 
+![Example project graph](docs/images/example.png)
+
+<details>
+<summary>The PlantUML source behind it</summary>
+
 ```puml
 @startuml
 !theme amiga
@@ -49,13 +54,13 @@ arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'
 top to bottom direction
 hide empty members
 
-package app1 <<(P, #95A5A6)>> {
+package app1 {
   class app1.models <<(M, #2ECC71)>>
 }
-package app2 <<(P, #95A5A6)>> {
+package app2 {
   class app2.service <<(M, #2ECC71)>>
 }
-package plugins <<(P, #95A5A6)>> {
+package plugins {
   class plugins.auth.backend <<(M, #1ABC9C)>>
 }
 
@@ -63,6 +68,8 @@ app2 ---> app1
 app2 ---> plugins
 @enduml
 ```
+
+</details>
 
 ### How the diagram is built
 
@@ -104,6 +111,17 @@ Blocks appear in the order you asked for them. A cycle is one connection standin
 a link metric shows both values there as `forward/backward`, matching the order of the cycle's own
 detail block.
 
+```shell
+arch-blueprint tests/fixtures/cyclic -m 'pkg_a.*' -m 'pkg_b.*' \
+  --metric fan_in --metric fan_out --metric instability --metric edge_weight
+```
+
+![Metrics on nodes and on a cyclic connection](docs/images/metrics.png)
+
+`pkg_b.util` is depended on twice and depends on one module, so `instability: 0.33`. The connection
+is a cycle, so `edge_weight` reads `2/1`: two imports one way, one the other — the same two
+directions the note spells out.
+
 New metrics are self-contained plugins under `src/arch_blueprint/metrics/`, registered in
 `metrics/__init__.py` — no changes to the extractor or renderers are needed. See `CLAUDE.md` for the
 protocols.
@@ -123,9 +141,20 @@ uv run pre-commit run -a      # lint, format, type-check, test (what CI runs)
 Generated with the code in this repository against released packages, so they can be reproduced:
 
 ```shell
-pip install --target /tmp/pkgs fastapi taskiq
-arch-blueprint /tmp/pkgs -m 'fastapi.*'
+pip install --target /tmp/pkgs wemake-python-styleguide fastapi taskiq
+arch-blueprint /tmp/pkgs -m 'wemake_python_styleguide.*'
 ```
+
+## wemake-python-styleguide
+
+`wemake-python-styleguide 1.8.0` — 14 modules, 29 links, **no cycles**.
+Source: [`docs/images/wemake.puml`](docs/images/wemake.puml)
+
+What a layered codebase looks like when nothing points back up: `checker` sits alone at the top,
+everything drains toward `types`, `constants` and `compat` at the bottom, and no connection is red.
+Compare it with the two below, where the red links are cycles the tool found.
+
+![wemake-python-styleguide module graph](docs/images/wemake.png)
 
 ## FastAPI
 
