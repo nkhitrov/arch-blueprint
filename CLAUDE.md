@@ -34,6 +34,13 @@ This project uses `uv` for environment and dependency management.
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
     not a silent no-op.
+- Regenerate goldens after an *intentional* output change:
+  `uv run python scripts/regenerate_goldens.py`. Running it twice must leave the tree clean — a diff
+  on the second run means the output is not deterministic, and that is the bug to fix first.
+- Regenerate the README example images: `uv pip install --target /tmp/pkgs wemake-python-styleguide
+  fastapi taskiq`, then `uv run arch-blueprint /tmp/pkgs -m '<pkg>.*' > docs/images/<name>.puml` and
+  `plantuml -tpng docs/images/*.puml`. The committed `.puml` must stay byte-identical to what the
+  CLI emits.
 - Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
@@ -57,6 +64,11 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
 - `test_golden_structure.py` — invariants the goldens must satisfy, not just their bytes: every link
   endpoint is declared, and no package wraps a class of its own name.
 
+Two scenarios look redundant and are not. `metrics_reordered` is the only one whose `--metric` order
+differs from registration order, so it is the only thing that would catch a render plan built by
+iterating the registry. `deep` is the only single-root project whose link endpoints collide with node
+ids and nest inside one another.
+
 A hand-built `BlueprintGraph` has **empty `cycles` and `groups`** until the analyze step fills them.
 A renderer test that needs either must populate them explicitly, or it will silently assert against
 ungrouped nodes and plain arrows.
@@ -66,6 +78,20 @@ Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tes
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
 `tests/fixtures/ancestor_dep` (an import of a package facade). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
+
+## Gotchas
+
+- `pre-commit run -a` reports the ruff hooks as **Failed** on the run that rewrites a file. Re-`git
+  add` and run again; a second failure is a real one.
+- Changing PlantUML output: **render a PNG and look at it**. `-syntax` / `-checkonly` only prove the
+  diagram parses. A stereotype on a `package` passes every text check while rendering as caption
+  text inside each frame — that regression shipped once and was caught only by comparing images.
+- `plantuml -syntax` ignores file arguments and reads stdin only; `-checkonly` takes files. Distro
+  builds differ: Ubuntu's `plantuml` 1.2020.02 carries no theme resources, so every golden fails
+  there on the shared `!theme amiga` header. Do not put a PlantUML check in CI — assert our own
+  invariants in `test_golden_structure.py` instead.
+- `tests/golden/` and `docs/images/` are excluded from the whitespace fixers: both hold verbatim tool
+  output, and a "fix" makes them stop matching it.
 
 ## Git conventions
 

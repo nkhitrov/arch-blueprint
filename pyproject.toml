@@ -113,6 +113,9 @@ exclude = [".venv/", "tests/fixtures/"]
 line-length = 88
 
 [tool.ruff.lint.per-file-ignores]
+"scripts/*" = [
+	"S603",   # subprocess call — the script exists to invoke our own CLI
+]
 "tests/*" = [
 	"S101",   # Use of assert detected
 	"S301",   # Use of pickle detected
