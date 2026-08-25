@@ -31,6 +31,7 @@ repos:
           - "--fix"
           - "src"
           - "tests"
+          - "scripts"
 
       - id: mypy
         name: Validate types with MyPy
@@ -41,6 +42,7 @@ repos:
         args:
           - ./src
           - ./tests
+          - ./scripts
 
       - id: pytest
         name: Run tests
