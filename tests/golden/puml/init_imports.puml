@@ -4,7 +4,7 @@
 top to bottom direction
 hide empty members
 
-package storage <<(P, #95A5A6)>> {
+package storage {
   class storage.backend <<(M, #2ECC71)>>
 }
 class writer <<(M, #3498DB)>>

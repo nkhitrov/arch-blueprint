@@ -24,7 +24,7 @@ package pkg_b {
   }
 }
 
-pkg_a <-[#C0392B,bold]-> pkg_b
+pkg_a <-[#C0392B,bold]-> pkg_b : edge_weight=2/1
 note on link
   **pkg_a -> pkg_b:**
   - core → util

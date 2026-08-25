@@ -4,10 +4,10 @@
 top to bottom direction
 hide empty members
 
-package api <<(P, #95A5A6)>> {
+package api {
   class api.handlers <<(M, #2ECC71)>>
 }
-package services <<(P, #95A5A6)>> {
+package services {
   class services.engine <<(M, #2ECC71)>>
 }
 

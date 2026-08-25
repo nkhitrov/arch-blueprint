@@ -6,10 +6,11 @@ repos:
     hooks:
       - id: check-ast
       - id: trailing-whitespace
-        exclude: ^tests/golden/
+        exclude: ^(tests/golden/|docs/images/)
       - id: check-toml
       - id: end-of-file-fixer
-        exclude: ^tests/golden/
+        # Both hold verbatim tool output; a "fix" makes them stop matching it.
+        exclude: ^(tests/golden/|docs/images/)
 
   - repo: local
     hooks:

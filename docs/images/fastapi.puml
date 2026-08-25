@@ -1,0 +1,125 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class fastapi.__main__ <<(M, #2ECC71)>>
+class fastapi._compat <<(M, #2ECC71)>>
+class fastapi.applications <<(M, #2ECC71)>>
+class fastapi.background <<(M, #2ECC71)>>
+class fastapi.cli <<(M, #2ECC71)>>
+class fastapi.concurrency <<(M, #2ECC71)>>
+class fastapi.datastructures <<(M, #2ECC71)>>
+class fastapi.dependencies <<(M, #2ECC71)>>
+class fastapi.encoders <<(M, #2ECC71)>>
+class fastapi.exception_handlers <<(M, #2ECC71)>>
+class fastapi.exceptions <<(M, #2ECC71)>>
+class fastapi.logger <<(M, #2ECC71)>>
+class fastapi.middleware <<(M, #2ECC71)>>
+class fastapi.openapi <<(M, #2ECC71)>>
+class fastapi.param_functions <<(M, #2ECC71)>>
+class fastapi.params <<(M, #2ECC71)>>
+class fastapi.requests <<(M, #2ECC71)>>
+class fastapi.responses <<(M, #2ECC71)>>
+class fastapi.routing <<(M, #2ECC71)>>
+class fastapi.security <<(M, #2ECC71)>>
+class fastapi.sse <<(M, #2ECC71)>>
+class fastapi.staticfiles <<(M, #2ECC71)>>
+class fastapi.templating <<(M, #2ECC71)>>
+class fastapi.testclient <<(M, #2ECC71)>>
+class fastapi.types <<(M, #2ECC71)>>
+class fastapi.utils <<(M, #2ECC71)>>
+class fastapi.websockets <<(M, #2ECC71)>>
+
+fastapi.__main__ ---> fastapi.cli
+fastapi._compat <-[#C0392B,bold]-> fastapi.openapi
+note on link
+  **fastapi._compat -> fastapi.openapi:**
+  - fastapi._compat → constants
+  **fastapi.openapi -> fastapi._compat:**
+  - fastapi.openapi → fastapi._compat
+end note
+fastapi._compat <-[#C0392B,bold]-> fastapi.params
+note on link
+  **fastapi._compat -> fastapi.params:**
+  - fastapi._compat → fastapi.params
+  **fastapi.params -> fastapi._compat:**
+  - fastapi.params → fastapi._compat
+end note
+fastapi._compat ---> fastapi.types
+fastapi.applications ---> fastapi.datastructures
+fastapi.applications ---> fastapi.exception_handlers
+fastapi.applications ---> fastapi.exceptions
+fastapi.applications ---> fastapi.logger
+fastapi.applications ---> fastapi.middleware
+fastapi.applications ---> fastapi.openapi
+fastapi.applications ---> fastapi.params
+fastapi.applications ---> fastapi.routing
+fastapi.applications ---> fastapi.types
+fastapi.applications ---> fastapi.utils
+fastapi.datastructures ---> fastapi._compat
+fastapi.dependencies ---> fastapi._compat
+fastapi.dependencies ---> fastapi.background
+fastapi.dependencies ---> fastapi.concurrency
+fastapi.dependencies ---> fastapi.exceptions
+fastapi.dependencies ---> fastapi.logger
+fastapi.dependencies ---> fastapi.params
+fastapi.dependencies ---> fastapi.security
+fastapi.dependencies ---> fastapi.types
+fastapi.dependencies ---> fastapi.utils
+fastapi.encoders ---> fastapi._compat
+fastapi.encoders ---> fastapi.exceptions
+fastapi.encoders ---> fastapi.types
+fastapi.exception_handlers ---> fastapi.encoders
+fastapi.exception_handlers ---> fastapi.exceptions
+fastapi.exception_handlers ---> fastapi.utils
+fastapi.exception_handlers ---> fastapi.websockets
+fastapi.openapi ---> fastapi.datastructures
+fastapi.openapi ---> fastapi.dependencies
+fastapi.openapi ---> fastapi.encoders
+fastapi.openapi ---> fastapi.exceptions
+fastapi.openapi ---> fastapi.logger
+fastapi.openapi <-[#C0392B,bold]-> fastapi.params
+note on link
+  **fastapi.openapi -> fastapi.params:**
+  - fastapi.openapi → fastapi.params
+  **fastapi.params -> fastapi.openapi:**
+  - fastapi.params → models
+end note
+fastapi.openapi ---> fastapi.responses
+fastapi.openapi ---> fastapi.routing
+fastapi.openapi ---> fastapi.sse
+fastapi.openapi ---> fastapi.types
+fastapi.openapi ---> fastapi.utils
+fastapi.param_functions ---> fastapi._compat
+fastapi.param_functions ---> fastapi.datastructures
+fastapi.param_functions ---> fastapi.openapi
+fastapi.param_functions ---> fastapi.params
+fastapi.params ---> fastapi.datastructures
+fastapi.params ---> fastapi.exceptions
+fastapi.responses ---> fastapi.exceptions
+fastapi.responses ---> fastapi.sse
+fastapi.routing ---> fastapi._compat
+fastapi.routing ---> fastapi.datastructures
+fastapi.routing ---> fastapi.dependencies
+fastapi.routing ---> fastapi.encoders
+fastapi.routing ---> fastapi.exceptions
+fastapi.routing ---> fastapi.params
+fastapi.routing ---> fastapi.sse
+fastapi.routing ---> fastapi.types
+fastapi.routing <-[#C0392B,bold]-> fastapi.utils
+note on link
+  **fastapi.routing -> fastapi.utils:**
+  - fastapi.routing → fastapi.utils
+  **fastapi.utils -> fastapi.routing:**
+  - fastapi.utils → fastapi.routing
+end note
+fastapi.security ---> fastapi.exceptions
+fastapi.security ---> fastapi.openapi
+fastapi.security ---> fastapi.param_functions
+fastapi.utils ---> fastapi._compat
+fastapi.utils ---> fastapi.datastructures
+fastapi.utils ---> fastapi.exceptions
+@enduml
+

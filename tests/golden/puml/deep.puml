@@ -4,11 +4,11 @@
 top to bottom direction
 hide empty members
 
-package deep.api <<(P, #95A5A6)>> {
+package deep.api {
   class deep.api.v1.handlers <<(M, #F39C12)>>
   class deep.api.v1.schemas <<(M, #F39C12)>>
 }
-package deep.core <<(P, #95A5A6)>> {
+package deep.core {
   class deep.core.models <<(M, #1ABC9C)>>
   class deep.core.services <<(M, #1ABC9C)>>
 }

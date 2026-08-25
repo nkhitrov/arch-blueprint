@@ -4,11 +4,11 @@
 top to bottom direction
 hide empty members
 
-package pkg_a <<(P, #95A5A6)>> {
+package pkg_a {
   class pkg_a.core <<(M, #2ECC71)>>
   class pkg_a.services <<(M, #2ECC71)>>
 }
-package pkg_b <<(P, #95A5A6)>> {
+package pkg_b {
   class pkg_b.util <<(M, #2ECC71)>>
 }
 

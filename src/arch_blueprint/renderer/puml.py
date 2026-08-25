@@ -42,11 +42,6 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
 _SPOT_LETTER: Final = {NodeKind.MODULE: "M"}
 _DEFAULT_SPOT: Final = "M"
 
-#: Spot letter and fill for a namespace container. The color is deliberately
-#: outside DEFAULT_OPTIONS.depth_colors so a container never reads as a node.
-_GROUP_SPOT: Final = "P"
-_GROUP_COLOR: Final = "#95A5A6"
-
 
 class PlantUmlRenderer(BlueprintRenderer):
     """PlantUML diagram renderer."""
@@ -62,14 +57,18 @@ class PlantUmlRenderer(BlueprintRenderer):
         return f"{head} {{\n{body}\n}}"
 
     def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
-        """Declare the namespace as a package so links can point at something.
+        """Declare the namespace as a package so links point at a real element.
 
-        Without it PlantUML invents an empty element for every arrow endpoint
-        that no class is named after.
+        PlantUML would otherwise infer the container from the dotted class names
+        and resolve the arrow to it, which happens to render the same — but only
+        because every endpoint is a prefix of some declared class. Declaring it
+        makes the emitted source say what it means.
+
+        No stereotype: on a package PlantUML draws one as literal text inside the
+        frame rather than as a colored spot, which is noise on every container.
         """
         body = "\n".join(f"  {line}" for node in nodes for line in node.splitlines())
-        head = f"package {namespace} <<({_GROUP_SPOT}, {_GROUP_COLOR})>> {{"
-        return [f"{head}\n{body}\n}}"]
+        return [f"package {namespace} {{\n{body}\n}}"]
 
     def _format_link(
         self,
