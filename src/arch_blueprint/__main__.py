@@ -36,9 +36,11 @@ from arch_blueprint.history import (
 )
 from arch_blueprint.history.album import IMAGE_EXTENSION
 from arch_blueprint.metrics import (
+    AllMetricOptions,
     MetricConfigError,
     MetricDisplay,
     MetricRegistry,
+    RenderPlan,
     build_render_plan,
     default_registry,
     default_renders,
@@ -152,6 +154,18 @@ def _add_metric_arg(parser: argparse.ArgumentParser) -> None:
             "on each connection (e.g. --metric edge_weight)."
         ),
     )
+    parser.add_argument(
+        "--metric-option",
+        action="append",
+        default=[],
+        dest="metric_options",
+        metavar="NAME.OPTION=VALUE",
+        help=(
+            "Set one of a metric's options (repeatable), e.g. --metric-option "
+            "balance.strength=20. The metric must also be requested with "
+            "--metric. Which options exist is reported in the diagram's legend."
+        ),
+    )
 
 
 def _add_cycle_details_arg(parser: argparse.ArgumentParser) -> None:
@@ -162,13 +176,22 @@ def _add_cycle_details_arg(parser: argparse.ArgumentParser) -> None:
         default=True,
         help="Hide detailed information for cyclic dependencies",
     )
+    parser.add_argument(
+        "--no-link-details",
+        action="store_false",
+        dest="link_details",
+        default=True,
+        help="Hide the per-import note a metric asks for on a connection",
+    )
 
 
 def _add_quick_look_cycle_details_arg(parser: argparse.ArgumentParser) -> None:
     """For ``diff`` and ``history``: a quick look, so the import notes are opt-in.
 
     A note lists every import on both sides of a cycle — detail for digging
-    into one, noise when the question is what changed.
+    into one, noise when the question is what changed. The per-import note a
+    metric asks for follows the same flag: both are notes, and a quick look
+    wants neither by default.
     """
     parser.add_argument(
         "--cycle-details",
@@ -198,6 +221,8 @@ def _renderer(
     metrics: Sequence[str],
     *,
     cycle_details: bool,
+    link_details: bool = False,
+    metric_options: Sequence[str] = (),
     registry: MetricRegistry,
 ) -> BlueprintRenderer:
     renderer_cls = _RENDERERS[fmt]
@@ -207,12 +232,14 @@ def _renderer(
             renders=default_renders(),
             display=MetricDisplay(shown=tuple(metrics)),
             fmt=renderer_cls.fmt,
+            options=metric_options,
         )
     except MetricConfigError as error:
         _abort(str(error), _EXIT_USAGE)
     options = RendererOptions(
         depth_colors=DEFAULT_OPTIONS.depth_colors,
         show_cycle_details=cycle_details,
+        show_link_details=link_details,
     )
     return renderer_cls(plan=plan, options=options)
 
@@ -221,6 +248,7 @@ def _build(
     project_dir: str,
     modules: Sequence[str],
     metric_names: Optional[Iterable[str]],
+    metric_options: Optional[AllMetricOptions] = None,
     *,
     failure_code: int,
     use_cache: bool = True,
@@ -235,6 +263,7 @@ def _build(
             ModuleExtractor,
             default_registry(),
             metric_names,
+            metric_options,
             use_cache=use_cache,
         )
     except ImportError as error:
@@ -284,10 +313,11 @@ def _generate(argv: Sequence[str]) -> None:
 
     registry = default_registry()
     if args.format == _SNAPSHOT_FORMAT:
-        if args.metrics or not args.cycle_details:
+        if args.metrics or args.metric_options or not args.cycle_details:
             _abort(
-                "--metric and --no-cycle-details apply to drawing; a snapshot "
-                "holds every metric — pass them to 'render' instead",
+                "--metric, --metric-option and --no-cycle-details apply to "
+                "drawing; a snapshot holds every metric — pass them to "
+                "'render' instead",
                 _EXIT_USAGE,
             )
         graph = _build(args.project_dir, args.modules, None, failure_code=_EXIT_FAILURE)
@@ -300,12 +330,15 @@ def _generate(argv: Sequence[str]) -> None:
         args.format,
         args.metrics,
         cycle_details=args.cycle_details,
+        link_details=args.link_details,
+        metric_options=args.metric_options,
         registry=registry,
     )
     graph = _build(
         args.project_dir,
         args.modules,
         renderer.plan.required_metrics,
+        renderer.plan.metric_options,
         failure_code=_EXIT_FAILURE,
     )
     if not graph.nodes:
@@ -326,12 +359,16 @@ def _render(argv: Sequence[str]) -> None:
     args = parser.parse_args(argv)
 
     snapshot = _read_snapshot(args.snapshot)
+    registry = default_registry()
     renderer = _renderer(
         args.format,
         args.metrics,
         cycle_details=args.cycle_details,
-        registry=default_registry(),
+        link_details=args.link_details,
+        metric_options=args.metric_options,
+        registry=registry,
     )
+    _rejudge(snapshot.graph, renderer.plan, registry)
     missing = sorted(renderer.plan.required_metrics - snapshot.metrics)
     if missing:
         _abort(
@@ -340,6 +377,24 @@ def _render(argv: Sequence[str]) -> None:
             _EXIT_USAGE,
         )
     _write(renderer.render(snapshot.graph))
+
+
+def _rejudge(
+    graph: BlueprintGraph,
+    plan: RenderPlan,
+    registry: MetricRegistry,
+) -> None:
+    """Recompute, from the snapshot's own graph, every metric that takes options.
+
+    A snapshot holds every metric's *value*, which is enough for a measurement
+    and not enough for a judgement: what counts as too much is given when the
+    diagram is drawn, not when the graph was captured. Both inputs a judgement
+    needs — the links and their edges — are in the snapshot, so re-asking is
+    exact rather than approximate.
+    """
+    tunable = [name for name in plan.required_metrics if registry.options_of(name)]
+    if tunable:
+        registry.compute(graph, tunable, plan.metric_options)
 
 
 def _diff(argv: Sequence[str]) -> None:
@@ -503,6 +558,8 @@ def _history(argv: Sequence[str]) -> None:
         diagram_fmt,
         args.metrics,
         cycle_details=args.cycle_details,
+        link_details=args.cycle_details,
+        metric_options=args.metric_options,
         registry=registry,
     )
     diff_renderer = DIFF_RENDERERS[diagram_fmt](show_cycle_details=args.cycle_details)

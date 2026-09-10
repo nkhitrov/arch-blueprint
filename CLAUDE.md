@@ -29,14 +29,21 @@ This project uses `uv` for environment and dependency management.
     packages (e.g. `-m 'app1.*' -m 'app2.*'`). A cross-package link is drawn only when both
     endpoints belong to the selected set — which includes a dependency *on* a package whose
     children were selected, since `pkg.*` never selects `pkg` itself.
-  - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
-    `diff` and `history` are quick looks and invert the default: the notes are off unless
-    `--cycle-details` is given. Both draw the diff over the whole graph; `--changes-only` draws
-    just the changes and the modules they touch.
+  - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles,
+    `--no-link-details` hides the note a metric asks for on a flagged connection. Two flags,
+    not one: the notes answer different questions and a heavy link's note is fifty lines long.
+    `diff` and `history` are quick looks and invert both defaults: the notes are off unless
+    `--cycle-details` is given, which turns on both. Both draw the diff over the whole graph;
+    `--changes-only` draws just the changes and the modules they touch.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
     not a silent no-op.
+  - `--metric-option NAME.OPTION=VALUE` (repeatable) sets one of a metric's declared options, e.g.
+    `--metric-option balance.strength=20`. Five ways to get it wrong, five distinct messages, all
+    exit 2: malformed string, non-numeric value, unknown metric, unknown option, and an option for a
+    metric that is not being computed. The last one matters most — it would otherwise be a no-op the
+    user has no way to notice.
 - Snapshot / render / diff (see **Snapshot and diff** below):
   - `uv run arch-blueprint <project_dir> -m '<pattern>' -f json > graph.json` — graph snapshot.
   - `uv run arch-blueprint render graph.json [-f puml|d2] [--metric NAME]` — draw a snapshot.
@@ -90,6 +97,11 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
 A scenario is a `Selection` (project + `-m` patterns — what the snapshot golden is keyed by) plus
 `render_args` (drawing-only options, passed unchanged to `render`).
 
+`balance`, `balance_nodetails` and `balance_unset` are the same graph three ways. The first two
+differ only in `--no-link-details`, which pins that the flag governs the notes and nothing else — the
+flagged arrow must survive in both. `balance_unset` drops the thresholds and pins the opposite: no
+verdict, no thick arrow, and a legend that still reports the values and names the knobs.
+
 Two scenarios look redundant and are not. `metrics_reordered` is the only one whose `--metric` order
 differs from registration order, so it is the only thing that would catch a render plan built by
 iterating the registry. `deep` is the only single-root project whose link endpoints collide with node
@@ -103,7 +115,9 @@ Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tes
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
 `tests/fixtures/ancestor_dep` (an import of a package facade), `tests/fixtures/diff` (snapshot
-edits used as diff inputs — regenerate them if the snapshot format changes). Fixture projects are excluded from
+edits used as diff inputs — regenerate them if the snapshot format changes), `tests/fixtures/coupling`
+(five links weighing 1/1/1/1/5 over 4/4/4/4/6 tree steps — the only spread here that a single
+threshold pair splits into one flagged link and four plain ones). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 
 ## Gotchas
@@ -119,6 +133,10 @@ ruff and mypy — they are analysis subjects, not code we ship.
   invariants in `test_golden_structure.py` instead.
 - `tests/golden/` and `docs/images/` are excluded from the whitespace fixers: both hold verbatim tool
   output, and a "fix" makes them stop matching it.
+- PlantUML **silently clips** a render at `PLANTUML_LIMIT_SIZE` (4096 px by default) — no error, just
+  a missing bottom. Detail notes make that reachable: consigliere's features slice is 6106 px tall
+  with them on. Render big diagrams with `PLANTUML_LIMIT_SIZE=16384`, and treat a dimension that
+  lands on exactly 4096 as clipped until proven otherwise.
 
 ## Git conventions
 
@@ -275,10 +293,57 @@ renderer cores do not change. Demo metrics: `fan_in`/`fan_out`/`instability` (no
 `_degrees.degree_counts`) and `edge_weight` (link label). A cycle is one connection standing for two
 links, so a link metric shows both values there as `forward/backward`.
 
+`balance` and `namespace_distance` (`metrics/balance.py`, `metrics/namespace_distance.py`,
+sharing `_coupling.py`) implement the balanced-coupling model. Two traps live here.
+
+**Distance is measured between modules, never between a link's namespaces** — a namespace pair
+shares every component but the last by construction, so measuring it returns a constant 2 for every
+link in every project.
+
+**There is no automatic threshold, and attempts to add one have already failed.** Import counts are
+close to degenerate in real graphs: 22 of wemake's 29 links carry exactly one import, 280 of
+aiohttp's 281. Any rank-based cut lands on the floor (the upper quartile *is* 1), so "above the
+threshold" comes to mean "more than one import" — that shipped once and marked a 3-import link
+beside a 47-import one. A Tukey fence degenerates identically when IQR is 0; a largest-gap rule
+finds nothing on consigliere, whose weights climb smoothly. So `balance` takes its thresholds from
+the caller and returns **an empty mapping** when given none: nothing computed, no row in the value
+summary, plain arrows. A threshold left out does not constrain. Do not re-add a default without
+re-running the comparison across at least wemake, consigliere, fastapi and aiohttp.
+
+A metric carries its own display wording: `title` (short name used in labels — `edge_weight` shows
+as `imports`) and `description` (its row in the diagram legend). It also declares `options`, a tuple
+of `MetricOption(name, description)`, and receives the resolved ones as the second argument to
+`compute`. Declared rather than read loosely from a bag, so a misspelled key is a reported error
+instead of a threshold that silently never applies; passed per metric, so one metric's typo cannot
+reach another. The renderer hardcodes none of this; a new metric explains itself and names its own
+knobs. `name` stays the CLI key.
+
+Link labels are stacked **one per line**, and each format needs its own break: PlantUML expands the
+two-character `\n` escape, while D2 needs a real newline that `_quote_label` escapes inside quotes —
+a raw newline ends a D2 statement. `_LABEL_SPECIALS` includes newline for exactly that reason.
+
+Both renderers hardcode the cycle arrow's style and **discard `decoration.styles`** there, so a link
+metric cannot style a cycle. That is why `balance` draws a thick arrow on a plain link but spells its
+verdict out in text on a cycle.
+
+A verdict says *that* a boundary is hot, never *what* crosses it, so `RenderFragment.detail` lets a
+plugin ask for the link's imports to be listed. It is a **request, not content**: the plugin has no
+edges in hand and no business emitting a format's markup, so the renderer builds the note and never
+learns which metric raised the flag. `balance` raises it on a plain `too-far` link only — a cycle
+already prints every edge in both directions.
+
+The legend has three blocks, all assembled by `BlueprintRenderer._legend_sections(graph)`: metric
+descriptions, the options each shown metric takes with their values (`not set (…)` carries the
+option's description — that row is the whole path from "why is nothing marked" to a second run that
+marks the right thing), and **the values that landed on the diagram**, so a threshold can be picked
+from the data. A metric that computed nothing gets no value row. Past 12 distinct values the row
+elides its middle **out loud** (`… N more …`), because a silently truncated row would read as the
+whole picture.
+
 ### Adding a render type (plugin)
 
 Implement the `RenderPlugin` protocol in a new class (`name`, `attaches_to`,
-`render(ctx, label, value)` returning a `RenderFragment(text, style)`) and register it on a
+`render(ctx, label, value)` returning a `RenderFragment(text, style, detail)`) and register it on a
 `RenderRegistry` (add to `metrics/render.py:default_renders` for a built-in, or register on a
 registry you construct — no library change needed). Branch on `ctx.fmt` (`"puml"`/`"d2"`) to emit
 format-specific output; `text` becomes a node line / edge label, `style` is injected into the edge's
@@ -305,22 +370,34 @@ otherwise:
 
 `BlueprintRenderer` (`renderer/base.py`) defines the fixed, **stateless** `render(graph)` algorithm.
 It takes a `RenderPlan` (required — a missing one is a `TypeError`, never a silent metric-free
-render) and `RendererOptions` (depth colors, cycle details). `fmt` is a `ClassVar` each renderer must
+render) and `RendererOptions` (depth colors, cycle details, link details). `fmt` is a `ClassVar` each renderer must
 set; the constructor rejects a plan built for another format.
 
 Abstract hooks: `_format_node`, `_format_link(source, target, decoration)`,
-`_format_cycle(cycle, decoration)`, `_combine_output`. `_format_group(namespace, nodes)` is
-**concrete**, defaulting to no wrapping — D2 nests by dotted name on its own, and an abstract method
-would break every renderer outside this package. `_format_cycle` returns a
-`CycleRender(inline, deferred)` so a renderer that must place cycle details elsewhere (D2) carries
-them out-of-band without mutating instance state. Shared cycle-detail formatting lives in
-`renderer/cycles.py`. Cycles use `CYCLE_HIGHLIGHT_COLOR`, kept distinct from every
+`_format_cycle(cycle, decoration)`, `_combine_output(sections)`. That last one takes a single
+`RenderSections(nodes, links, deferred, legend)` rather than positional lists: the legend was the
+second thing it had to carry that the old three-list signature could not, so the next addition
+should be a field, not another breaking change. `_format_group(namespace, nodes)` and
+`_format_link_detail(link)` are **concrete**, defaulting to no wrapping and no note — D2 nests by
+dotted name on its own, most links deserve no note, and an abstract method would break every
+renderer outside this package. Both `_format_cycle` and `_format_link_detail` return a
+`RenderedLink(inline, deferred)` so a renderer that must place detail elsewhere (D2) carries it
+out-of-band without mutating instance state; PlantUML puts everything `inline`, since `note on link`
+binds to the last declared connection. Shared detail formatting lives in `renderer/details.py`:
+`detail_block` returns a `DetailBlock(source, target, lines)` and `cycle_detail_blocks` /
+`link_detail_block` wrap it. **The header's ends are data, not template constants** — when every
+edge shares one end, that end is hoisted into the header and the lines carry only the other. On
+wemake that turns 41 repetitions of `wemake_python_styleguide.presets → ` into one. Only one end is
+ever hoisted (source first), so a single-edge note never collapses to an empty line. A link's note
+gets its own neutral palette — on the cycle red it would read as a cycle.
+Cycles use `CYCLE_HIGHLIGHT_COLOR`, kept distinct from every
 `depth_colors` entry. Containers carry **no** stereotype: PlantUML draws one on a package as literal
 text inside the frame rather than as a colored spot, which is noise on every container.
 
 To add a new output format:
 1. Subclass `BlueprintRenderer` in a new `renderer/<name>.py`, set `fmt`, implement the abstract
-   hooks, and override `_format_group` if the format does not nest by dotted name.
+   hooks, and override `_format_group` / `_format_link_detail` if the format does not nest by
+   dotted name or has somewhere to put a note.
 2. Register it in the `_RENDERERS` mapping in `__main__.py`.
 3. Subclass `DiffRenderer` in `diff/render_<name>.py` and register it in `DIFF_RENDERERS` —
    `test_diff.py` fails while the two registries disagree. No parser is ever needed: diagrams and
@@ -334,9 +411,12 @@ Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer
 `main()` dispatches on the first argument: `render` / `diff` / `history` select a subcommand, anything else is
 the original `<project_dir> -m ...` interface, unchanged. Failures are one line on stderr with no
 traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
-matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
+matched, bad `--metric` or `--metric-option`, unreadable or invalid snapshot, `-f json` with drawing
+options), exit **1**
 for an analysis that could not finish (`history`: images that could not be drawn). `diff` exits
 like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
-diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
-details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all
-the work is done.
+diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — every
+legend row joins a metric to its description with an em dash, and a non-UTF-8 console would
+otherwise raise `UnicodeEncodeError` after all the work is done. The guard is tested with a metric
+shown, because that em dash is the one piece of non-ASCII a PlantUML diagram reliably contains:
+detail notes carry arrows only when a note has no constant end to hoist into its header.

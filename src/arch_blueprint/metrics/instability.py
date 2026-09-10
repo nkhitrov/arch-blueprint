@@ -5,7 +5,12 @@ from typing import Optional
 
 from arch_blueprint.domain.graph import BlueprintGraph, MetricValue
 from arch_blueprint.metrics._degrees import degree_counts
-from arch_blueprint.metrics.base import ALL_KINDS
+from arch_blueprint.metrics.base import (
+    ALL_KINDS,
+    NO_OPTIONS,
+    MetricOption,
+    MetricOptions,
+)
 
 
 class InstabilityMetric:
@@ -16,10 +21,18 @@ class InstabilityMetric:
     """
 
     name = "instability"
+    title = "instability"
+    description = "fan-out / (fan-in + fan-out): 0 is stable, 1 is unstable"
     applies_to = ALL_KINDS
     render: Optional[str] = "text_row"
+    #: No knobs: this metric measures, it does not judge.
+    options: tuple[MetricOption, ...] = ()
 
-    def compute(self, graph: BlueprintGraph) -> Mapping[str, MetricValue]:
+    def compute(
+        self,
+        graph: BlueprintGraph,
+        options: MetricOptions = NO_OPTIONS,
+    ) -> Mapping[str, MetricValue]:
         fan_in, fan_out = degree_counts(graph)
         result: dict[str, MetricValue] = {}
         for node in graph.nodes:

@@ -41,44 +41,44 @@ taskiq.abc ---> taskiq.acks
 taskiq.abc <-[#C0392B,bold]-> taskiq.decor
 note on link
   **taskiq.abc -> taskiq.decor:**
-  - taskiq.abc → taskiq.decor
+  - taskiq.decor
   **taskiq.decor -> taskiq.abc:**
-  - taskiq.decor → broker
-  - taskiq.decor → schedule_source
+  - broker
+  - schedule_source
 end note
 taskiq.abc ---> taskiq.events
 taskiq.abc ---> taskiq.exceptions
 taskiq.abc <-[#C0392B,bold]-> taskiq.formatters
 note on link
   **taskiq.abc -> taskiq.formatters:**
-  - taskiq.abc → proxy_formatter
+  - proxy_formatter
   **taskiq.formatters -> taskiq.abc:**
-  - taskiq.formatters → broker
-  - taskiq.formatters → formatter
+  - broker
+  - formatter
 end note
 taskiq.abc ---> taskiq.message
 taskiq.abc ---> taskiq.result
 taskiq.abc <-[#C0392B,bold]-> taskiq.result_backends
 note on link
   **taskiq.abc -> taskiq.result_backends:**
-  - taskiq.abc → dummy
+  - dummy
   **taskiq.result_backends -> taskiq.abc:**
-  - taskiq.result_backends → result_backend
+  - result_backend
 end note
 taskiq.abc <-[#C0392B,bold]-> taskiq.scheduler
 note on link
   **taskiq.abc -> taskiq.scheduler:**
-  - taskiq.abc → scheduled_task
+  - scheduled_task
   **taskiq.scheduler -> taskiq.abc:**
-  - taskiq.scheduler → broker
-  - taskiq.scheduler → schedule_source
+  - broker
+  - schedule_source
 end note
 taskiq.abc <-[#C0392B,bold]-> taskiq.serializers
 note on link
   **taskiq.abc -> taskiq.serializers:**
-  - taskiq.abc → json_serializer
+  - json_serializer
   **taskiq.serializers -> taskiq.abc:**
-  - taskiq.serializers → serializer
+  - serializer
 end note
 taskiq.abc ---> taskiq.state
 taskiq.abc ---> taskiq.utils
@@ -125,10 +125,10 @@ taskiq.kicker ---> taskiq.message
 taskiq.kicker <-[#C0392B,bold]-> taskiq.scheduler
 note on link
   **taskiq.kicker -> taskiq.scheduler:**
-  - taskiq.kicker → created_schedule
-  - taskiq.kicker → scheduled_task
+  - created_schedule
+  - scheduled_task
   **taskiq.scheduler -> taskiq.kicker:**
-  - taskiq.scheduler → taskiq.kicker
+  - taskiq.kicker
 end note
 taskiq.kicker ---> taskiq.task
 taskiq.kicker ---> taskiq.utils

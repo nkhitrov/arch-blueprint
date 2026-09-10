@@ -20,7 +20,7 @@ from arch_blueprint.diff.render_base import (
     DiffRenderer,
 )
 from arch_blueprint.domain.graph import Cycle
-from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, CycleRender
+from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, RenderedLink
 from arch_blueprint.renderer.puml import (
     PUML_HEADER,
     format_cycle_note,
@@ -75,10 +75,10 @@ class PlantUmlDiffRenderer(DiffRenderer):
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},bold]->"
         return f"{cycle.namespace_from} {arrow} {cycle.namespace_to}"
 
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
+    def _format_cycle(self, delta: CycleDelta) -> RenderedLink:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
-            return CycleRender(inline=self._format_resolved(delta))
+            return RenderedLink(inline=self._format_resolved(delta))
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},dashed,thickness=3]->"
         link = (
             f"{cycle.namespace_from} {arrow} {cycle.namespace_to} : {NEW_CYCLE_LABEL}"
@@ -86,7 +86,7 @@ class PlantUmlDiffRenderer(DiffRenderer):
         # Only a new cycle gets its imports listed: they are what to fix.
         if delta.change is CycleChange.NEW and self.show_cycle_details:
             link = f"{link}\n{format_cycle_note(cycle)}"
-        return CycleRender(inline=link)
+        return RenderedLink(inline=link)
 
     @staticmethod
     def _format_resolved(delta: CycleDelta) -> str:

@@ -19,5 +19,19 @@ plugins.auth.backend: {
     fill: "#1ABC9C"
   }
 }
-app2 -> app1: edge_weight=1
-app2 -> plugins: edge_weight=1
+app2 -> app1: imports=1
+app2 -> plugins: imports=1
+"Legend": |md
+  ### Legend
+
+  - imports — how many imports cross this boundary
+  - a/b on a cycle — a is the forward direction, b the backward one
+
+  **values on this diagram**
+
+  - imports: 1×2
+| {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.border-radius: 8
+}

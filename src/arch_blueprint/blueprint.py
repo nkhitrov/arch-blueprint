@@ -8,7 +8,11 @@ from arch_blueprint.domain.graph import BlueprintGraph
 from arch_blueprint.extract.base import GraphExtractor
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
-from arch_blueprint.metrics import MetricRegistry, default_registry
+from arch_blueprint.metrics import (
+    AllMetricOptions,
+    MetricRegistry,
+    default_registry,
+)
 from arch_blueprint.renderer.base import BlueprintRenderer
 
 
@@ -18,6 +22,7 @@ def build_graph(
     extractor_factory: Callable[[GrimpSource], GraphExtractor] = ModuleExtractor,
     registry: Optional[MetricRegistry] = None,
     metric_names: Optional[Iterable[str]] = None,
+    metric_options: Optional[AllMetricOptions] = None,
     *,
     use_cache: bool = True,
 ) -> BlueprintGraph:
@@ -25,12 +30,14 @@ def build_graph(
 
     A function rather than only a method so a caller that never renders — a
     snapshot dump, either side of a diff — does not need a renderer to get here.
-    ``metric_names=None`` computes every registered metric. ``use_cache=False``
-    is for graphing several checkouts of one project (see ``GrimpSource``).
+    ``metric_names=None`` computes every registered metric, and
+    ``metric_options=None`` leaves every metric on its own defaults.
+    ``use_cache=False`` is for graphing several checkouts of one project (see
+    ``GrimpSource``).
     """
     source = GrimpSource(project_dir, target_names, use_cache=use_cache)
     graph = extractor_factory(source).extract()
-    (registry or default_registry()).compute(graph, metric_names)
+    (registry or default_registry()).compute(graph, metric_names, metric_options)
     return analyze(graph)
 
 
@@ -49,6 +56,7 @@ class ArchBlueprint:
         extractor_factory: Callable[[GrimpSource], GraphExtractor] = ModuleExtractor,
         registry: Optional[MetricRegistry] = None,
         metric_names: Optional[Iterable[str]] = None,
+        metric_options: Optional[AllMetricOptions] = None,
     ) -> None:
         self.project_dir = project_dir
         self.target_names = target_names
@@ -58,6 +66,8 @@ class ArchBlueprint:
         # None means "every registered metric"; the CLI narrows this to what the
         # render plan actually needs, color metric included.
         self.metric_names = metric_names
+        # Already parsed and checked by the render plan — never raw CLI strings.
+        self.metric_options = metric_options
 
     def build(self) -> BlueprintGraph:
         """Everything up to rendering: extract, compute metrics, analyze.
@@ -71,6 +81,7 @@ class ArchBlueprint:
             self.extractor_factory,
             self.registry,
             self.metric_names,
+            self.metric_options,
         )
 
     def render(self, graph: BlueprintGraph) -> str:

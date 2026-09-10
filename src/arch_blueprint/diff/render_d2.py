@@ -21,7 +21,7 @@ from arch_blueprint.diff.render_base import (
     DiffRenderer,
 )
 from arch_blueprint.domain.graph import Cycle
-from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, CycleRender
+from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, RenderedLink
 from arch_blueprint.renderer.d2 import (
     CYCLE_CONNECTION_TEMPLATE,
     format_cycle_note,
@@ -64,7 +64,7 @@ _LEGEND_ITEMS: Final = (
 
 
 class D2LangDiffRenderer(DiffRenderer):
-    """D2 diff renderer (stateless: cycle notes flow through CycleRender)."""
+    """D2 diff renderer (stateless: cycle notes flow through RenderedLink)."""
 
     fmt = "d2"
 
@@ -91,18 +91,18 @@ class D2LangDiffRenderer(DiffRenderer):
             color=CYCLE_HIGHLIGHT_COLOR,
         )
 
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
+    def _format_cycle(self, delta: CycleDelta) -> RenderedLink:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
-            return CycleRender(inline=self._format_resolved(delta))
+            return RenderedLink(inline=self._format_resolved(delta))
         connection = (
             f"{cycle.namespace_from} <-> {cycle.namespace_to}: "
             f"{NEW_CYCLE_LABEL} {{{_NEW_CYCLE_STYLE}}}"
         )
         # Only a new cycle gets its imports listed: they are what to fix.
         if delta.change is CycleChange.NEW and self.show_cycle_details:
-            return CycleRender(inline=connection, deferred=format_cycle_note(cycle))
-        return CycleRender(inline=connection)
+            return RenderedLink(inline=connection, deferred=format_cycle_note(cycle))
+        return RenderedLink(inline=connection)
 
     @staticmethod
     def _format_resolved(delta: CycleDelta) -> str:

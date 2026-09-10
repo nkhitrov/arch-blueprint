@@ -4,15 +4,20 @@ import textwrap
 from string import Template
 from typing import Final
 
-from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.domain.graph import Cycle, Link
 from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
     BlueprintRenderer,
-    CycleRender,
+    LegendSection,
     LinkDecoration,
+    RenderedLink,
+    RenderSections,
 )
-from arch_blueprint.renderer.cycles import cycle_detail_sections
+from arch_blueprint.renderer.details import (
+    cycle_detail_blocks,
+    link_detail_block,
+)
 
 PUML_HEADER: Final = textwrap.dedent(
     """\
@@ -29,16 +34,31 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
     textwrap.dedent(
         """\
         note on link
-          **$ns_a -> $ns_b:**
+          **$forward_source -> $forward_target:**
         $forward_details
-          **$ns_b -> $ns_a:**
+          **$backward_source -> $backward_target:**
         $backward_details
         end note
         """,
     ).rstrip(),
 )
 
+_LINK_NOTE_TEMPLATE: Final = Template(
+    textwrap.dedent(
+        """\
+        note on link
+          **$source -> $target:**
+        $details
+        end note
+        """,
+    ).rstrip(),
+)
+
 # PlantUML stereotype spot letter per node kind.
+#: PlantUML expands this two-character escape inside a label into a line break.
+#: A real newline cannot be used: a statement ends at the end of its line.
+_LABEL_BREAK: Final = "\\n"
+
 _SPOT_LETTER: Final = {NodeKind.MODULE: "M"}
 _DEFAULT_SPOT: Final = "M"
 
@@ -50,13 +70,18 @@ def format_package(namespace: str, nodes: list[str]) -> list[str]:
 
 
 def format_cycle_note(cycle: Cycle) -> str:
-    """The ``note on link`` listing both directions' imports of a cycle."""
-    forward_details, backward_details = cycle_detail_sections(cycle)
+    """The ``note on link`` listing both directions' imports of a cycle.
+
+    Shared with the diff renderer, so a cycle reads the same in both.
+    """
+    forward, backward = cycle_detail_blocks(cycle)
     return _CYCLE_NOTE_TEMPLATE.substitute(
-        ns_a=cycle.namespace_from,
-        ns_b=cycle.namespace_to,
-        forward_details=forward_details,
-        backward_details=backward_details,
+        forward_source=forward.source,
+        forward_target=forward.target,
+        backward_source=backward.source,
+        backward_target=backward.target,
+        forward_details=forward.lines,
+        backward_details=backward.lines,
     )
 
 
@@ -95,26 +120,53 @@ class PlantUmlRenderer(BlueprintRenderer):
         arrow = f"-[{','.join(decoration.styles)}]->" if decoration.styles else "--->"
         link = f"{source} {arrow} {target}"
         if decoration.labels:
-            link = f"{link} : {' '.join(decoration.labels)}"
+            link = f"{link} : {_LABEL_BREAK.join(decoration.labels)}"
         return link
 
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+    def _format_link_detail(self, link: Link) -> RenderedLink:
+        """Attach the note to the arrow by adjacency, as a cycle's note is.
+
+        ``note on link`` binds to the most recently declared connection, so there
+        is nothing to defer and nothing to name.
+        """
+        block = link_detail_block(link)
+        note = _LINK_NOTE_TEMPLATE.substitute(
+            source=block.source,
+            target=block.target,
+            details=block.lines,
+        )
+        return RenderedLink(inline=note)
+
+    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> RenderedLink:
         color = CYCLE_HIGHLIGHT_COLOR
         link = f"{cycle.namespace_from} <-[{color},bold]-> {cycle.namespace_to}"
         if decoration.labels:
-            link = f"{link} : {' '.join(decoration.labels)}"
+            link = f"{link} : {_LABEL_BREAK.join(decoration.labels)}"
 
         if not self.options.show_cycle_details:
-            return CycleRender(inline=link)
+            return RenderedLink(inline=link)
 
-        return CycleRender(inline=f"{link}\n{format_cycle_note(cycle)}")
+        return RenderedLink(inline=f"{link}\n{format_cycle_note(cycle)}")
 
-    def _combine_output(
-        self,
-        nodes: list[str],
-        links: list[str],
-        deferred: list[str],
-    ) -> str:
-        nodes_section = "\n".join(nodes)
-        links_section = "\n".join(links) + "\n" if links else ""
-        return f"{PUML_HEADER}{nodes_section}\n\n{links_section}@enduml\n"
+    def _combine_output(self, sections: RenderSections) -> str:
+        nodes_section = "\n".join(sections.nodes)
+        links = "\n".join(sections.links) + "\n" if sections.links else ""
+        legend = self._legend(sections.legend)
+        return f"{PUML_HEADER}{nodes_section}\n\n{links}{legend}@enduml\n"
+
+    @staticmethod
+    def _legend(sections: tuple[LegendSection, ...]) -> str:
+        """A ``legend`` block, or nothing when no metric is shown.
+
+        Rows are indented on purpose: an unindented line starting with ``class``
+        or ``package`` would be picked up by the golden structure invariants.
+        """
+        if not sections:
+            return ""
+        blocks: list[str] = []
+        for section in sections:
+            rows = [f"  {row}" for row in section.rows]
+            if section.title:
+                rows.insert(0, f"  {section.title}")
+            blocks.append("\n".join(rows))
+        return "legend right\n" + "\n\n".join(blocks) + "\nendlegend\n\n"

@@ -1,17 +1,30 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import ClassVar, Final, Optional, final
 
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Group, MetricValue
+from arch_blueprint.domain.graph import (
+    BlueprintGraph,
+    Cycle,
+    Group,
+    Link,
+    MetricValue,
+)
 from arch_blueprint.domain.node import Node
-from arch_blueprint.metrics import RenderContext, RenderPlan
+from arch_blueprint.metrics import PlannedMetric, RenderContext, RenderPlan
 
 # A distinct danger red for cycles; intentionally not one of DEFAULT_OPTIONS'
 # depth_colors so a cycle never visually collides with a node's depth color.
 CYCLE_HIGHLIGHT_COLOR: Final = "#C0392B"
+
+#: How to read a link metric on a cycle. The convention belongs to the renderer
+#: (one connection standing for two links), not to any metric, so it is shared.
+CYCLE_VALUE_NOTE: Final = (
+    "a/b on a cycle \u2014 a is the forward direction, b the backward one"
+)
 
 
 @dataclass(frozen=True)
@@ -25,6 +38,7 @@ class RendererOptions:
 
     depth_colors: Sequence[str]
     show_cycle_details: bool = False
+    show_link_details: bool = False
 
     def __post_init__(self) -> None:
         if not self.depth_colors:
@@ -82,13 +96,49 @@ def wrap_groups(
     return result
 
 
-@dataclass(frozen=True)
-class CycleRender:
-    """A rendered cycle: an ``inline`` fragment and optional ``deferred`` block.
+#: Beyond this many distinct values a summary row elides the middle. Thresholds
+#: are picked from the top of a distribution, so the top is what survives.
+_MAX_DISTINCT: Final = 12
 
-    Renderers that draw cycle details next to the link (PlantUML) put everything
-    in ``inline``; renderers that must collect details elsewhere (D2) return them
-    in ``deferred``. This keeps the render algorithm stateless.
+#: Legend section headings. Empty for the first: metric descriptions need none.
+_OPTIONS_TITLE: Final = "options"
+_VALUES_TITLE: Final = "values on this diagram"
+
+
+@dataclass(frozen=True)
+class LegendSection:
+    """One titled block of legend rows; an empty title means no heading."""
+
+    title: str
+    rows: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RenderSections:
+    """Everything a renderer assembles into its final document.
+
+    A single object rather than positional arguments: the legend is the second
+    thing this hook has needed that the old three-list signature could not carry,
+    and the next one should be a field, not another breaking change.
+    """
+
+    nodes: list[str]
+    links: list[str]
+    deferred: list[str]
+    legend: tuple[LegendSection, ...]
+
+
+@dataclass(frozen=True)
+class RenderedLink:
+    """A drawn connection: an ``inline`` fragment and an optional ``deferred`` block.
+
+    Renderers that place detail next to the connection (PlantUML) put everything
+    in ``inline``; renderers that must collect it elsewhere (D2) return it in
+    ``deferred``. This keeps the render algorithm stateless.
+
+    Returned by both :meth:`BlueprintRenderer._format_cycle` and
+    :meth:`BlueprintRenderer._format_link_detail` -- a cycle is one drawn
+    connection too, and both may need the two placements.
     """
 
     inline: str
@@ -100,11 +150,39 @@ class LinkDecoration:
     """Render-plugin output attached to a single directed link.
 
     ``labels`` are text fragments shown on the arrow; ``styles`` are raw,
-    format-specific style payloads the renderer injects into the edge.
+    format-specific style payloads the renderer injects into the edge. ``detail``
+    is a plugin asking for the link's imports to be spelled out; the renderer
+    never learns which metric raised it.
     """
 
     labels: tuple[str, ...] = ()
     styles: tuple[str, ...] = ()
+    detail: bool = False
+
+
+def _sort_key(value: MetricValue) -> tuple[bool, object]:
+    """Numbers ascending, then words alphabetically; never the two compared."""
+    return (isinstance(value, str), value)
+
+
+def _summarize(values: Iterable[MetricValue]) -> str:
+    """One row of a distribution: distinct values ascending, repeats counted.
+
+    Elided out loud past ``_MAX_DISTINCT``: a silently truncated row would read
+    as the whole picture, and the whole point of the row is to be trusted.
+    """
+    counts = Counter(values)
+    if not counts:
+        return ""
+    parts = [
+        f"{value}\u00d7{count}" if count > 1 else f"{value}"
+        for value, count in sorted(counts.items(), key=lambda item: _sort_key(item[0]))
+    ]
+    if len(parts) <= _MAX_DISTINCT:
+        return ", ".join(parts)
+    head, tail = parts[:3], parts[-6:]
+    hidden = len(parts) - len(head) - len(tail)
+    return ", ".join([*head, f"\u2026 {hidden} more \u2026", *tail])
 
 
 class BlueprintRenderer(ABC):
@@ -132,7 +210,14 @@ class BlueprintRenderer(ABC):
         """Template method: orchestrates the rendering algorithm."""
         nodes_output = self._render_nodes(graph)
         links_output, deferred = self._render_links(graph)
-        return self._combine_output(nodes_output, links_output, deferred)
+        return self._combine_output(
+            RenderSections(
+                nodes=nodes_output,
+                links=links_output,
+                deferred=deferred,
+                legend=self._legend_sections(graph),
+            ),
+        )
 
     def _render_nodes(self, graph: BlueprintGraph) -> list[str]:
         """Render every node, wrapping those the analyzer assigned to a group.
@@ -163,7 +248,7 @@ class BlueprintRenderer(ABC):
         for item in self.plan.node_items:
             if node.kind not in item.applies_to or item.name not in metrics:
                 continue
-            fragment = item.plugin.render(ctx, item.name, metrics[item.name])
+            fragment = item.plugin.render(ctx, item.title, metrics[item.name])
             if fragment is not None and fragment.text:
                 blocks.append(fragment.text)
         return blocks
@@ -200,7 +285,14 @@ class BlueprintRenderer(ABC):
                 processed.add((pair[1], pair[0]))
             else:
                 decoration = self._link_decoration(graph, pair)
-                links.append(self._format_link(pair[0], pair[1], decoration))
+                rendered_link = self._format_link(pair[0], pair[1], decoration)
+                if decoration.detail and self.options.show_link_details:
+                    detail = self._format_link_detail(link)
+                    if detail.inline:
+                        rendered_link = f"{rendered_link}\n{detail.inline}"
+                    if detail.deferred is not None:
+                        deferred.append(detail.deferred)
+                links.append(rendered_link)
                 processed.add(pair)
 
         return links, deferred
@@ -243,17 +335,86 @@ class BlueprintRenderer(ABC):
         ctx = RenderContext(fmt=self.plan.fmt)
         labels: list[str] = []
         styles: list[str] = []
+        detail = False
         for item in self.plan.link_items:
             if item.name not in values:
                 continue
-            fragment = item.plugin.render(ctx, item.name, values[item.name])
+            fragment = item.plugin.render(ctx, item.title, values[item.name])
             if fragment is None:
                 continue
             if fragment.text:
                 labels.append(fragment.text)
             if fragment.style:
                 styles.append(fragment.style)
-        return LinkDecoration(labels=tuple(labels), styles=tuple(styles))
+            detail = detail or fragment.detail
+        return LinkDecoration(
+            labels=tuple(labels),
+            styles=tuple(styles),
+            detail=detail,
+        )
+
+    def _legend_sections(self, graph: BlueprintGraph) -> tuple[LegendSection, ...]:
+        """What each shown metric means, how it is tuned, and what it measured.
+
+        Concrete and shared: every word comes from the metric's own
+        ``description`` and option declarations, so a new metric explains itself
+        and neither renderer hardcodes any of it.
+        """
+        items = (*self.plan.node_items, *self.plan.link_items)
+        if not items:
+            return ()
+        rows = [f"{item.title} \u2014 {item.description}" for item in items]
+        if self.plan.link_items:
+            rows.append(CYCLE_VALUE_NOTE)
+        sections = [LegendSection(title="", rows=tuple(rows))]
+        for title, block in (
+            (_OPTIONS_TITLE, self._option_rows(items)),
+            (_VALUES_TITLE, self._value_rows(graph, items)),
+        ):
+            if block:
+                sections.append(LegendSection(title=title, rows=tuple(block)))
+        return tuple(sections)
+
+    def _option_rows(self, items: tuple[PlannedMetric, ...]) -> list[str]:
+        """Name every knob a shown metric takes, and what it is set to.
+
+        An unset one carries its description: that row is the whole path from
+        "why is nothing marked" to a second run that marks the right thing.
+        """
+        rows: list[str] = []
+        for item in items:
+            given = self.plan.metric_options.get(item.name, {})
+            for option in item.options:
+                key = f"{item.name}.{option.name}"
+                if option.name in given:
+                    rows.append(f"{key} = {given[option.name]:g}")
+                else:
+                    rows.append(f"{key} = not set ({option.description})")
+        return rows
+
+    def _value_rows(
+        self,
+        graph: BlueprintGraph,
+        items: tuple[PlannedMetric, ...],
+    ) -> list[str]:
+        """What each metric actually produced, so a threshold can be picked from it.
+
+        A metric that computed nothing gets no row: an empty one would be noise
+        on exactly the diagram meant to be read for data.
+        """
+        rows: list[str] = []
+        for item in items:
+            source = (
+                graph.link_metrics.values()
+                if item in self.plan.link_items
+                else graph.node_metrics.values()
+            )
+            summary = _summarize(
+                values[item.name] for values in source if item.name in values
+            )
+            if summary:
+                rows.append(f"{item.title}: {summary}")
+        return rows
 
     def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
         """Wrap the nodes belonging to one namespace; by default, do not wrap.
@@ -264,6 +425,16 @@ class BlueprintRenderer(ABC):
         extension point the docs advertise.
         """
         return nodes
+
+    def _format_link_detail(self, link: Link) -> RenderedLink:
+        """Spell out the imports behind one link; by default, draw nothing.
+
+        Concrete for the same reason as :meth:`_format_group`: an abstract method
+        would break every renderer outside this package. Called only for a link a
+        plugin flagged, and only while ``show_link_details`` is on -- a note on
+        every arrow would bury the diagram.
+        """
+        return RenderedLink(inline="")
 
     @abstractmethod
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
@@ -281,16 +452,11 @@ class BlueprintRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> RenderedLink:
         """Format a bidirectional cycle between namespaces, with any decoration."""
         ...
 
     @abstractmethod
-    def _combine_output(
-        self,
-        nodes: list[str],
-        links: list[str],
-        deferred: list[str],
-    ) -> str:
-        """Combine all parts into final output with header/footer."""
+    def _combine_output(self, sections: RenderSections) -> str:
+        """Assemble the final document from the rendered sections."""
         ...

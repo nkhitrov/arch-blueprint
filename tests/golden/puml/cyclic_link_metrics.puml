@@ -12,13 +12,21 @@ package pkg_b {
   class pkg_b.util <<(M, #2ECC71)>>
 }
 
-pkg_a <-[#C0392B,bold]-> pkg_b : edge_weight=2/1
+pkg_a <-[#C0392B,bold]-> pkg_b : imports=2/1
 note on link
-  **pkg_a -> pkg_b:**
-  - core → util
-  - services → util
-  **pkg_b -> pkg_a:**
-  - util → core
+  **pkg_a -> pkg_b.util:**
+  - core
+  - services
+  **pkg_b.util -> pkg_a:**
+  - core
 end note
+legend right
+  imports — how many imports cross this boundary
+  a/b on a cycle — a is the forward direction, b the backward one
+
+  values on this diagram
+  imports: 1, 2
+endlegend
+
 @enduml
 

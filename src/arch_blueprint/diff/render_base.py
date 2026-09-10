@@ -12,7 +12,7 @@ from arch_blueprint.diff.model import (
 from arch_blueprint.domain.graph import Cycle
 from arch_blueprint.renderer.base import (
     DEFAULT_OPTIONS,
-    CycleRender,
+    RenderedLink,
     RendererOptions,
     wrap_groups,
 )
@@ -110,7 +110,7 @@ class DiffRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
+    def _format_cycle(self, delta: CycleDelta) -> RenderedLink:
         """Format a new or resolved cycle, with details for a new one."""
         ...
 

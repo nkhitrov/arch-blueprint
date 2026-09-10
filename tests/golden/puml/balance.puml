@@ -1,0 +1,61 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+package api {
+  class api.handlers <<(M, #2ECC71)>>
+}
+package cli {
+  class cli.main <<(M, #2ECC71)>>
+}
+package core {
+  class core.deep.sub.config <<(M, #F39C12)>>
+  class core.deep.sub.errors <<(M, #F39C12)>>
+  class core.deep.sub.models <<(M, #F39C12)>>
+  class core.deep.sub.types <<(M, #F39C12)>>
+  class core.deep.sub.util <<(M, #F39C12)>>
+  class core.errors <<(M, #2ECC71)>>
+}
+package jobs {
+  class jobs.tasks <<(M, #2ECC71)>>
+}
+package util {
+  class util.text <<(M, #2ECC71)>>
+}
+package web {
+  class web.views <<(M, #2ECC71)>>
+}
+
+api ---> core : imports=1\ndistance=4
+cli ---> web : imports=1\ndistance=4
+jobs ---> util : imports=1\ndistance=4
+util ---> core : imports=1\ndistance=4
+web -[#D35400,thickness=4]-> core : imports=5\ndistance=6
+note on link
+  **web.views -> core:**
+  - deep.sub.config
+  - deep.sub.errors
+  - deep.sub.models
+  - deep.sub.types
+  - deep.sub.util
+end note
+legend right
+  balance — a thick arrow marks a link clearing every threshold below; on a cycle the verdict is named in text instead
+  imports — how many imports cross this boundary
+  distance — steps through the package tree between the two ends
+  a/b on a cycle — a is the forward direction, b the backward one
+
+  options
+  balance.strength = 5
+  balance.distance = 5
+
+  values on this diagram
+  balance: balanced×4, too-far
+  imports: 1×4, 5
+  distance: 4×4, 6
+endlegend
+
+@enduml
+

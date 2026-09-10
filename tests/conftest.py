@@ -19,6 +19,7 @@ CYCLIC_PROJECT = _FIXTURES / "cyclic"
 DEEP_PROJECT = _FIXTURES / "deep_ns"
 INIT_IMPORTS_PROJECT = _FIXTURES / "init_imports"
 ANCESTOR_DEP_PROJECT = _FIXTURES / "ancestor_dep"
+COUPLING_PROJECT = _FIXTURES / "coupling"
 
 INIT_IMPORTS_MODULES = ["-m", "writer", "-m", "storage.*"]
 ANCESTOR_DEP_MODULES = ["-m", "api.*", "-m", "services.*"]
@@ -27,6 +28,39 @@ EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
 CYCLIC_MODULES = ["-m", "pkg_a.*", "-m", "pkg_b.*"]
 SHOW_METRICS = ["--metric", "fan_in", "--metric", "fan_out", "--metric", "instability"]
 SHOW_LINK_METRIC = ["--metric", "edge_weight"]
+# Both inputs of the verdict are requested alongside it on purpose: a threshold
+# is picked from the legend's value summary, and a metric only reports values it
+# was asked to compute.
+SHOW_BALANCE = [
+    "--metric",
+    "balance",
+    "--metric",
+    "edge_weight",
+    "--metric",
+    "namespace_distance",
+]
+# The coupling fixture's spread is 1/1/1/1/5 imports over 4/4/4/4/6 steps, so
+# these two are the only pair that separates exactly one link from the rest.
+BALANCE_THRESHOLDS = [
+    "--metric-option",
+    "balance.strength=5",
+    "--metric-option",
+    "balance.distance=5",
+]
+COUPLING_MODULES = [
+    "-m",
+    "core.**",
+    "-m",
+    "web.*",
+    "-m",
+    "api.*",
+    "-m",
+    "cli.*",
+    "-m",
+    "jobs.*",
+    "-m",
+    "util.*",
+]
 DEEP_MODULES = ["-m", "deep.**"]
 # Deliberately not the order metrics are registered in ``default_registry`` — this pins
 # that metric blocks follow CLI argument order, which ``SHOW_METRICS`` cannot detect
@@ -65,8 +99,11 @@ INIT_IMPORTS = Selection("init_imports", INIT_IMPORTS_PROJECT, INIT_IMPORTS_MODU
 # An import of a package facade whose children are selected: the edge exists
 # only if selection matches upward as well as down.
 ANCESTOR_DEP = Selection("ancestor_dep", ANCESTOR_DEP_PROJECT, ANCESTOR_DEP_MODULES)
+# Five links weighing 1/1/1/1/5 over 4/4/4/4/6 tree steps: the only spread here
+# that one threshold pair splits into a single flagged link and four plain ones.
+COUPLING = Selection("coupling", COUPLING_PROJECT, COUPLING_MODULES)
 
-SELECTIONS = [EXAMPLE, CYCLIC, DEEP, INIT_IMPORTS, ANCESTOR_DEP]
+SELECTIONS = [EXAMPLE, CYCLIC, DEEP, INIT_IMPORTS, ANCESTOR_DEP, COUPLING]
 
 
 @dataclass(frozen=True)
@@ -103,6 +140,17 @@ SCENARIOS = [
     Scenario("cyclic_link_metrics", CYCLIC, SHOW_LINK_METRIC),
     Scenario("init_imports", INIT_IMPORTS),
     Scenario("ancestor_dep", ANCESTOR_DEP),
+    Scenario("balance", COUPLING, [*SHOW_BALANCE, *BALANCE_THRESHOLDS]),
+    # The same graph with the notes off: pins that the flag governs the notes and
+    # nothing else, so the flagged arrow itself must survive.
+    Scenario(
+        "balance_nodetails",
+        COUPLING,
+        [*SHOW_BALANCE, *BALANCE_THRESHOLDS, "--no-link-details"],
+    ),
+    # The same graph with no thresholds at all: no verdict, no thick arrow, and a
+    # legend that reports the values and names the knobs that would use them.
+    Scenario("balance_unset", COUPLING, SHOW_BALANCE),
 ]
 
 

@@ -1,0 +1,225 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 1,
+  "metrics": [
+    "balance",
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability",
+    "namespace_distance"
+  ],
+  "nodes": [
+    {
+      "id": "api.handlers",
+      "kind": "module"
+    },
+    {
+      "id": "cli.main",
+      "kind": "module"
+    },
+    {
+      "id": "core.deep.sub.config",
+      "kind": "module"
+    },
+    {
+      "id": "core.deep.sub.errors",
+      "kind": "module"
+    },
+    {
+      "id": "core.deep.sub.models",
+      "kind": "module"
+    },
+    {
+      "id": "core.deep.sub.types",
+      "kind": "module"
+    },
+    {
+      "id": "core.deep.sub.util",
+      "kind": "module"
+    },
+    {
+      "id": "core.errors",
+      "kind": "module"
+    },
+    {
+      "id": "jobs.tasks",
+      "kind": "module"
+    },
+    {
+      "id": "util.text",
+      "kind": "module"
+    },
+    {
+      "id": "web.views",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "api.handlers",
+      "target": "core.errors",
+      "source_namespace": "api",
+      "target_namespace": "core"
+    },
+    {
+      "source": "cli.main",
+      "target": "web.views",
+      "source_namespace": "cli",
+      "target_namespace": "web"
+    },
+    {
+      "source": "jobs.tasks",
+      "target": "util.text",
+      "source_namespace": "jobs",
+      "target_namespace": "util"
+    },
+    {
+      "source": "util.text",
+      "target": "core.errors",
+      "source_namespace": "util",
+      "target_namespace": "core"
+    },
+    {
+      "source": "web.views",
+      "target": "core.deep.sub.config",
+      "source_namespace": "web",
+      "target_namespace": "core"
+    },
+    {
+      "source": "web.views",
+      "target": "core.deep.sub.errors",
+      "source_namespace": "web",
+      "target_namespace": "core"
+    },
+    {
+      "source": "web.views",
+      "target": "core.deep.sub.models",
+      "source_namespace": "web",
+      "target_namespace": "core"
+    },
+    {
+      "source": "web.views",
+      "target": "core.deep.sub.types",
+      "source_namespace": "web",
+      "target_namespace": "core"
+    },
+    {
+      "source": "web.views",
+      "target": "core.deep.sub.util",
+      "source_namespace": "web",
+      "target_namespace": "core"
+    }
+  ],
+  "node_metrics": {
+    "api.handlers": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "cli.main": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "core.deep.sub.config": {
+      "depth": 4,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "core.deep.sub.errors": {
+      "depth": 4,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "core.deep.sub.models": {
+      "depth": 4,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "core.deep.sub.types": {
+      "depth": 4,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "core.deep.sub.util": {
+      "depth": 4,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "core.errors": {
+      "depth": 2,
+      "fan_in": 2,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "jobs.tasks": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "util.text": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "web.views": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 5,
+      "instability": 0.83
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "api",
+      "target": "core",
+      "values": {
+        "edge_weight": 1,
+        "namespace_distance": 4
+      }
+    },
+    {
+      "source": "cli",
+      "target": "web",
+      "values": {
+        "edge_weight": 1,
+        "namespace_distance": 4
+      }
+    },
+    {
+      "source": "jobs",
+      "target": "util",
+      "values": {
+        "edge_weight": 1,
+        "namespace_distance": 4
+      }
+    },
+    {
+      "source": "util",
+      "target": "core",
+      "values": {
+        "edge_weight": 1,
+        "namespace_distance": 4
+      }
+    },
+    {
+      "source": "web",
+      "target": "core",
+      "values": {
+        "edge_weight": 5,
+        "namespace_distance": 6
+      }
+    }
+  ]
+}

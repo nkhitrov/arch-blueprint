@@ -13,7 +13,8 @@ pip install arch-blueprint
 ```shell
 arch-blueprint --help
 usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2,json}]
-                      [--metric NAME] [--no-cycle-details]
+                      [--metric NAME] [--metric-option NAME.OPTION=VALUE]
+                      [--no-cycle-details] [--no-link-details]
                       project_dir
 
 Generate architecture diagrams for Python applications. Subcommands: 'render'
@@ -35,7 +36,14 @@ options:
                         as a block on each node (e.g. --metric fan_in); a link
                         metric renders as a label on each connection (e.g.
                         --metric edge_weight).
+  --metric-option NAME.OPTION=VALUE
+                        Set one of a metric's options (repeatable), e.g.
+                        --metric-option balance.strength=20. The metric must
+                        also be requested with --metric. Which options exist
+                        is reported in the diagram's legend.
   --no-cycle-details    Hide detailed information for cyclic dependencies
+  --no-link-details     Hide the per-import note a metric asks for on a
+                        connection
 ```
 
 A run against the bundled example project:
@@ -96,7 +104,7 @@ modules is an error rather than an empty diagram.
 
 ```shell
 $ arch-blueprint examples/project_root -m 'app1.*' --metric fanin
-arch-blueprint: unknown metric 'fanin'. Available: depth, edge_weight, fan_in, fan_out, instability
+arch-blueprint: unknown metric 'fanin'. Available: balance, depth, edge_weight, fan_in, fan_out, instability, namespace_distance
 ```
 
 ### Metrics
@@ -109,10 +117,18 @@ arch-blueprint: unknown metric 'fanin'. Available: depth, edge_weight, fan_in, f
 | `fan_out` | node | a row in the node's block |
 | `instability` | node | a row in the node's block — `fan_out / (fan_in + fan_out)` |
 | `edge_weight` | link | a label on the connection: how many imports it stands for |
+| `namespace_distance` | link | a label: how far apart in the package tree the two ends sit |
+| `balance` | link | a thick colored arrow, drawn only on a link the model calls unbalanced |
 
-Blocks appear in the order you asked for them. A cycle is one connection standing for two links, so
-a link metric shows both values there as `forward/backward`, matching the order of the cycle's own
-detail block.
+Blocks appear in the order you asked for them, one per line. A cycle is one connection standing for
+two links, so a link metric shows both values there as `forward/backward`, matching the order of the
+cycle's own detail block.
+
+Asking for any metric adds a **legend**, so a rendered diagram can be handed to someone who has never
+seen this README. It has three blocks: what each metric measures (in the metric's own words), which
+options each one takes and what they are set to, and **the values that landed on this diagram** —
+`imports: 1×22, 2, 3, 5, 6, 7, 41, 47`. That last block is what a threshold is picked from, and it
+only reports metrics you asked for: to tune `balance` you also request its two inputs.
 
 ```shell
 arch-blueprint tests/fixtures/cyclic -m 'pkg_a.*' -m 'pkg_b.*' \
@@ -124,6 +140,63 @@ arch-blueprint tests/fixtures/cyclic -m 'pkg_a.*' -m 'pkg_b.*' \
 `pkg_b.util` is depended on twice and depends on one module, so `instability: 0.33`. The connection
 is a cycle, so `edge_weight` reads `2/1`: two imports one way, one the other — the same two
 directions the note spells out.
+
+### Balanced coupling
+
+`--metric balance` judges each connection instead of measuring it. It follows the balanced-coupling
+model described in Vlad Khononov's *Balancing Coupling in Software Design*
+([coupling.dev](https://coupling.dev/)), which calls coupling balanced when integration strength and
+distance counterbalance each other: a lot of shared knowledge is fine between neighbours, and a
+distant boundary is fine if little crosses it.
+
+Two of the model's three dimensions are visible in an import graph, and both are approximations:
+
+- **strength** — how many imports stand behind the connection (`edge_weight`),
+- **distance** — how far apart in the package tree its farthest two modules sit
+  (`namespace_distance`).
+
+**You set where each dimension becomes too much, and the tool refuses to guess.** Run it once with
+no thresholds: nothing is marked, and the legend reports the values it saw. Pick from those, run it
+again, and every connection clearing *every* threshold you set is drawn as a **thick orange arrow**:
+too much knowledge crossing too far a boundary, so either move the modules together or put a
+contract between them. Everything else is left plain, so the diagram shows problems rather than
+restating a verdict on every arrow. A cycle is the exception — both renderers reserve the arrow's
+styling for the cycle itself, so there the verdict is named in text (`too-far/balanced`).
+
+A threshold you leave out does not constrain, so `--metric-option balance.strength=20` alone reads
+as "twenty imports or more, whatever the distance".
+
+```shell
+# 1. what is there
+arch-blueprint /path/to/site-packages -m 'wemake_python_styleguide.*' \
+  --metric balance --metric edge_weight --metric namespace_distance
+#    legend: imports: 1×22, 2, 3, 5, 6, 7, 41, 47
+
+# 2. mark what stands out
+arch-blueprint /path/to/site-packages -m 'wemake_python_styleguide.*' \
+  --metric balance --metric edge_weight --metric namespace_distance \
+  --metric-option balance.strength=10 --metric-option balance.distance=4
+```
+
+There is no automatic threshold because none of them survives contact with real graphs. Import
+counts are close to degenerate: 22 of wemake's 29 connections carry exactly one import, 280 of
+aiohttp's 281. Any rank-based cut therefore lands on the floor — the upper quartile *is* 1 — and
+"above the threshold" comes to mean "more than one import". A Tukey fence collapses to the same
+thing when the interquartile range is zero, and a largest-gap rule finds nothing on a project whose
+weights climb smoothly. As a starting point rather than a default: a boundary carrying **an order of
+magnitude more imports than the typical one** is the one worth looking at — on wemake that is
+`strength=10`, which marks the two connections carrying 41 and 47 imports and nothing else.
+
+The arrow says *that* a boundary is hot; a **note beside it lists the imports that cross it**, the
+same way a cycle's note spells out its edges. When every import shares one end — one module reaching
+into a package, or a whole package reaching into one module — that end is named once in the note's
+header instead of on all forty lines. That is the difference between knowing a boundary is a
+problem and knowing what to move. On a heavy connection the note is long — fifty imports make a
+diagram twice as tall — so `--no-link-details` turns the notes off and leaves the arrows, and
+`--no-cycle-details` does the same for cycles, independently.
+
+One caveat worth knowing before you act on it: the model's third dimension, volatility, is not an
+input. It needs change history, which would make the output non-deterministic.
 
 New metrics are self-contained plugins under `src/arch_blueprint/metrics/`, registered in
 `metrics/__init__.py` — no changes to the extractor or renderers are needed. See `CLAUDE.md` for the
@@ -287,9 +360,9 @@ arch-blueprint /tmp/pkgs -m 'taskiq.*' \
   --metric fan_in --metric fan_out --metric instability
 ```
 
-Every node carries its own block. `taskiq.abc` reads `fan_out: 13, instability: 1.0` — it depends on
+Every node carries its own block. `taskiq.abc` reads `fan-out: 13, instability: 1.0` — it depends on
 thirteen modules and nothing depends on it, which is what an abstract-base module should look like.
-`taskiq.compat` is the opposite at `fan_in: 8, instability: 0.0`. Cycles stay highlighted, with the
+`taskiq.compat` is the opposite at `fan-in: 8, instability: 0.0`. Cycles stay highlighted, with the
 imports that cause them listed beside the connection.
 
 Source: [`docs/images/taskiq_metrics.puml`](docs/images/taskiq_metrics.puml)

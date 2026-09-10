@@ -36,16 +36,16 @@ fastapi.__main__ ---> fastapi.cli
 fastapi._compat <-[#C0392B,bold]-> fastapi.openapi
 note on link
   **fastapi._compat -> fastapi.openapi:**
-  - fastapi._compat → constants
+  - constants
   **fastapi.openapi -> fastapi._compat:**
-  - fastapi.openapi → fastapi._compat
+  - fastapi._compat
 end note
 fastapi._compat <-[#C0392B,bold]-> fastapi.params
 note on link
   **fastapi._compat -> fastapi.params:**
-  - fastapi._compat → fastapi.params
+  - fastapi.params
   **fastapi.params -> fastapi._compat:**
-  - fastapi.params → fastapi._compat
+  - fastapi._compat
 end note
 fastapi._compat ---> fastapi.types
 fastapi.applications ---> fastapi.datastructures
@@ -83,9 +83,9 @@ fastapi.openapi ---> fastapi.logger
 fastapi.openapi <-[#C0392B,bold]-> fastapi.params
 note on link
   **fastapi.openapi -> fastapi.params:**
-  - fastapi.openapi → fastapi.params
+  - fastapi.params
   **fastapi.params -> fastapi.openapi:**
-  - fastapi.params → models
+  - models
 end note
 fastapi.openapi ---> fastapi.responses
 fastapi.openapi ---> fastapi.routing
@@ -111,9 +111,9 @@ fastapi.routing ---> fastapi.types
 fastapi.routing <-[#C0392B,bold]-> fastapi.utils
 note on link
   **fastapi.routing -> fastapi.utils:**
-  - fastapi.routing → fastapi.utils
+  - fastapi.utils
   **fastapi.utils -> fastapi.routing:**
-  - fastapi.utils → fastapi.routing
+  - fastapi.routing
 end note
 fastapi.security ---> fastapi.exceptions
 fastapi.security ---> fastapi.openapi

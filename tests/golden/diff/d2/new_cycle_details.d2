@@ -28,7 +28,7 @@ pkg_b.util: {
   }
 }
 pkg_a <-> pkg_b: NEW CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
-"Cycle Details": {
+"Details": {
   style.fill: "#FEF9E7"
   style.stroke: "#F39C12"
   style.stroke-width: 2
@@ -44,14 +44,14 @@ pkg_a <-> pkg_b: NEW CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4; styl
     cycle_pkg_a_pkg_b: |md
       **pkg_a ↔ pkg_b**
 
-      **pkg_a → pkg_b:**
+      **pkg_a → pkg_b.util:**
 
-      - core → util
-      - services → util
+      - core
+      - services
 
-      **pkg_b → pkg_a:**
+      **pkg_b.util → pkg_a:**
 
-      - util → core
+      - core
     | {
       style.fill: "#FADBD8"
       style.stroke: "#C0392B"

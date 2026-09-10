@@ -14,7 +14,15 @@ package plugins {
   class plugins.auth.backend <<(M, #1ABC9C)>>
 }
 
-app2 ---> app1 : edge_weight=1
-app2 ---> plugins : edge_weight=1
+app2 ---> app1 : imports=1
+app2 ---> plugins : imports=1
+legend right
+  imports — how many imports cross this boundary
+  a/b on a cycle — a is the forward direction, b the backward one
+
+  values on this diagram
+  imports: 1×2
+endlegend
+
 @enduml
 

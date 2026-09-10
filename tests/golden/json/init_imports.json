@@ -2,11 +2,13 @@
   "format": "arch-blueprint-graph",
   "version": 1,
   "metrics": [
+    "balance",
     "depth",
     "edge_weight",
     "fan_in",
     "fan_out",
-    "instability"
+    "instability",
+    "namespace_distance"
   ],
   "nodes": [
     {
@@ -45,7 +47,8 @@
       "source": "writer",
       "target": "storage",
       "values": {
-        "edge_weight": 1
+        "edge_weight": 1,
+        "namespace_distance": 3
       }
     }
   ]

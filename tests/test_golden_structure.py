@@ -9,6 +9,9 @@ from tests.conftest import DIFF_CASES, SCENARIOS, diff_golden_path, golden_path
 
 _CLASS = re.compile(r"^\s*class\s+(?P<name>[\w.]+)")
 _PACKAGE = re.compile(r'^\s*package\s+(?P<name>[\w.]+|"[^"]+")')
+#: Every arrow shape the PlantUML renderer emits: plain, styled one-way (what a
+#: balance verdict draws), and the bidirectional cycle arrow. Missing a shape
+#: here does not fail the invariants below — it makes them pass vacuously.
 _LINK = re.compile(
     r"^(?P<source>[\w.]+)\s+(?:--->|<?-\[[^\]]*\]->)\s+(?P<target>[\w.]+)",
 )
@@ -38,6 +41,30 @@ def _link_endpoints(source: str) -> set[str]:
 _GOLDENS = [golden_path("puml", s.name) for s in SCENARIOS] + [
     diff_golden_path("puml", c.name) for c in DIFF_CASES
 ]
+
+
+def test_link_endpoints_are_found_on_every_arrow_shape_we_emit() -> None:
+    """The invariant below is worthless if the regex silently skips an arrow.
+
+    A styled one-way arrow is what a balance verdict produces, and it matched
+    nothing until this test existed — so that scenario's endpoints were never
+    actually checked.
+    """
+    source = "\n".join(
+        [
+            "plain ---> target",
+            "styled -[#D35400,thickness=4]-> other",
+            "cyclic <-[#C0392B,bold]-> partner",
+        ],
+    )
+    assert _link_endpoints(source) == {
+        "plain",
+        "target",
+        "styled",
+        "other",
+        "cyclic",
+        "partner",
+    }
 
 
 def _read(golden: Path) -> str:

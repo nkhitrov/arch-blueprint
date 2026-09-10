@@ -2,11 +2,13 @@
   "format": "arch-blueprint-graph",
   "version": 1,
   "metrics": [
+    "balance",
     "depth",
     "edge_weight",
     "fan_in",
     "fan_out",
-    "instability"
+    "instability",
+    "namespace_distance"
   ],
   "nodes": [
     {
@@ -61,14 +63,16 @@
       "source": "app2",
       "target": "app1",
       "values": {
-        "edge_weight": 1
+        "edge_weight": 1,
+        "namespace_distance": 4
       }
     },
     {
       "source": "app2",
       "target": "plugins",
       "values": {
-        "edge_weight": 1
+        "edge_weight": 1,
+        "namespace_distance": 5
       }
     }
   ]

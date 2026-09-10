@@ -2,11 +2,13 @@
   "format": "arch-blueprint-graph",
   "version": 1,
   "metrics": [
+    "balance",
     "depth",
     "edge_weight",
     "fan_in",
     "fan_out",
-    "instability"
+    "instability",
+    "namespace_distance"
   ],
   "nodes": [
     {
@@ -83,21 +85,24 @@
       "source": "deep.api",
       "target": "deep.core",
       "values": {
-        "edge_weight": 2
+        "edge_weight": 2,
+        "namespace_distance": 5
       }
     },
     {
       "source": "deep.api.v1.handlers",
       "target": "deep.api.v1.schemas",
       "values": {
-        "edge_weight": 1
+        "edge_weight": 1,
+        "namespace_distance": 2
       }
     },
     {
       "source": "deep.core.services",
       "target": "deep.core.models",
       "values": {
-        "edge_weight": 1
+        "edge_weight": 1,
+        "namespace_distance": 2
       }
     }
   ]

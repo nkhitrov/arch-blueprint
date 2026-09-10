@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from tests.conftest import (
+    COUPLING_MODULES,
+    COUPLING_PROJECT,
     CYCLIC_MODULES,
     CYCLIC_PROJECT,
     DIFF_CASES,
@@ -79,14 +81,23 @@ def test_metric_typo_lists_the_available_names() -> None:
 
 
 def test_output_is_utf8_whatever_the_console_encoding() -> None:
-    """Cycle details contain arrows; a cp1252 console must not kill the run."""
+    """Diagrams carry non-ASCII; a cp1252 console must not kill the run.
+
+    Asked of the default format, and of a run with a metric: every legend row
+    joins a metric to its description with an em dash, which makes it the one
+    piece of non-ASCII a PlantUML diagram reliably contains. Detail notes carry
+    arrows and value rows carry a multiplication sign, but only when the graph
+    happens to have a note with no constant end, or a repeated value.
+    """
     result = run_cli(
         CYCLIC_PROJECT,
         *CYCLIC_MODULES,
+        "--metric",
+        "edge_weight",
         extra_env={"PYTHONIOENCODING": "cp1252"},
     )
     assert result.returncode == 0
-    assert "→" in result.stdout
+    assert "\u2014" in result.stdout
 
 
 def test_errors_are_utf8_whatever_the_console_encoding() -> None:
@@ -105,7 +116,7 @@ def test_errors_are_utf8_whatever_the_console_encoding() -> None:
 def test_link_metrics_reach_cyclic_connections() -> None:
     """A cycle stands for two links, so its label carries both values."""
     result = run_cli(CYCLIC_PROJECT, *CYCLIC_MODULES, "--metric", "edge_weight")
-    assert "edge_weight=2/1" in result.stdout
+    assert "imports=2/1" in result.stdout
 
 
 # --- snapshot, render and diff ----------------------------------------------
@@ -211,3 +222,25 @@ def test_diff_shows_new_cycle_details_on_request_only() -> None:
     assert "note on link" in shown
     assert "note on link" not in hidden
     assert "NEW CYCLE" in hidden
+
+
+def test_the_two_detail_flags_are_independent() -> None:
+    """Silencing one kind of note must leave the other one standing.
+
+    A cycle's note and a flagged link's note answer different questions, so they
+    are two flags and not one: the cyclic fixture has a cycle and no verdict, the
+    coupling fixture the other way round.
+    """
+    cyclic = run_cli(CYCLIC_PROJECT, *CYCLIC_MODULES, "--no-link-details")
+    assert "note on link" in cyclic.stdout
+
+    coupling = run_cli(
+        COUPLING_PROJECT,
+        *COUPLING_MODULES,
+        "--metric",
+        "balance",
+        "--metric-option",
+        "balance.strength=5",
+        "--no-cycle-details",
+    )
+    assert "**web.views -> core:**" in coupling.stdout

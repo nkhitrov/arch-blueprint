@@ -1,0 +1,105 @@
+direction: right
+api.handlers: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+cli.main: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+core.deep.sub.config: {
+  shape: class
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+core.deep.sub.errors: {
+  shape: class
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+core.deep.sub.models: {
+  shape: class
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+core.deep.sub.types: {
+  shape: class
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+core.deep.sub.util: {
+  shape: class
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+core.errors: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+jobs.tasks: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+util.text: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+web.views: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+api -> core: "imports=1\ndistance=4"
+cli -> web: "imports=1\ndistance=4"
+jobs -> util: "imports=1\ndistance=4"
+util -> core: "imports=1\ndistance=4"
+web -> core: "imports=5\ndistance=6" {style.stroke: "#D35400"; style.stroke-width: 4}
+"Legend": |md
+  ### Legend
+
+  - balance — a thick arrow marks a link clearing every threshold below; on a cycle the verdict is named in text instead
+  - imports — how many imports cross this boundary
+  - distance — steps through the package tree between the two ends
+  - a/b on a cycle — a is the forward direction, b the backward one
+
+  **options**
+
+  - balance.strength = 5
+  - balance.distance = 5
+
+  **values on this diagram**
+
+  - balance: balanced×4, too-far
+  - imports: 1×4, 5
+  - distance: 4×4, 6
+| {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.border-radius: 8
+}

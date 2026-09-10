@@ -5,158 +5,158 @@ top to bottom direction
 hide empty members
 
 class taskiq.__main__ <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 1
+  fan-in: 0
+  fan-out: 1
   instability: 1.0
 }
 class taskiq.abc <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 13
+  fan-in: 0
+  fan-out: 13
   instability: 1.0
 }
 class taskiq.acks <<(M, #2ECC71)>> {
-  fan_in: 5
-  fan_out: 1
+  fan-in: 5
+  fan-out: 1
   instability: 0.17
 }
 class taskiq.api <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 5
+  fan-in: 0
+  fan-out: 5
   instability: 1.0
 }
 class taskiq.brokers <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 9
+  fan-in: 0
+  fan-out: 9
   instability: 1.0
 }
 class taskiq.cli <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 7
+  fan-in: 0
+  fan-out: 7
   instability: 1.0
 }
 class taskiq.compat <<(M, #2ECC71)>> {
-  fan_in: 8
-  fan_out: 0
+  fan-in: 8
+  fan-out: 0
   instability: 0.0
 }
 class taskiq.context <<(M, #2ECC71)>> {
-  fan_in: 1
-  fan_out: 5
+  fan-in: 1
+  fan-out: 5
   instability: 0.83
 }
 class taskiq.decor <<(M, #2ECC71)>> {
-  fan_in: 2
-  fan_out: 6
+  fan-in: 2
+  fan-out: 6
   instability: 0.75
 }
 class taskiq.error <<(M, #2ECC71)>> {
-  fan_in: 1
-  fan_out: 0
+  fan-in: 1
+  fan-out: 0
   instability: 0.0
 }
 class taskiq.events <<(M, #2ECC71)>> {
-  fan_in: 2
-  fan_out: 0
+  fan-in: 2
+  fan-out: 0
   instability: 0.0
 }
 class taskiq.exceptions <<(M, #2ECC71)>> {
-  fan_in: 10
-  fan_out: 1
+  fan-in: 10
+  fan-out: 1
   instability: 0.09
 }
 class taskiq.formatters <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 4
+  fan-in: 0
+  fan-out: 4
   instability: 1.0
 }
 class taskiq.funcs <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 3
+  fan-in: 0
+  fan-out: 3
   instability: 1.0
 }
 class taskiq.instrumentation <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 3
+  fan-in: 0
+  fan-out: 3
   instability: 1.0
 }
 class taskiq.kicker <<(M, #2ECC71)>> {
-  fan_in: 4
-  fan_out: 11
+  fan-in: 4
+  fan-out: 11
   instability: 0.73
 }
 class taskiq.labels <<(M, #2ECC71)>> {
-  fan_in: 2
-  fan_out: 0
+  fan-in: 2
+  fan-out: 0
   instability: 0.0
 }
 class taskiq.message <<(M, #2ECC71)>> {
-  fan_in: 7
-  fan_out: 1
+  fan-in: 7
+  fan-out: 1
   instability: 0.12
 }
 class taskiq.middlewares <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 6
+  fan-in: 0
+  fan-out: 6
   instability: 1.0
 }
 class taskiq.package <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 0
+  fan-in: 0
+  fan-out: 0
   instability: 0.0
 }
 class taskiq.receiver <<(M, #2ECC71)>> {
-  fan_in: 2
-  fan_out: 10
+  fan-in: 2
+  fan-out: 10
   instability: 0.83
 }
 class taskiq.result <<(M, #2ECC71)>> {
-  fan_in: 6
-  fan_out: 2
+  fan-in: 6
+  fan-out: 2
   instability: 0.25
 }
 class taskiq.result_backends <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 2
+  fan-in: 0
+  fan-out: 2
   instability: 1.0
 }
 class taskiq.schedule_sources <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 3
+  fan-in: 0
+  fan-out: 3
   instability: 1.0
 }
 class taskiq.scheduler <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 7
+  fan-in: 0
+  fan-out: 7
   instability: 1.0
 }
 class taskiq.serialization <<(M, #2ECC71)>> {
-  fan_in: 1
-  fan_out: 2
+  fan-in: 1
+  fan-out: 2
   instability: 0.67
 }
 class taskiq.serializers <<(M, #2ECC71)>> {
-  fan_in: 0
-  fan_out: 1
+  fan-in: 0
+  fan-out: 1
   instability: 1.0
 }
 class taskiq.state <<(M, #2ECC71)>> {
-  fan_in: 3
-  fan_out: 0
+  fan-in: 3
+  fan-out: 0
   instability: 0.0
 }
 class taskiq.task <<(M, #2ECC71)>> {
-  fan_in: 4
-  fan_out: 4
+  fan-in: 4
+  fan-out: 4
   instability: 0.5
 }
 class taskiq.utils <<(M, #2ECC71)>> {
-  fan_in: 6
-  fan_out: 0
+  fan-in: 6
+  fan-out: 0
   instability: 0.0
 }
 class taskiq.warnings <<(M, #2ECC71)>> {
-  fan_in: 1
-  fan_out: 0
+  fan-in: 1
+  fan-out: 0
   instability: 0.0
 }
 
@@ -165,44 +165,44 @@ taskiq.abc ---> taskiq.acks
 taskiq.abc <-[#C0392B,bold]-> taskiq.decor
 note on link
   **taskiq.abc -> taskiq.decor:**
-  - taskiq.abc → taskiq.decor
+  - taskiq.decor
   **taskiq.decor -> taskiq.abc:**
-  - taskiq.decor → broker
-  - taskiq.decor → schedule_source
+  - broker
+  - schedule_source
 end note
 taskiq.abc ---> taskiq.events
 taskiq.abc ---> taskiq.exceptions
 taskiq.abc <-[#C0392B,bold]-> taskiq.formatters
 note on link
   **taskiq.abc -> taskiq.formatters:**
-  - taskiq.abc → proxy_formatter
+  - proxy_formatter
   **taskiq.formatters -> taskiq.abc:**
-  - taskiq.formatters → broker
-  - taskiq.formatters → formatter
+  - broker
+  - formatter
 end note
 taskiq.abc ---> taskiq.message
 taskiq.abc ---> taskiq.result
 taskiq.abc <-[#C0392B,bold]-> taskiq.result_backends
 note on link
   **taskiq.abc -> taskiq.result_backends:**
-  - taskiq.abc → dummy
+  - dummy
   **taskiq.result_backends -> taskiq.abc:**
-  - taskiq.result_backends → result_backend
+  - result_backend
 end note
 taskiq.abc <-[#C0392B,bold]-> taskiq.scheduler
 note on link
   **taskiq.abc -> taskiq.scheduler:**
-  - taskiq.abc → scheduled_task
+  - scheduled_task
   **taskiq.scheduler -> taskiq.abc:**
-  - taskiq.scheduler → broker
-  - taskiq.scheduler → schedule_source
+  - broker
+  - schedule_source
 end note
 taskiq.abc <-[#C0392B,bold]-> taskiq.serializers
 note on link
   **taskiq.abc -> taskiq.serializers:**
-  - taskiq.abc → json_serializer
+  - json_serializer
   **taskiq.serializers -> taskiq.abc:**
-  - taskiq.serializers → serializer
+  - serializer
 end note
 taskiq.abc ---> taskiq.state
 taskiq.abc ---> taskiq.utils
@@ -249,10 +249,10 @@ taskiq.kicker ---> taskiq.message
 taskiq.kicker <-[#C0392B,bold]-> taskiq.scheduler
 note on link
   **taskiq.kicker -> taskiq.scheduler:**
-  - taskiq.kicker → created_schedule
-  - taskiq.kicker → scheduled_task
+  - created_schedule
+  - scheduled_task
   **taskiq.scheduler -> taskiq.kicker:**
-  - taskiq.scheduler → taskiq.kicker
+  - taskiq.kicker
 end note
 taskiq.kicker ---> taskiq.task
 taskiq.kicker ---> taskiq.utils
@@ -287,5 +287,16 @@ taskiq.task ---> taskiq.abc
 taskiq.task ---> taskiq.compat
 taskiq.task ---> taskiq.exceptions
 taskiq.task ---> taskiq.result
+legend right
+  fan-in — how many modules depend on this one
+  fan-out — how many modules this one depends on
+  instability — fan-out / (fan-in + fan-out): 0 is stable, 1 is unstable
+
+  values on this diagram
+  fan-in: 0×14, 1×4, 2×4, 3, 4×2, 5, 6×2, 7, 8, 10
+  fan-out: 0×8, 1×5, 2×3, 3×3, 4×2, 5×2, 6×2, 7×2, 9, 10, 11, 13
+  instability: 0.0×8, 0.09, 0.12, 0.17, 0.25, 0.5, 0.67, 0.73, 0.75, 0.83×2, 1.0×13
+endlegend
+
 @enduml
 

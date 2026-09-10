@@ -1,7 +1,12 @@
+from arch_blueprint.metrics.balance import BalanceMetric
 from arch_blueprint.metrics.base import (
     ALL_KINDS,
+    NO_OPTIONS,
+    AllMetricOptions,
     LinkMetric,
     Metric,
+    MetricOption,
+    MetricOptions,
     MetricRegistry,
     MetricTarget,
     NodeMetric,
@@ -12,6 +17,7 @@ from arch_blueprint.metrics.edge_weight import EdgeWeightMetric
 from arch_blueprint.metrics.fan_in import FanInMetric
 from arch_blueprint.metrics.fan_out import FanOutMetric
 from arch_blueprint.metrics.instability import InstabilityMetric
+from arch_blueprint.metrics.namespace_distance import NamespaceDistanceMetric
 from arch_blueprint.metrics.plan import (
     DEFAULT_COLOR_METRIC,
     MetricConfigError,
@@ -44,6 +50,8 @@ def default_registry() -> MetricRegistry:
     registry.register_node(FanOutMetric())
     registry.register_node(InstabilityMetric())
     registry.register_link(EdgeWeightMetric())
+    registry.register_link(NamespaceDistanceMetric())
+    registry.register_link(BalanceMetric())
     return registry
 
 
@@ -51,10 +59,14 @@ __all__ = [
     "ALL_KINDS",
     "COLOR_METRIC",
     "DEFAULT_COLOR_METRIC",
+    "NO_OPTIONS",
+    "AllMetricOptions",
     "LinkMetric",
     "Metric",
     "MetricConfigError",
     "MetricDisplay",
+    "MetricOption",
+    "MetricOptions",
     "MetricRegistry",
     "MetricTarget",
     "NodeMetric",

@@ -64,8 +64,11 @@ def test_cycle_introduced_in_the_working_tree(repo: Path) -> None:
     result = _diff(repo)
     assert result.returncode == _DIFFERENT, result.stderr
     assert "pkg_a <-[#C0392B,dashed,thickness=3]-> pkg_b : NEW CYCLE" in result.stdout
-    assert "- util → core" not in result.stdout  # the import notes are opt-in
-    assert "- util → core" in _diff(repo, "--cycle-details").stdout
+    # Both edges of that direction share a source, so the note hoists it into the
+    # header and the line under it carries only the target.
+    note = "**pkg_b.util -> pkg_a:**"
+    assert note not in result.stdout  # the import notes are opt-in
+    assert note in _diff(repo, "--cycle-details").stdout
 
 
 def test_head_revision_instead_of_the_working_tree(repo: Path) -> None:

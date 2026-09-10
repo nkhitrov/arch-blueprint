@@ -19,8 +19,8 @@ pkg_b.util: {
     fill: "#2ECC71"
   }
 }
-pkg_a <-> pkg_b: CYCLE edge_weight=2/1 {style.stroke: "#C0392B"; style.stroke-width: 4}
-"Cycle Details": {
+pkg_a <-> pkg_b: "CYCLE\nimports=2/1" {style.stroke: "#C0392B"; style.stroke-width: 4}
+"Details": {
   style.fill: "#FEF9E7"
   style.stroke: "#F39C12"
   style.stroke-width: 2
@@ -36,18 +36,32 @@ pkg_a <-> pkg_b: CYCLE edge_weight=2/1 {style.stroke: "#C0392B"; style.stroke-wi
     cycle_pkg_a_pkg_b: |md
       **pkg_a ↔ pkg_b**
 
-      **pkg_a → pkg_b:**
+      **pkg_a → pkg_b.util:**
 
-      - core → util
-      - services → util
+      - core
+      - services
 
-      **pkg_b → pkg_a:**
+      **pkg_b.util → pkg_a:**
 
-      - util → core
+      - core
     | {
       style.fill: "#FADBD8"
       style.stroke: "#C0392B"
       style.border-radius: 8
     }
   }
+}
+"Legend": |md
+  ### Legend
+
+  - imports — how many imports cross this boundary
+  - a/b on a cycle — a is the forward direction, b the backward one
+
+  **values on this diagram**
+
+  - imports: 1, 2
+| {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.border-radius: 8
 }
