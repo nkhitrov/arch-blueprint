@@ -1,4 +1,5 @@
 import argparse
+import shutil
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from contextlib import ExitStack
@@ -6,11 +7,31 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, NoReturn, Optional, TextIO
 
+from grimp.exceptions import GrimpException
+
 from arch_blueprint.blueprint import build_graph
 from arch_blueprint.diff import DIFF_RENDERERS, diff_graphs
-from arch_blueprint.diff.git import GitError, checkout, split_patterns
 from arch_blueprint.domain.graph import BlueprintGraph
 from arch_blueprint.extract.module_extractor import ModuleExtractor
+from arch_blueprint.git import (
+    Commit,
+    GitError,
+    checkout,
+    first_parent_commits,
+    has_module,
+    split_patterns,
+    tree_id,
+)
+from arch_blueprint.history import (
+    DEFAULT_CACHE_DIR,
+    IMAGE_RENDERERS,
+    Frame,
+    ImageRenderer,
+    SnapshotCache,
+    collect,
+    image_of,
+    write,
+)
 from arch_blueprint.metrics import (
     MetricConfigError,
     MetricDisplay,
@@ -208,7 +229,8 @@ def _generate(argv: Sequence[str]) -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Generate architecture diagrams for Python applications. "
-            "Subcommands: 'render' draws a snapshot, 'diff' compares two."
+            "Subcommands: 'render' draws a snapshot, 'diff' compares two, "
+            "'history' draws one diagram per commit that changed the graph."
         ),
     )
     parser.add_argument(
@@ -376,8 +398,241 @@ def _side(project_dir: str, modules: Sequence[str]) -> BlueprintGraph:
     )
 
 
+def _history(argv: Sequence[str]) -> None:
+    """``arch-blueprint history``: a diagram per commit that changed the graph."""
+    parser = argparse.ArgumentParser(
+        prog="arch-blueprint history",
+        description=(
+            "Walk the first-parent history of the branch and draw, for every "
+            "commit that changed the graph, the full diagram and the diff "
+            "against the previous frame — numbered files to leaf through. "
+            "Snapshots are cached, so a rerun (after a failed image render, "
+            "say) builds only what it has not built before."
+        ),
+    )
+    parser.add_argument("project_dir", help="Path to root directory of target project")
+    parser.add_argument(
+        "roots",
+        nargs="+",
+        metavar="ROOT",
+        help="Top-level package(s) to graph; without -m, everything under each",
+    )
+    _add_modules_arg(parser, required=False)
+    parser.add_argument(
+        "--base",
+        metavar="REV",
+        help="First commit of the album (default: the start of history)",
+    )
+    parser.add_argument(
+        "--head",
+        metavar="REV",
+        default="HEAD",
+        help="Last commit of the album (default: HEAD)",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        metavar="DIR",
+        default="blueprint-history",
+        help="Directory to write the album to (default: ./blueprint-history)",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        metavar="DIR",
+        default=DEFAULT_CACHE_DIR,
+        help=f"Snapshot cache, read and written (default: ./{DEFAULT_CACHE_DIR})",
+    )
+    _add_format_arg(parser, _RENDERERS)
+    parser.add_argument(
+        "--png",
+        action="store_true",
+        help="Also draw PNG images, with plantuml or d2 from PATH",
+    )
+    _add_metric_arg(parser)
+    _add_cycle_details_arg(parser)
+    args = parser.parse_args(argv)
+
+    patterns = _history_patterns(args.roots, args.modules)
+    registry = default_registry()
+    renderer = _renderer(
+        args.format,
+        args.metrics,
+        cycle_details=args.cycle_details,
+        registry=registry,
+    )
+    diff_renderer = DIFF_RENDERERS[args.format](show_cycle_details=args.cycle_details)
+    images = _image_renderer(args.format) if args.png else None
+    if not Path(args.project_dir).is_dir():
+        _abort(f"no such project directory: {args.project_dir}", _EXIT_USAGE)
+
+    try:
+        commits = first_parent_commits(args.project_dir, args.base, args.head)
+        if not commits:
+            _abort(f"no commits touch {args.project_dir}", _EXIT_USAGE)
+        cache = SnapshotCache(Path(args.cache_dir))
+        statuses: dict[str, str] = {}
+        frames = collect(
+            commits,
+            lambda commit: _history_snapshot(
+                args.project_dir,
+                patterns,
+                commit,
+                cache,
+                registry,
+                statuses,
+            ),
+            _progress_reporter(len(commits), statuses),
+        )
+    except GitError as error:
+        _abort(str(error), _EXIT_USAGE)
+    if not frames:
+        _no_match(patterns)
+
+    out_dir = Path(args.output)
+    files = write(
+        frames,
+        out_dir,
+        args.format,
+        lambda snapshot: renderer.render(snapshot.graph),
+        lambda old, new: diff_renderer.render(diff_graphs(old.graph, new.graph)),
+        images=images is not None,
+    )
+    _emit(
+        sys.stderr,
+        f"{len(frames)} frames from {len(commits)} commits in {out_dir}",
+    )
+    if images is not None:
+        pending = [
+            source
+            for source in files.sources
+            if source in files.changed or not image_of(source).exists()
+        ]
+        failed = images.render(pending)
+        if failed:
+            for source, reason in failed:
+                _emit(sys.stderr, f"arch-blueprint: {source.name}: {reason}")
+            _abort(
+                f"{len(failed)} of {len(pending)} images failed; sources and "
+                "cached snapshots are kept — rerun to retry",
+                _EXIT_FAILURE,
+            )
+
+
+def _history_patterns(roots: Sequence[str], modules: Sequence[str]) -> list[str]:
+    """``-m`` as given, each under one of the roots; else everything under each."""
+    if not modules:
+        return [f"{root}.**" for root in roots]
+    outside = [
+        pattern
+        for pattern in modules
+        if not any(pattern == root or pattern.startswith(f"{root}.") for root in roots)
+    ]
+    if outside:
+        _abort(
+            f"-m {', '.join(map(repr, outside))} is under none of the roots "
+            f"{', '.join(map(repr, roots))}",
+            _EXIT_USAGE,
+        )
+    return list(modules)
+
+
+def _image_renderer(fmt: str) -> ImageRenderer:
+    renderer_cls = IMAGE_RENDERERS[fmt]
+    executable = shutil.which(renderer_cls.binary)
+    if executable is None:
+        _abort(
+            f"--png needs '{renderer_cls.binary}' on PATH to draw {fmt} images",
+            _EXIT_USAGE,
+        )
+    return renderer_cls(executable)
+
+
+def _history_snapshot(
+    project_dir: str,
+    patterns: Sequence[str],
+    commit: Commit,
+    cache: SnapshotCache,
+    registry: MetricRegistry,
+    statuses: dict[str, str],
+) -> Optional[Snapshot]:
+    """The snapshot at ``commit``: from the cache, or built and then cached.
+
+    Every metric is computed, as for ``-f json``, so any ``--metric`` can be
+    drawn from a cached snapshot. A commit that cannot be analyzed (broken code
+    somewhere in the history) is reported and skipped, not fatal.
+    """
+    key = cache.key(tree_id(project_dir, commit.sha), patterns)
+    text = cache.get(key)
+    if text is not None:
+        try:
+            snapshot = load(text)
+        except SnapshotError:
+            pass  # damaged entry: build it again
+        else:
+            statuses[commit.sha] = "cached"
+            return snapshot
+    with checkout(project_dir, commit.sha) as root:
+        # A root the commit does not have yet is not an error: it appears later.
+        present = [p for p in patterns if has_module(root, _root_of(p))]
+        try:
+            graph = _history_graph(root, present, registry)
+        except (ImportError, OSError, GrimpException) as error:
+            statuses[commit.sha] = f"skipped ({error})"
+            return None
+    names = registry.names()
+    cache.put(key, dump(graph, names))
+    statuses[commit.sha] = "built"
+    return Snapshot(graph, frozenset(names))
+
+
+def _history_graph(
+    project_dir: str,
+    patterns: Sequence[str],
+    registry: MetricRegistry,
+) -> BlueprintGraph:
+    if not patterns:
+        return BlueprintGraph(nodes=[], edges=frozenset())
+    # No grimp cache: git archive stamps every file with the commit time.
+    return build_graph(
+        project_dir,
+        patterns,
+        ModuleExtractor,
+        registry,
+        None,
+        use_cache=False,
+    )
+
+
+def _root_of(pattern: str) -> str:
+    """The literal module path a pattern starts with, up to its first wildcard."""
+    parts = []
+    for part in pattern.split("."):
+        if "*" in part:
+            break
+        parts.append(part)
+    return ".".join(parts)
+
+
+def _progress_reporter(
+    total: int,
+    statuses: dict[str, str],
+) -> Callable[[Commit, Optional[Frame]], None]:
+    counter = iter(range(1, total + 1))
+
+    def report(commit: Commit, frame: Optional[Frame]) -> None:
+        outcome = frame.stem if frame is not None else "unchanged"
+        status = statuses.get(commit.sha, "")
+        _emit(
+            sys.stderr,
+            f"[{next(counter)}/{total}] {commit.short} {commit.date} "
+            f"{status}: {outcome}",
+        )
+
+    return report
+
+
 _SUBCOMMANDS: Final[MappingProxyType[str, Callable[[Sequence[str]], None]]] = (
-    MappingProxyType({"render": _render, "diff": _diff})
+    MappingProxyType({"render": _render, "diff": _diff, "history": _history})
 )
 
 

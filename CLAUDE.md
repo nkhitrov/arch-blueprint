@@ -40,6 +40,9 @@ This project uses `uv` for environment and dependency management.
   - `uv run arch-blueprint diff OLD.json NEW.json [-f puml|d2]` — draw what changed.
   - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> -m '<pattern>'` — both sides
     built from git (`--head` defaults to the working tree).
+  - `uv run arch-blueprint history <project_dir> ROOT [ROOT ...] [-m '<pattern>'] [--base REV]
+    [--head REV] [-o DIR] [--png]` — an album: a diagram and a diff per commit that changed the
+    graph (see **History album** below).
 - Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
@@ -70,6 +73,9 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   including the exit code. Inputs are golden snapshots or small edits of them in
   `tests/fixtures/diff/`.
 - `test_diff_git.py` — `diff --base` end to end in a throwaway git repository.
+- `test_history.py` — `history` end to end over a throwaway repository's commits (frames, cache,
+  stale frames, `--png` through a stand-in `plantuml` on `PATH`), plus `collect` and the cache
+  in-process.
 
 A scenario is a `Selection` (project + `-m` patterns — what the snapshot golden is keyed by) plus
 `render_args` (drawing-only options, passed unchanged to `render`).
@@ -164,11 +170,35 @@ Diff renderers (`render_base.py` Template Method, `render_puml.py`, `render_d2.p
 `format_cycle_notes_container` (`renderer/d2.py`). Colors and labels are constants in
 `render_base.py`; every marker also carries text. An empty diff is still a valid diagram.
 
-`diff/git.py`: `checkout(project_dir, rev)` resolves the repo root, `git archive`s only the
-project's subtree for that commit into a temp dir, and yields the project path inside it.
+`git.py` (shared by `diff` and `history`): `checkout(project_dir, rev)` resolves the repo root,
+`git archive`s only the project's subtree for that commit into a temp dir, and yields the project
+path inside it.
 `split_patterns` gives each side only the `-m` patterns whose top-level package it has (a package
 added or removed wholesale is a diff, not an error); a pattern on neither side goes to both, so a
 typo still fails.
+
+### History album
+
+`history/` builds on the snapshot and the diff; it adds no graph logic of its own.
+
+- `git.first_parent_commits` lists the commits on `--head`'s first-parent line that touched the
+  project (plus `--base` itself, as the start). `git.tree_id` is the cache key: a snapshot is a
+  function of the project's tree and the patterns.
+- `history/cache.py:SnapshotCache` — entries keyed by `sha256(tree, patterns, snapshot version,
+  tool version)`, written atomically; creates a `.gitignore` of `*` in its root. Every metric is
+  computed into a cached snapshot, so any `--metric` can be drawn from it.
+- `history/album.py` — pure: `collect(commits, snapshot_for)` keeps a commit only when
+  `diff_graphs` against the previous kept frame is non-empty (a leading empty graph — no root yet —
+  is skipped). `write()` rewrites only files whose content changed, removes the image of a changed
+  source, and removes this format's frame files that the run did not produce.
+- `history/images.py` — `ImageRenderer` per format in `IMAGE_RENDERERS` (keys must match
+  `_RENDERERS`, a test checks). PlantUML runs one batch and, since it draws an error picture and
+  only reports the batch's exit code, redoes a failed batch file by file to learn which failed. A
+  failed source never keeps an image.
+- CLI (`_history`): roots are positional and required; `-m` defaults to `ROOT.**` and must lie under
+  a root. A root missing at a commit is dropped for that commit (`git.has_module`); a commit whose
+  analysis fails is skipped with a message. Exit 2 for bad input (including a missing image tool,
+  checked before any work), 1 when images failed — sources and cache are kept for the rerun.
 
 ### Render plan
 
@@ -246,12 +276,12 @@ Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer
 
 ### CLI behaviour
 
-`main()` dispatches on the first argument: `render` / `diff` select a subcommand, anything else is
+`main()` dispatches on the first argument: `render` / `diff` / `history` select a subcommand, anything else is
 the original `<project_dir> -m ...` interface, unchanged. Failures are one line on stderr with no
 traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
 matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
-for an analysis that could not finish. `diff` exits like `diff(1)` instead: **0** no change, **1**
-any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
+for an analysis that could not finish (`history`: images that could not be drawn). `diff` exits
+like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
 diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
 details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all
 the work is done.

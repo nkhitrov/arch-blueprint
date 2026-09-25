@@ -17,7 +17,8 @@ usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2,json}]
                       project_dir
 
 Generate architecture diagrams for Python applications. Subcommands: 'render'
-draws a snapshot, 'diff' compares two.
+draws a snapshot, 'diff' compares two, 'history' draws one diagram per commit
+that changed the graph.
 
 positional arguments:
   project_dir           Path to root directory of target project
@@ -182,6 +183,39 @@ A structural diff ignores metrics and depth colors (depth shifts whenever the gr
 treats a change to the imports inside a link present on both sides as no change. Graphing
 `arch_blueprint` itself always resolves to the running copy, so `diff --base` cannot compare two
 versions of this tool.
+
+### History album
+
+`history` walks the branch's first-parent history (one commit per merged merge request) and, for
+every commit that changed the graph, draws the full diagram and the diff against the frame before
+it. Commits that leave the graph alone are skipped, so the album is the architecture's changes and
+nothing else:
+
+```shell
+arch-blueprint history src myapp                                   # everything: myapp.**
+arch-blueprint history src app1 app2 -m 'app1.*' -m 'app2.core.*'  # roots, narrowed by -m
+arch-blueprint history src myapp --base v1.0 --head master -f d2 --png -o album
+```
+
+The roots are required, one or more top-level packages. Without `-m` each is graphed with everything
+under it (`ROOT.**`); with `-m` only those patterns are, and each must lie under one of the roots. A
+root that a commit does not have yet is no error — it shows up in the frame where it appears.
+
+```
+album/
+  0001_2026-05-02_ab12cd3.puml        the first frame: the diagram only
+  0002_2026-05-12_ef45ab6.diff.puml   what changed
+  0002_2026-05-12_ef45ab6.puml        what it became
+  index.md                            the frames in order, with dates and commit subjects
+```
+
+`--png` draws an image next to each source with `plantuml` or `d2` from `PATH` (checked before any
+work starts). Every commit's snapshot is cached in `./.arch-blueprint` (or `--cache-dir`), keyed by
+the project's git tree: if drawing images fails, the run exits 1 with the sources and snapshots in
+place, and a rerun rebuilds nothing — it redraws only the images that are missing or out of date.
+Frame files from an earlier run that this one did not produce are removed; nothing else in the
+directory is touched. Images are named after the frame whatever the format, so keep one format per
+directory. A commit whose code cannot be analyzed is reported and skipped.
 
 ## Development
 

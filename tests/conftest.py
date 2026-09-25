@@ -216,6 +216,16 @@ def run_command(
     )
 
 
+def git(repo: Path, *args: str) -> None:
+    """Run git in ``repo`` as a throwaway identity, failing the test on error."""
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+
 def assert_scenario_matches_golden(scenario: Scenario, fmt: str) -> None:
     """Render ``scenario`` in ``fmt`` and assert it equals the stored golden."""
     expected = golden_path(fmt, scenario.name).read_text(encoding="utf-8")
