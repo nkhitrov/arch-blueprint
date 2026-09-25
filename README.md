@@ -165,7 +165,7 @@ Only the change is drawn, with the unchanged modules its imports connect in grey
 | removed | red spot `-`, `«removed»`, dashed frame | red dashed arrow, `removed` |
 | context | grey spot `M` | — (unchanged dependencies are hidden) |
 | new cycle | — | red bold `<->`, `NEW CYCLE`, plus a note listing the imports that close it |
-| cycle resolved | — | grey dashed `<->`, `cycle resolved` |
+| cycle resolved | — | grey dashed arrow, `cycle resolved`, in the direction that remains (a bare line if neither does) |
 
 Every marker carries text as well as color, so a grey-scale image stays readable. Nothing changed
 still gives a valid diagram ("No architectural changes"), so a CI job always has a picture to post.

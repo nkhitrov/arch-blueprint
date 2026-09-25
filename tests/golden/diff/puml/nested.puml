@@ -9,7 +9,7 @@ legend top left
   <color:#E74C3C>**- removed**</color> module / dependency (dashed)
   <color:#95A5A6>**M**</color> unchanged, shown for context
   <color:#C0392B>**NEW CYCLE**</color> cycle introduced
-  <color:#95A5A6>**cycle resolved**</color> cycle broken
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
 package deep.api {

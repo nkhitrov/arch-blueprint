@@ -123,7 +123,42 @@ def test_broken_cycle_is_resolved_with_the_old_details() -> None:
     [change] = diff.cycle_changes
     assert change.change is CycleChange.RESOLVED
     assert change.cycle.forward_edges == frozenset({A_TO_B})
+    # Who depends on whom afterwards is the point of breaking a cycle.
+    assert change.remaining == ("a", "b")
     assert diff.link_status == {}
+
+
+def test_cycle_with_both_directions_gone_has_nothing_remaining() -> None:
+    diff = diff_graphs(_graph(NODES, [A_TO_B, B_TO_A]), _graph(NODES, []))
+    [change] = diff.cycle_changes
+    assert change.change is CycleChange.RESOLVED
+    assert change.remaining is None
+
+
+def test_new_cycle_has_no_remaining_direction() -> None:
+    diff = diff_graphs(_graph(NODES, [A_TO_B]), _graph(NODES, [A_TO_B, B_TO_A]))
+    assert diff.cycle_changes[0].remaining is None
+
+
+@pytest.mark.parametrize(
+    ("fmt", "one_way", "no_way"),
+    [
+        ("puml", "a -[#95A5A6,dashed]-> b : cycle resolved", "a -[#95A5A6,dashed]- b"),
+        ("d2", "a -> b: cycle resolved", "a -- b: cycle resolved"),
+    ],
+)
+def test_resolved_cycle_is_drawn_as_the_dependency_that_remains(
+    fmt: str,
+    one_way: str,
+    no_way: str,
+) -> None:
+    both = [A_TO_B, B_TO_A]
+    renderer = DIFF_RENDERERS[fmt]()
+    kept = renderer.render(diff_graphs(_graph(NODES, both), _graph(NODES, [A_TO_B])))
+    gone = renderer.render(diff_graphs(_graph(NODES, both), _graph(NODES, [])))
+    assert one_way in kept
+    assert "a <-" not in kept
+    assert no_way in gone
 
 
 def test_unchanged_cycle_is_hidden() -> None:

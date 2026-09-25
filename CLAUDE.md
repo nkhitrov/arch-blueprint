@@ -150,7 +150,8 @@ renderer and no parser. `-f json` computes every registered metric so `render` c
 - nodes and links by set difference; links by **directed** namespace pair, so `A→B` becoming `A↔B`
   is a new cycle. A pair whose cycle appeared/disappeared is a `CycleDelta` (`NEW` carries the new
   side's `Cycle`, `RESOLVED` the old side's) and is **not** in `link_status` — drawn as one
-  connection.
+  connection. A resolved one carries `remaining`, the direction that survived, and is drawn as that
+  single arrow (a bare line when none did): who depends on whom afterwards is what a reviewer needs.
 - context is exact: unchanged modules that the changed links' edges actually connect (an edge
   endpoint may be a package facade, not a node — filtered).
 - `GraphDiff.graph` holds shown nodes + changed edges, with `groups` built but `cycles` left empty on

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.diff.model import ChangeStatus, CycleChange, CycleDelta, GraphDiff
 from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge, Link
@@ -17,7 +19,7 @@ def diff_graphs(old: BlueprintGraph, new: BlueprintGraph) -> GraphDiff:
     """
     old_links = _links_by_pair(old)
     new_links = _links_by_pair(new)
-    cycle_changes = _cycle_changes(old, new)
+    cycle_changes = _cycle_changes(old, new, new_links.keys())
     cycle_keys = {_key(delta.cycle) for delta in cycle_changes}
 
     link_status: dict[tuple[str, str], ChangeStatus] = {}
@@ -60,17 +62,33 @@ def _key(cycle: Cycle) -> frozenset[str]:
     return frozenset({cycle.namespace_from, cycle.namespace_to})
 
 
-def _cycle_changes(old: BlueprintGraph, new: BlueprintGraph) -> tuple[CycleDelta, ...]:
+def _cycle_changes(
+    old: BlueprintGraph,
+    new: BlueprintGraph,
+    new_pairs: Iterable[tuple[str, str]],
+) -> tuple[CycleDelta, ...]:
     old_cycles = {_key(cycle): cycle for cycle in old.cycles}
     new_cycles = {_key(cycle): cycle for cycle in new.cycles}
     deltas = [
         CycleDelta(CycleChange.NEW, new_cycles[key])
         for key in new_cycles.keys() - old_cycles.keys()
     ]
-    deltas += [
-        CycleDelta(CycleChange.RESOLVED, old_cycles[key])
-        for key in old_cycles.keys() - new_cycles.keys()
-    ]
+    surviving = set(new_pairs)
+    for key in old_cycles.keys() - new_cycles.keys():
+        cycle = old_cycles[key]
+        # At most one direction survives, or it would still be a cycle.
+        remaining = next(
+            (
+                pair
+                for pair in (
+                    (cycle.namespace_from, cycle.namespace_to),
+                    (cycle.namespace_to, cycle.namespace_from),
+                )
+                if pair in surviving
+            ),
+            None,
+        )
+        deltas.append(CycleDelta(CycleChange.RESOLVED, cycle, remaining))
     return tuple(
         sorted(
             deltas,

@@ -41,7 +41,7 @@ _LEGEND: Final = textwrap.dedent(
       <color:{REMOVED_COLOR}>**- removed**</color> module / dependency (dashed)
       <color:{RESOLVED_COLOR}>**M**</color> unchanged, shown for context
       <color:{CYCLE_HIGHLIGHT_COLOR}>**{NEW_CYCLE_LABEL}**</color> cycle introduced
-      <color:{RESOLVED_COLOR}>**{RESOLVED_CYCLE_LABEL}**</color> cycle broken
+      <color:{RESOLVED_COLOR}>**{RESOLVED_CYCLE_LABEL}**</color> dependency that remains
     endlegend""",
 )
 
@@ -64,16 +64,26 @@ class PlantUmlDiffRenderer(DiffRenderer):
     def _format_cycle(self, delta: CycleDelta) -> CycleRender:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
-            arrow = f"<-[{RESOLVED_COLOR},dashed]->"
-            label = RESOLVED_CYCLE_LABEL
-        else:
-            arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},bold]->"
-            label = NEW_CYCLE_LABEL
-        link = f"{cycle.namespace_from} {arrow} {cycle.namespace_to} : {label}"
+            return CycleRender(inline=self._format_resolved(delta))
+        arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},bold]->"
+        link = (
+            f"{cycle.namespace_from} {arrow} {cycle.namespace_to} : {NEW_CYCLE_LABEL}"
+        )
         # Only a new cycle gets its imports listed: they are what to fix.
         if delta.change is CycleChange.NEW and self.show_cycle_details:
             link = f"{link}\n{format_cycle_note(cycle)}"
         return CycleRender(inline=link)
+
+    @staticmethod
+    def _format_resolved(delta: CycleDelta) -> str:
+        """The dependency the cycle left behind; a bare line if none is left."""
+        if delta.remaining is None:
+            source, target = delta.cycle.namespace_from, delta.cycle.namespace_to
+            connector = f"-[{RESOLVED_COLOR},dashed]-"
+        else:
+            source, target = delta.remaining
+            connector = f"-[{RESOLVED_COLOR},dashed]->"
+        return f"{source} {connector} {target} : {RESOLVED_CYCLE_LABEL}"
 
     def _format_legend(self) -> str:
         return _LEGEND
