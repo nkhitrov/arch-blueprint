@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import ClassVar, Final, Optional, final
 
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, MetricValue
+from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Group, MetricValue
 from arch_blueprint.domain.node import Node
 from arch_blueprint.metrics import RenderContext, RenderPlan
 
@@ -50,6 +50,36 @@ DEFAULT_OPTIONS: Final = RendererOptions(
         "#8E44AD",
     ],
 )
+
+
+def wrap_groups(
+    groups: Iterable[Group],
+    rendered: Sequence[tuple[str, str]],
+    format_group: Callable[[str, list[str]], list[str]],
+) -> list[str]:
+    """Wrap rendered ``(node_id, text)`` pairs in their groups' containers.
+
+    A group's block takes the position of its first member, so nodes keep
+    appearing in the order given. Shared by every renderer that draws nodes,
+    diagram and diff alike.
+    """
+    group_of = {member: group.namespace for group in groups for member in group.members}
+    members: dict[str, list[str]] = {}
+    for node_id, text in rendered:
+        namespace = group_of.get(node_id)
+        if namespace is not None:
+            members.setdefault(namespace, []).append(text)
+
+    result: list[str] = []
+    emitted: set[str] = set()
+    for node_id, text in rendered:
+        namespace = group_of.get(node_id)
+        if namespace is None:
+            result.append(text)
+        elif namespace not in emitted:
+            emitted.add(namespace)
+            result.extend(format_group(namespace, members[namespace]))
+    return result
 
 
 @dataclass(frozen=True)
@@ -110,13 +140,7 @@ class BlueprintRenderer(ABC):
         A group's block takes the position of its first member, so nodes keep
         appearing in the order the extractor produced them.
         """
-        group_of = {
-            member: group.namespace
-            for group in graph.groups
-            for member in group.members
-        }
-        rendered: list[tuple[Optional[str], str]] = []
-        members: dict[str, list[str]] = {}
+        rendered: list[tuple[str, str]] = []
         for node in graph.nodes:
             metrics = graph.node_metrics.get(node.id, {})
             depth = int(metrics.get(self.plan.color_metric, 0))
@@ -126,20 +150,8 @@ class BlueprintRenderer(ABC):
                 color,
                 self._render_metric_blocks(node, metrics),
             )
-            namespace = group_of.get(node.id)
-            rendered.append((namespace, text))
-            if namespace is not None:
-                members.setdefault(namespace, []).append(text)
-
-        result: list[str] = []
-        emitted: set[str] = set()
-        for namespace, text in rendered:
-            if namespace is None:
-                result.append(text)
-            elif namespace not in emitted:
-                emitted.add(namespace)
-                result.extend(self._format_group(namespace, members[namespace]))
-        return result
+            rendered.append((node.id, text))
+        return wrap_groups(graph.groups, rendered, self._format_group)
 
     def _render_metric_blocks(
         self,

@@ -27,9 +27,14 @@ class GrimpSource:
         self,
         project_dir: str,
         target_names: Sequence[str],
+        *,
+        use_cache: bool = True,
     ) -> None:
         self.project_dir = project_dir
         self.target_names = target_names
+        # grimp keys its cache by module name and mtime, not by path: two
+        # checkouts of one project (a diff) must opt out or share one graph.
+        self.use_cache = use_cache
         self._graph: Optional[ImportGraph] = None
 
     @property
@@ -46,7 +51,9 @@ class GrimpSource:
                     "None of the given --modules patterns resolve to an analyzable "
                     "source package.",
                 )
-            return grimp.build_graph(*packages)
+            if self.use_cache:
+                return grimp.build_graph(*packages)
+            return grimp.build_graph(*packages, cache_dir=None)
 
     @contextmanager
     def _project_importable(self) -> Iterator[None]:
@@ -55,10 +62,14 @@ class GrimpSource:
         Without the undo, a second run in the same process resolves against the
         first project's leftovers: ``sys.modules`` is consulted before
         ``sys.path``, so restoring the path alone would not be enough.
+
+        The directory goes to the *front*: the project is usually installed in
+        the venv as well, and an older checkout of it (``diff --base``) must not
+        resolve to the installed, current copy.
         """
         added = self.project_dir not in sys.path
         if added:
-            sys.path.append(self.project_dir)
+            sys.path.insert(0, self.project_dir)
         imported_before = set(sys.modules)
         try:
             yield

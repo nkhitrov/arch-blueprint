@@ -22,7 +22,7 @@ _CYCLE_CONNECTION_TEMPLATE: Final = Template(
 _LABEL_SPECIALS: Final = frozenset(';{}|#"')
 
 
-def _quote_label(label: str) -> str:
+def quote_label(label: str) -> str:
     """Quote a connection label that would otherwise terminate the statement."""
     if not _LABEL_SPECIALS.intersection(label):
         return label
@@ -34,11 +34,14 @@ _CYCLE_NOTE_COLOR: Final = "#FADBD8"
 _CYCLE_CONTAINER_FILL: Final = "#FEF9E7"
 _CYCLE_CONTAINER_STROKE: Final = "#F39C12"
 
+# The title is bold text, not a ``###`` heading: D2 sizes a markdown block by a
+# measurement that underestimates heading width, so a heading wraps to a second
+# line the block has no room for, and the last import in the note is cut off.
 _CYCLE_NOTE_TEMPLATE: Final = Template(
     textwrap.dedent(
         """\
         $note_id: |md
-          ### $ns_a ↔ $ns_b
+          **$ns_a ↔ $ns_b**
 
           **$ns_a → $ns_b:**
 
@@ -79,6 +82,33 @@ _CYCLE_CONTAINER_TEMPLATE: Final = Template(
 )
 
 
+def format_cycle_note(cycle: Cycle) -> str:
+    """Format cycle details as a separate note block (D2 needs them deferred)."""
+    forward_details, backward_details = cycle_detail_sections(cycle)
+    ns_a_safe = cycle.namespace_from.replace(".", "_")
+    ns_b_safe = cycle.namespace_to.replace(".", "_")
+    return _CYCLE_NOTE_TEMPLATE.substitute(
+        ns_a=cycle.namespace_from,
+        ns_b=cycle.namespace_to,
+        note_id=f"cycle_{ns_a_safe}_{ns_b_safe}",
+        forward_details=forward_details,
+        backward_details=backward_details,
+        note_color=_CYCLE_NOTE_COLOR,
+        stroke_color=CYCLE_HIGHLIGHT_COLOR,
+    )
+
+
+def format_cycle_notes_container(notes: list[str]) -> str:
+    """Wrap cycle notes in a styled box with grid layout."""
+    notes_content = "\n\n".join(notes)
+    indented_notes = textwrap.indent(notes_content, "    ")
+    return _CYCLE_CONTAINER_TEMPLATE.substitute(
+        fill=_CYCLE_CONTAINER_FILL,
+        stroke=_CYCLE_CONTAINER_STROKE,
+        notes=indented_notes,
+    )
+
+
 class D2LangRenderer(BlueprintRenderer):
     """D2 diagram renderer (stateless: cycle notes flow through CycleRender)."""
 
@@ -104,7 +134,7 @@ class D2LangRenderer(BlueprintRenderer):
     ) -> str:
         link = f"{source} -> {target}"
         if decoration.labels:
-            link = f"{link}: {_quote_label(', '.join(decoration.labels))}"
+            link = f"{link}: {quote_label(', '.join(decoration.labels))}"
         if decoration.styles:
             link = f"{link} {{{'; '.join(decoration.styles)}}}"
         return link
@@ -116,27 +146,12 @@ class D2LangRenderer(BlueprintRenderer):
         connection = _CYCLE_CONNECTION_TEMPLATE.substitute(
             ns_a=cycle.namespace_from,
             ns_b=cycle.namespace_to,
-            label=_quote_label(label),
+            label=quote_label(label),
             color=CYCLE_HIGHLIGHT_COLOR,
         )
         if not self.options.show_cycle_details:
             return CycleRender(inline=connection)
-        return CycleRender(inline=connection, deferred=self._format_cycle_note(cycle))
-
-    def _format_cycle_note(self, cycle: Cycle) -> str:
-        """Format cycle details as a separate note block (D2 needs them deferred)."""
-        forward_details, backward_details = cycle_detail_sections(cycle)
-        ns_a_safe = cycle.namespace_from.replace(".", "_")
-        ns_b_safe = cycle.namespace_to.replace(".", "_")
-        return _CYCLE_NOTE_TEMPLATE.substitute(
-            ns_a=cycle.namespace_from,
-            ns_b=cycle.namespace_to,
-            note_id=f"cycle_{ns_a_safe}_{ns_b_safe}",
-            forward_details=forward_details,
-            backward_details=backward_details,
-            note_color=_CYCLE_NOTE_COLOR,
-            stroke_color=CYCLE_HIGHLIGHT_COLOR,
-        )
+        return CycleRender(inline=connection, deferred=format_cycle_note(cycle))
 
     def _combine_output(
         self,
@@ -146,16 +161,5 @@ class D2LangRenderer(BlueprintRenderer):
     ) -> str:
         sections = ["direction: right", "\n\n".join(nodes), "\n".join(links)]
         if deferred:
-            sections.append(self._format_cycle_notes_container(deferred))
+            sections.append(format_cycle_notes_container(deferred))
         return "\n".join(sections)
-
-    @staticmethod
-    def _format_cycle_notes_container(notes: list[str]) -> str:
-        """Wrap cycle notes in a styled box with grid layout."""
-        notes_content = "\n\n".join(notes)
-        indented_notes = textwrap.indent(notes_content, "    ")
-        return _CYCLE_CONTAINER_TEMPLATE.substitute(
-            fill=_CYCLE_CONTAINER_FILL,
-            stroke=_CYCLE_CONTAINER_STROKE,
-            notes=indented_notes,
-        )

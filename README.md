@@ -12,11 +12,12 @@ pip install arch-blueprint
 
 ```shell
 arch-blueprint --help
-usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2}]
+usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2,json}]
                       [--metric NAME] [--no-cycle-details]
                       project_dir
 
-Generate architecture diagrams for Python applications
+Generate architecture diagrams for Python applications. Subcommands: 'render'
+draws a snapshot, 'diff' compares two.
 
 positional arguments:
   project_dir           Path to root directory of target project
@@ -27,8 +28,8 @@ options:
                         Selected modules for rendering (examples:
                         'myapp.somemodule', 'myapp.somemodule.*',
                         'myapp.*.*.models.*', 'myapp.somemodule.**')
-  --format, -f {puml,d2}
-                        Output format. Possible values: ['puml', 'd2']
+  --format, -f {puml,d2,json}
+                        Output format. Possible values: ['puml', 'd2', 'json']
   --metric NAME         Display a metric (repeatable). A node metric renders
                         as a block on each node (e.g. --metric fan_in); a link
                         metric renders as a label on each connection (e.g.
@@ -87,7 +88,8 @@ of its own. A link is drawn when both endpoints belong to the selected set — i
 
 ### Errors
 
-Bad input is reported on stderr and exits 2; an analysis that cannot finish exits 1. Nothing fails
+Bad input is reported on stderr and exits 2; an analysis that cannot finish exits 1 (`diff` has its
+own codes, below). Nothing fails
 silently — a mistyped metric name is an error listing the valid ones, and a pattern matching no
 modules is an error rather than an empty diagram.
 
@@ -125,6 +127,61 @@ directions the note spells out.
 New metrics are self-contained plugins under `src/arch_blueprint/metrics/`, registered in
 `metrics/__init__.py` — no changes to the extractor or renderers are needed. See `CLAUDE.md` for the
 protocols.
+
+### Snapshots, render and diff
+
+`-f json` writes a **snapshot** of the graph instead of a diagram: modules, the imports between them
+and every metric. Links, cycles and namespace containers are not stored — they are derived from the
+imports again on load, so a snapshot cannot hold a stale copy of them. Every diagram can be drawn
+from a snapshot, byte for byte the same as a direct run:
+
+```shell
+arch-blueprint src -m 'myapp.*' -f json > graph.json
+arch-blueprint render graph.json -f puml --metric fan_in > graph.puml
+```
+
+`diff` draws what changed between two snapshots, in `puml` or `d2`:
+
+```shell
+arch-blueprint diff old.json new.json -f puml > diff.puml
+```
+
+It needs no stored files when the project is in git: `--base REV` builds the graph at that revision
+(`git archive` into a temporary directory — no worktree, nothing left in `.git`) and compares it
+with the working tree, or with `--head REV`. A package that exists on one side only is shown as
+added or removed rather than failing the run.
+
+```shell
+arch-blueprint diff --base origin/master src -m 'myapp.*' > diff.puml
+```
+
+![Diff: a module and link added, a module and link removed](docs/images/diff.png)
+
+Only the change is drawn, with the unchanged modules its imports connect in grey for context:
+
+| Marker | Module | Dependency |
+| --- | --- | --- |
+| added | green spot `+`, `«added»` | green bold arrow, `added` |
+| removed | red spot `-`, `«removed»`, dashed frame | red dashed arrow, `removed` |
+| context | grey spot `M` | — (unchanged dependencies are hidden) |
+| new cycle | — | red bold `<->`, `NEW CYCLE`, plus a note listing the imports that close it |
+| cycle resolved | — | grey dashed `<->`, `cycle resolved` |
+
+Every marker carries text as well as color, so a grey-scale image stays readable. Nothing changed
+still gives a valid diagram ("No architectural changes"), so a CI job always has a picture to post.
+
+`diff` exits like `diff(1)`: **0** when nothing changed, **1** when something did, **2** on any
+error. The diagram is written either way; to keep a drawing step green on a diff but red on an
+error:
+
+```shell
+arch-blueprint diff --base origin/master src -m 'myapp.*' > diff.puml || test $? -eq 1
+```
+
+A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
+treats a change to the imports inside a link present on both sides as no change. Graphing
+`arch_blueprint` itself always resolves to the running copy, so `diff --base` cannot compare two
+versions of this tool.
 
 ## Development
 

@@ -1,0 +1,52 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 1,
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "api.handlers",
+      "kind": "module"
+    },
+    {
+      "id": "services.engine",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "api.handlers",
+      "target": "services",
+      "source_namespace": "api",
+      "target_namespace": "services"
+    }
+  ],
+  "node_metrics": {
+    "api.handlers": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "services.engine": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 0,
+      "instability": 0.0
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "api",
+      "target": "services",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

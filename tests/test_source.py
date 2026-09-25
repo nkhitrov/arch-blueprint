@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -55,6 +57,50 @@ def test_two_projects_in_one_process() -> None:
     example = GrimpSource(str(EXAMPLE_PROJECT), ["app1.*"]).selected_modules()
     assert cyclic == ["pkg_a.core", "pkg_a.services"]
     assert example == ["app1.models"]
+
+
+def test_project_dir_wins_over_a_same_named_package_already_on_the_path(
+    tmp_path: Path,
+) -> None:
+    """An installed copy of the project must not shadow the directory asked for.
+
+    ``uv sync`` installs the project into the venv, so when ``diff --base`` graphs
+    an older checkout, the installed (current) copy is already importable. If the
+    project directory only went to the end of ``sys.path``, the old side would
+    silently be built from the current code and the diff would come out empty.
+    """
+    shadow = tmp_path / "pkg_a"
+    shadow.mkdir()
+    (shadow / "__init__.py").write_text("")
+    (shadow / "impostor.py").write_text("")
+    sys.path.insert(0, str(tmp_path))
+    try:
+        selected = GrimpSource(str(CYCLIC_PROJECT), ["pkg_a.*"]).selected_modules()
+    finally:
+        sys.path.remove(str(tmp_path))
+    assert selected == ["pkg_a.core", "pkg_a.services"]
+
+
+def test_uncached_source_is_not_fooled_by_an_equal_mtime(tmp_path: Path) -> None:
+    """Grimp's cache is keyed by module *name* and mtime, not by path.
+
+    ``git archive`` stamps every file with its commit's time, so two revisions
+    committed within one second look identical to it and the second diff side
+    is silently read from the first one's cache.
+    """
+    old, new = tmp_path / "old", tmp_path / "new"
+    for root, body in ((old, ""), (new, "from pkg_a import core\n")):
+        shutil.copytree(CYCLIC_PROJECT, root)
+        (root / "pkg_b" / "util.py").write_text(body)
+        for path in root.rglob("*.py"):
+            os.utime(path, (1_000_000_000, 1_000_000_000))
+
+    def edges(root: Path) -> set[tuple[str, str]]:
+        source = GrimpSource(str(root), ["pkg_a.*", "pkg_b.*"], use_cache=False)
+        return {(e.source, e.target) for e in ModuleExtractor(source).extract().edges}
+
+    assert ("pkg_b.util", "pkg_a.core") not in edges(old)
+    assert ("pkg_b.util", "pkg_a.core") in edges(new)
 
 
 # --- package resolution ---------------------------------------------------

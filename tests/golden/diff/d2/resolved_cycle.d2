@@ -1,0 +1,33 @@
+direction: right
+diff_legend: Legend {
+  near: top-left
+  added: "+ added" {style.fill: "#2ECC71"}
+  removed: "- removed" {style.fill: "#E74C3C"; style.stroke-dash: 5}
+  context: "unchanged, shown for context" {style.fill: "#D5D8DC"}
+  new_cycle: "NEW CYCLE" {style.stroke: "#C0392B"; style.stroke-width: 4}
+  resolved: "cycle resolved" {style.stroke: "#95A5A6"; style.stroke-dash: 5}
+}
+pkg_a.core: {
+  shape: class
+  style: {
+    fill: "#D5D8DC"
+    font-color: "#2C3E50"
+  }
+}
+
+pkg_a.services: {
+  shape: class
+  style: {
+    fill: "#D5D8DC"
+    font-color: "#2C3E50"
+  }
+}
+
+pkg_b.util: {
+  shape: class
+  style: {
+    fill: "#D5D8DC"
+    font-color: "#2C3E50"
+  }
+}
+pkg_a <-> pkg_b: cycle resolved {style.stroke: "#95A5A6"; style.stroke-dash: 5}

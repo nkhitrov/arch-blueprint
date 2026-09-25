@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
-from tests.conftest import SCENARIOS, Scenario, golden_path
+from tests.conftest import DIFF_CASES, SCENARIOS, diff_golden_path, golden_path
 
 _CLASS = re.compile(r"^\s*class\s+(?P<name>[\w.]+)")
 _PACKAGE = re.compile(r'^\s*package\s+(?P<name>[\w.]+|"[^"]+")')
 _LINK = re.compile(
-    r"^(?P<source>[\w.]+)\s+(?:--->|<-\[[^\]]*\]->)\s+(?P<target>[\w.]+)",
+    r"^(?P<source>[\w.]+)\s+(?:--->|<?-\[[^\]]*\]->)\s+(?P<target>[\w.]+)",
 )
 
 
@@ -33,30 +34,36 @@ def _link_endpoints(source: str) -> set[str]:
     return endpoints
 
 
-def _read(scenario: Scenario) -> str:
-    return golden_path("puml", scenario.name).read_text(encoding="utf-8")
+# Diagrams and diffs alike: both declare packages around link endpoints.
+_GOLDENS = [golden_path("puml", s.name) for s in SCENARIOS] + [
+    diff_golden_path("puml", c.name) for c in DIFF_CASES
+]
 
 
-@pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda s: s.name)
-def test_no_package_wraps_a_class_of_its_own_name(scenario: Scenario) -> None:
+def _read(golden: Path) -> str:
+    return golden.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("golden", _GOLDENS, ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_no_package_wraps_a_class_of_its_own_name(golden: Path) -> None:
     """``package a.b { class a.b }`` is a PlantUML syntax error ("Bad name").
 
     Grouping would produce exactly that shape whenever a link endpoint equals a
     node id — which it does for 18 of 23 endpoints when this project graphs
     itself, so the analyzer declines to build a container for those.
     """
-    classes, packages = _declared(_read(scenario))
+    classes, packages = _declared(_read(golden))
     assert packages & classes == set()
 
 
-@pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda s: s.name)
-def test_every_link_endpoint_is_declared(scenario: Scenario) -> None:
+@pytest.mark.parametrize("golden", _GOLDENS, ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_every_link_endpoint_is_declared(golden: Path) -> None:
     """An arrow to an undeclared name makes PlantUML invent an empty box.
 
     The metric-carrying nodes then sit unconnected beside it. Namespace grouping
     is what gives these endpoints a declaration: either a package of their own,
     or a class already carrying that exact name.
     """
-    source = _read(scenario)
+    source = _read(golden)
     classes, packages = _declared(source)
     assert _link_endpoints(source) <= (classes | packages)

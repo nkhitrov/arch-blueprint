@@ -1,0 +1,52 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 1,
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "storage.backend",
+      "kind": "module"
+    },
+    {
+      "id": "writer",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "writer",
+      "target": "storage.backend",
+      "source_namespace": "writer",
+      "target_namespace": "storage"
+    }
+  ],
+  "node_metrics": {
+    "storage.backend": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "writer": {
+      "depth": 1,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "writer",
+      "target": "storage",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

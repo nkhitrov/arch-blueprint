@@ -1,0 +1,75 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 1,
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "app1.models",
+      "kind": "module"
+    },
+    {
+      "id": "app2.service",
+      "kind": "module"
+    },
+    {
+      "id": "plugins.auth.backend",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "app2.service",
+      "target": "app1.models",
+      "source_namespace": "app2",
+      "target_namespace": "app1"
+    },
+    {
+      "source": "app2.service",
+      "target": "plugins.auth.backend",
+      "source_namespace": "app2",
+      "target_namespace": "plugins"
+    }
+  ],
+  "node_metrics": {
+    "app1.models": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "app2.service": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 2,
+      "instability": 1.0
+    },
+    "plugins.auth.backend": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "app2",
+      "target": "app1",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "app2",
+      "target": "plugins",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

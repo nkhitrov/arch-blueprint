@@ -7,9 +7,12 @@ import pytest
 from tests.conftest import (
     CYCLIC_MODULES,
     CYCLIC_PROJECT,
+    DIFF_CASES,
     EXAMPLE_MODULES,
     EXAMPLE_PROJECT,
     run_cli,
+    run_command,
+    snapshot_path,
 )
 
 _USAGE_ERROR = 2
@@ -90,3 +93,107 @@ def test_link_metrics_reach_cyclic_connections() -> None:
     """A cycle stands for two links, so its label carries both values."""
     result = run_cli(CYCLIC_PROJECT, *CYCLIC_MODULES, "--metric", "edge_weight")
     assert "edge_weight=2/1" in result.stdout
+
+
+# --- snapshot, render and diff ----------------------------------------------
+
+_CYCLIC_SNAPSHOT = str(snapshot_path("cyclic"))
+_EXAMPLE_SNAPSHOT = str(snapshot_path("example"))
+
+
+def test_snapshot_rejects_drawing_options() -> None:
+    result = run_cli(
+        EXAMPLE_PROJECT,
+        *EXAMPLE_MODULES,
+        "-f",
+        "json",
+        "--metric",
+        "fan_in",
+        check=False,
+    )
+    assert result.returncode == _USAGE_ERROR
+    assert "'render'" in result.stderr
+    assert result.stdout == ""
+
+
+def test_render_rejects_a_metric_the_snapshot_lacks(tmp_path: Path) -> None:
+    text = Path(_CYCLIC_SNAPSHOT).read_text(encoding="utf-8")
+    lean = tmp_path / "lean.json"
+    lean.write_text(text.replace('"fan_in",', ""), encoding="utf-8")
+    result = run_command("render", str(lean), "--metric", "fan_in", check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "holds no metric 'fan_in'" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        pytest.param(
+            ["render", "nope.json"],
+            "cannot read snapshot",
+            id="render_missing",
+        ),
+        pytest.param(["render", __file__], "not a JSON document", id="render_not_json"),
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, "nope.json"],
+            "cannot read",
+            id="diff_missing",
+        ),
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, __file__],
+            "not a JSON",
+            id="diff_not_json",
+        ),
+        pytest.param(["diff", _CYCLIC_SNAPSHOT], "two snapshots", id="diff_one_input"),
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT, "-m", "pkg_a.*"],
+            "two snapshots",
+            id="diff_files_with_modules",
+        ),
+        pytest.param(
+            ["diff", "--base", "HEAD", "src"],
+            "-m pattern",
+            id="base_no_modules",
+        ),
+        pytest.param(
+            ["diff", "--base", "HEAD", "no/such/dir", "-m", "x.*"],
+            "no such project directory",
+            id="base_missing_dir",
+        ),
+    ],
+)
+def test_render_and_diff_input_errors(args: list[str], expected: str) -> None:
+    result = run_command(*args, check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert expected in result.stderr
+    assert "Traceback" not in result.stderr
+    assert result.stdout == ""
+
+
+def test_diff_of_equal_snapshots_exits_zero_with_a_diagram() -> None:
+    result = run_command("diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT)
+    assert result.returncode == 0
+    assert "No architectural changes" in result.stdout
+
+
+def test_diff_of_different_snapshots_exits_one_and_still_draws() -> None:
+    result = run_command("diff", _CYCLIC_SNAPSHOT, _EXAMPLE_SNAPSHOT, check=False)
+    assert result.returncode == 1
+    assert result.stdout.startswith("@startuml")
+    assert result.stderr == ""
+
+
+def test_diff_hides_new_cycle_details_on_request() -> None:
+    [new_cycle] = [case for case in DIFF_CASES if case.name == "new_cycle"]
+    one_way = str(new_cycle.old)
+    shown = run_command("diff", one_way, _CYCLIC_SNAPSHOT, check=False).stdout
+    hidden = run_command(
+        "diff",
+        one_way,
+        _CYCLIC_SNAPSHOT,
+        "--no-cycle-details",
+        check=False,
+    ).stdout
+    assert "note on link" in shown
+    assert "note on link" not in hidden
+    assert "NEW CYCLE" in hidden
