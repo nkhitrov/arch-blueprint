@@ -79,7 +79,7 @@ class SnapshotCache:
 class ImageCache:
     """Drawn images under ``<root>/images/<key>.png``, keyed by what they show.
 
-    The key is the diagram source itself (with the tool and its scale), so an
+    The key is the diagram source itself (with the tool and its settings), so an
     image is drawn once for all runs, albums and frames that show the same
     thing, and a rerun after a failure draws only what is still missing.
     """
@@ -88,8 +88,9 @@ class ImageCache:
         self.root = root
 
     @staticmethod
-    def key(fmt: str, scale: Optional[float], source: str) -> str:
-        material = json.dumps([fmt, scale, source])
+    def key(fmt: str, settings: str, source: str) -> str:
+        """The entry for ``source`` drawn as ``fmt`` with the tool's ``settings``."""
+        material = json.dumps([fmt, settings, source])
         return hashlib.sha256(material.encode()).hexdigest()
 
     def get(self, key: str) -> Optional[Path]:

@@ -226,7 +226,8 @@ the project's git tree, and every image, keyed by the diagram it shows. If drawi
 exits 1 and a rerun builds nothing and draws only the images still missing; another album of the
 same history reuses them too. d2 refuses to rasterize a very large diagram; such a diagram is
 redrawn at half the scale, then half again, and `--scale FACTOR` (`d2-png` only) sets the starting
-scale. A file whose content is unchanged is not rewritten, and frame files of the same kind from an
+scale. PlantUML crops an image at 4096 px unless told otherwise; `history` raises that to 16384
+(`PLANTUML_LIMIT_SIZE`, your own value wins). A file whose content is unchanged is not rewritten, and frame files of the same kind from an
 earlier run that this one did not produce are removed; nothing else in the directory is touched. A
 commit whose code cannot be analyzed is reported as `skipped` with the reason.
 

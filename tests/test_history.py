@@ -338,6 +338,21 @@ def test_d2_too_large_is_drawn_at_a_smaller_scale(repo: Path, tmp_path: Path) ->
     # The default size first, then halved twice.
     assert not first[0].startswith("--scale")
     assert first[1:] == ["--scale=0.5", "--scale=0.25"]
+@_posix_only
+def test_plantuml_is_not_cropped_at_its_default_size(
+    repo: Path,
+    tmp_path: Path,
+) -> None:
+    body = 'echo "$PLANTUML_LIMIT_SIZE" >> "$(dirname "$0")/limits"\n' + _DRAWS
+    assert _history(repo, "-f", "puml-png", env=_tool(tmp_path, body)).returncode == 0
+    assert set((tmp_path / "bin" / "limits").read_text().split()) == {"16384"}
+    # The user's own limit wins — and is another image, so it is drawn again.
+    (tmp_path / "bin" / "limits").unlink()
+    env = {**_tool(tmp_path, body), "PLANTUML_LIMIT_SIZE": "8192"}
+    assert _history(repo, "-f", "puml-png", env=env).returncode == 0
+    assert set((tmp_path / "bin" / "limits").read_text().split()) == {"8192"}
+
+
 
 
 @_posix_only
@@ -429,7 +444,7 @@ def test_cache_round_trip_and_key(tmp_path: Path) -> None:
 
 def test_image_cache_is_keyed_by_what_the_image_shows(tmp_path: Path) -> None:
     cache = ImageCache(tmp_path / "cache")
-    key = cache.key("d2", None, "a -> b")
+    key = cache.key("d2", "", "a -> b")
     assert cache.get(key) is None
     drawn = tmp_path / "drawn.png"
     image = b"png"
@@ -437,7 +452,7 @@ def test_image_cache_is_keyed_by_what_the_image_shows(tmp_path: Path) -> None:
     stored = cache.store(key, drawn)
     assert cache.get(key) == stored
     assert stored.read_bytes() == image
-    assert cache.key("d2", 0.5, "a -> b") != key  # another scale, another image
-    assert cache.key("puml", None, "a -> b") != key
-    assert cache.key("d2", None, "a -> c") != key
+    assert cache.key("d2", "scale=0.5", "a -> b") != key  # other settings, other image
+    assert cache.key("puml", "", "a -> b") != key
+    assert cache.key("d2", "", "a -> c") != key
     assert not list((tmp_path / "cache").rglob("*.tmp"))

@@ -192,8 +192,9 @@ side goes to both, so a typo still fails.
   function of the project's tree and the patterns.
 - `history/cache.py` — `SnapshotCache`: entries keyed by `sha256(tree, patterns, snapshot version,
   tool version)`. Every metric is computed into a cached snapshot, so any `--metric` can be drawn
-  from it. `ImageCache`: images keyed by `sha256(format, scale, diagram source)` — drawn once for
-  every run and album showing the same diagram. Both write atomically and share one root with a
+  from it. `ImageCache`: images keyed by `sha256(format, tool settings, diagram source)` — the
+  settings being d2's scale or PlantUML's size limit — drawn once for every run and album showing
+  the same diagram. Both write atomically and share one root with a
   `.gitignore` of `*`.
 - `history/album.py` — pure: `collect(commits, snapshot_for)` keeps a commit only when
   `diff_graphs` against the previous kept frame is non-empty (a leading empty graph — no root yet —

@@ -7,6 +7,7 @@ no ``plantuml`` has wasted that work.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
@@ -41,6 +42,15 @@ class ImageRenderer(ABC):
         self.scale = scale
         self._report = report
 
+    @property
+    def settings(self) -> str:
+        """What besides the source decides the image: part of its cache key."""
+        return "" if self.scale is None else f"scale={self.scale:g}"
+
+    def _env(self) -> Optional[dict[str, str]]:
+        """The tool's environment; ``None`` inherits ours unchanged."""
+        return None
+
     @abstractmethod
     def render(self, sources: Sequence[Path]) -> list[tuple[Path, str]]:
         """Draw every source; return the ones that failed, each with a reason.
@@ -57,6 +67,7 @@ class ImageRenderer(ABC):
                 [self.executable, *args],
                 capture_output=True,
                 check=False,
+                env=self._env(),
             )
         except OSError as error:
             return str(error)
@@ -74,6 +85,21 @@ class PlantUmlImages(ImageRenderer):
     """
 
     binary = "plantuml"
+
+    #: PlantUML crops an image at 4096 px by default — a large project's full
+    #: diagram loses its right-hand side. The user's own setting wins.
+    LIMIT_VARIABLE: ClassVar[str] = "PLANTUML_LIMIT_SIZE"
+    DEFAULT_LIMIT: ClassVar[str] = "16384"
+
+    @property
+    def settings(self) -> str:
+        return f"limit={self._limit()}"
+
+    def _limit(self) -> str:
+        return os.environ.get(self.LIMIT_VARIABLE, self.DEFAULT_LIMIT)
+
+    def _env(self) -> Optional[dict[str, str]]:
+        return {**os.environ, self.LIMIT_VARIABLE: self._limit()}
 
     def render(self, sources: Sequence[Path]) -> list[tuple[Path, str]]:
         if not sources or not self._run("-tpng", *map(str, sources)):
@@ -159,7 +185,7 @@ def draw(
     failures with their reasons. Sources are written to a temporary directory
     under the page's own name, so the tool's messages name the frame.
     """
-    keys = {page.name: cache.key(fmt, renderer.scale, page.text) for page in album}
+    keys = {page.name: cache.key(fmt, renderer.settings, page.text) for page in album}
     missing = [page for page in album if cache.get(keys[page.name]) is None]
     failed: list[tuple[str, str]] = []
     if missing:
