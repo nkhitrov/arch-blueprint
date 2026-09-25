@@ -31,12 +31,20 @@ def is_shadowed(node_id: str) -> bool:
     return node_id.endswith(f".{SHADOWED_SUFFIX}")
 
 
+def depth_of(node_id: str) -> int:
+    """A drawn node's dotted depth, as ``DepthMetric`` counts it: the fill color.
+
+    A shadowed node keeps its module's depth, so it keeps its module's color.
+    """
+    return len(node_id.split(".")) - (1 if is_shadowed(node_id) else 0)
+
+
 class ChangeStatus(Enum):
     """How a node or link differs between the two graphs."""
 
     ADDED = "added"
     REMOVED = "removed"
-    #: Unchanged, drawn only because a change touches it.
+    #: Unchanged, drawn as context: as it looks on a plain diagram.
     CONTEXT = "context"
 
 
@@ -68,28 +76,29 @@ class CycleDelta:
 
 @dataclass(frozen=True)
 class GraphDiff:
-    """What changed between two graphs, reduced to what is worth drawing.
+    """What changed between two graphs, with the context it is drawn against.
 
-    ``graph`` holds only the shown nodes and the edges of changed links, so its
+    ``graph`` holds the shown nodes and the edges of the shown links, so its
     ``groups`` are the containers those links need. Statuses sit in side maps
-    keyed by node id / namespace pair, as metrics do on a plain graph.
+    keyed by node id / namespace pair, as metrics do on a plain graph. Unchanged
+    nodes and links are :attr:`ChangeStatus.CONTEXT` — all of them, or with
+    ``changes_only`` just the nodes a change touches and no links.
 
     A namespace pair whose cycle changed is in ``cycle_changes`` and **not** in
-    ``link_status``: it is drawn as one cycle connection, not as two arrows.
+    ``link_status``: it is drawn as one cycle connection, not as two arrows. A
+    cycle present on both sides is in ``context_cycles``, likewise.
     """
 
     graph: BlueprintGraph
     node_status: Mapping[str, ChangeStatus]
     link_status: Mapping[tuple[str, str], ChangeStatus]
     cycle_changes: tuple[CycleDelta, ...]
+    context_cycles: tuple[Cycle, ...] = ()
 
     @property
     def is_empty(self) -> bool:
         """True when nothing was added or removed: context alone is no change."""
-        return (
-            not self.link_status
-            and not self.cycle_changes
-            and all(
-                status is ChangeStatus.CONTEXT for status in self.node_status.values()
-            )
+        return not self.cycle_changes and all(
+            status is ChangeStatus.CONTEXT
+            for status in (*self.node_status.values(), *self.link_status.values())
         )

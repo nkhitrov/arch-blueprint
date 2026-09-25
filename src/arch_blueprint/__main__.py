@@ -178,6 +178,18 @@ def _add_quick_look_cycle_details_arg(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_changes_only_arg(parser: argparse.ArgumentParser) -> None:
+    """For ``diff`` and ``history``: drop the unchanged part of the graph."""
+    parser.add_argument(
+        "--changes-only",
+        action="store_true",
+        help=(
+            "Draw only the changes and the modules they touch, not the whole "
+            "graph with the changes marked on it"
+        ),
+    )
+
+
 # --- shared steps ---------------------------------------------------------
 
 
@@ -357,6 +369,7 @@ def _diff(argv: Sequence[str]) -> None:
     _add_modules_arg(parser, required=False)
     _add_format_arg(parser, DIFF_RENDERERS)
     _add_quick_look_cycle_details_arg(parser)
+    _add_changes_only_arg(parser)
     args = parser.parse_args(argv)
 
     if args.base is None:
@@ -376,7 +389,7 @@ def _diff(argv: Sequence[str]) -> None:
             )
         old, new = _git_sides(args.inputs[0], args.modules, args.base, args.head)
 
-    diff = diff_graphs(old, new)
+    diff = diff_graphs(old, new, changes_only=args.changes_only)
     renderer = DIFF_RENDERERS[args.format](show_cycle_details=args.cycle_details)
     _write(renderer.render(diff))
     raise SystemExit(0 if diff.is_empty else _EXIT_DIFFERENT)
@@ -480,6 +493,7 @@ def _history(argv: Sequence[str]) -> None:
     )
     _add_metric_arg(parser)
     _add_quick_look_cycle_details_arg(parser)
+    _add_changes_only_arg(parser)
     args = parser.parse_args(argv)
 
     patterns = _history_patterns(args.roots, args.modules)
@@ -530,7 +544,9 @@ def _history(argv: Sequence[str]) -> None:
     album = pages(
         frames,
         lambda snapshot: renderer.render(snapshot.graph),
-        lambda old, new: diff_renderer.render(diff_graphs(old.graph, new.graph)),
+        lambda old, new: diff_renderer.render(
+            diff_graphs(old.graph, new.graph, changes_only=args.changes_only),
+        ),
     )
     if images is None:
         write(frames, album, out_dir, diagram_fmt)

@@ -14,7 +14,7 @@ from arch_blueprint.renderer.base import (
 )
 from arch_blueprint.renderer.cycles import cycle_detail_sections
 
-_CYCLE_CONNECTION_TEMPLATE: Final = Template(
+CYCLE_CONNECTION_TEMPLATE: Final = Template(
     '$ns_a <-> $ns_b: $label {style.stroke: "$color"; style.stroke-width: 4}',
 )
 
@@ -143,7 +143,7 @@ class D2LangRenderer(BlueprintRenderer):
         label = "CYCLE"
         if decoration.labels:
             label = f"{label} {' '.join(decoration.labels)}"
-        connection = _CYCLE_CONNECTION_TEMPLATE.substitute(
+        connection = CYCLE_CONNECTION_TEMPLATE.substitute(
             ns_a=cycle.namespace_from,
             ns_b=cycle.namespace_to,
             label=quote_label(label),

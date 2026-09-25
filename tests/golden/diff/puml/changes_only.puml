@@ -12,21 +12,20 @@ legend top left
   <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
-package pkg_a {
-  class pkg_a.core <<(M, #2ECC71)>>
-  class pkg_a.services <<(M, #2ECC71)>>
+package app1 {
+  class app1.models <<(M, #2ECC71)>>
 }
-package pkg_b {
-  class pkg_b.util <<(M, #2ECC71)>>
+package app2 {
+  class app2.service <<(M, #2ECC71)>>
+}
+package app3 {
+  class app3.api <<(+, #00C853) added>> #00C853;line.dashed
+}
+package plugins {
+  class plugins.auth.backend <<(-, #FF1744) removed>> #FF1744;line.dashed
 }
 
-pkg_a <-[#C0392B,dashed,thickness=3]-> pkg_b : NEW CYCLE
-note on link
-  **pkg_a -> pkg_b:**
-  - core → util
-  - services → util
-  **pkg_b -> pkg_a:**
-  - util → core
-end note
+app2 -[#FF1744,dashed,thickness=2]-> plugins : removed
+app3 -[#00C853,dashed,thickness=3]-> app1 : added
 @enduml
 

@@ -5,27 +5,28 @@ top to bottom direction
 hide empty members
 
 legend top left
-  <color:#2ECC71>**+ added**</color> module / dependency
-  <color:#E74C3C>**- removed**</color> module / dependency (dashed)
-  <color:#95A5A6>**M**</color> unchanged, shown for context
-  <color:#C0392B>**NEW CYCLE**</color> cycle introduced
-  <color:#95A5A6>**cycle resolved**</color> cycle broken
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
 package app1 {
-  class app1.models <<(M, #D5D8DC)>>
+  class app1.models <<(M, #2ECC71)>>
 }
 package app2 {
-  class app2.service <<(M, #D5D8DC)>>
+  class app2.service <<(M, #2ECC71)>>
 }
 package app3 {
-  class app3.api <<(+, #2ECC71) added>>
+  class app3.api <<(+, #00C853) added>> #00C853;line.dashed
 }
 package plugins {
-  class plugins.auth.backend <<(-, #E74C3C) removed>> #line.dashed
+  class plugins.auth.backend <<(-, #FF1744) removed>> #FF1744;line.dashed
 }
 
-app2 -[#E74C3C,dashed]-> plugins : removed
-app3 -[#2ECC71,bold]-> app1 : added
+app2 ---> app1
+app2 -[#FF1744,dashed,thickness=2]-> plugins : removed
+app3 -[#00C853,dashed,thickness=3]-> app1 : added
 @enduml
 

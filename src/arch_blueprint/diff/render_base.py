@@ -3,41 +3,62 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import ClassVar, Final
 
-from arch_blueprint.diff.model import ChangeStatus, CycleDelta, GraphDiff
-from arch_blueprint.renderer.base import CycleRender, wrap_groups
+from arch_blueprint.diff.model import (
+    ChangeStatus,
+    CycleDelta,
+    GraphDiff,
+    depth_of,
+)
+from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.renderer.base import (
+    DEFAULT_OPTIONS,
+    CycleRender,
+    RendererOptions,
+    wrap_groups,
+)
 
-# One palette for every format, so a puml and a d2 diff read the same. Every
-# marker also carries text: a diff pasted as a grey-scale image stays legible.
-ADDED_COLOR: Final = "#2ECC71"
-REMOVED_COLOR: Final = "#E74C3C"
-CONTEXT_COLOR: Final = "#D5D8DC"
+# One palette for every format, so a puml and a d2 diff read the same. What did
+# not change looks as on a plain diagram, so these stay clear of every depth
+# color and of the cycle color (a test checks). Every change is also dashed and
+# carries text: a diff pasted as a grey-scale image stays legible.
+ADDED_COLOR: Final = "#00C853"
+REMOVED_COLOR: Final = "#FF1744"
 RESOLVED_COLOR: Final = "#95A5A6"
 
 NEW_CYCLE_LABEL: Final = "NEW CYCLE"
 RESOLVED_CYCLE_LABEL: Final = "cycle resolved"
 NO_CHANGES_LABEL: Final = "No architectural changes"
+UNCHANGED_LABEL: Final = "unchanged: drawn as on a plain diagram"
 
 
 class DiffRenderer(ABC):
     """Template Method for drawing a :class:`GraphDiff`, like ``BlueprintRenderer``.
 
     Stateless: the fixed algorithm is legend, nodes (wrapped in their groups),
-    changed links, then changed cycles. An empty diff is still a valid diagram,
-    so a CI job always has a picture to post.
+    links, unchanged cycles, then changed cycles. What did not change is drawn
+    as on a plain diagram — node fill by depth from ``options`` — so the changes
+    read against the picture the reader knows. An empty diff is still a valid
+    diagram, so a CI job always has a picture to post.
     """
 
     #: Output format id; concrete renderers must set it.
     fmt: ClassVar[str] = ""
 
-    def __init__(self, *, show_cycle_details: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        show_cycle_details: bool = True,
+        options: RendererOptions = DEFAULT_OPTIONS,
+    ) -> None:
         if not self.fmt:
             msg = f"{type(self).__name__} must set a non-empty 'fmt'"
             raise TypeError(msg)
         self.show_cycle_details = show_cycle_details
+        self.options = options
 
     def render(self, diff: GraphDiff) -> str:
         """Template method: orchestrates the diff rendering algorithm."""
-        if diff.is_empty:
+        if diff.is_empty and not diff.graph.nodes:
             return self._format_empty()
         rendered = [
             (node.id, self._format_node(node.id, diff.node_status[node.id]))
@@ -48,13 +69,19 @@ class DiffRenderer(ABC):
             self._format_link(source, target, status)
             for (source, target), status in diff.link_status.items()
         ]
+        links += [self._format_context_cycle(cycle) for cycle in diff.context_cycles]
         deferred: list[str] = []
         for delta in diff.cycle_changes:
             cycle = self._format_cycle(delta)
             links.append(cycle.inline)
             if cycle.deferred is not None:
                 deferred.append(cycle.deferred)
-        return self._combine_output(self._format_legend(), nodes, links, deferred)
+        legend = self._format_legend(unchanged=diff.is_empty)
+        return self._combine_output(legend, nodes, links, deferred)
+
+    def _depth_color(self, node_id: str) -> str:
+        """The fill a plain diagram gives this node."""
+        return self.options.get_color_for_depth(depth_of(node_id))
 
     def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
         """Wrap one namespace's nodes; by default, do not wrap (D2 nests itself)."""
@@ -67,7 +94,12 @@ class DiffRenderer(ABC):
 
     @abstractmethod
     def _format_link(self, source: str, target: str, status: ChangeStatus) -> str:
-        """Format an added or removed link between namespaces."""
+        """Format an added, removed or unchanged link between namespaces."""
+        ...
+
+    @abstractmethod
+    def _format_context_cycle(self, cycle: Cycle) -> str:
+        """Format a cycle present on both sides, as a plain diagram draws it."""
         ...
 
     @abstractmethod
@@ -76,13 +108,13 @@ class DiffRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_legend(self) -> str:
-        """Explain every marker the diagram uses."""
+    def _format_legend(self, *, unchanged: bool) -> str:
+        """Explain every marker; ``unchanged`` says first that nothing changed."""
         ...
 
     @abstractmethod
     def _format_empty(self) -> str:
-        """A complete diagram saying nothing changed."""
+        """A complete diagram saying nothing changed, with nothing to show."""
         ...
 
     @abstractmethod

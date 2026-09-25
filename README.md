@@ -158,20 +158,24 @@ arch-blueprint diff --base origin/master src -m 'myapp.*' > diff.puml
 
 ![Diff: a module and link added, a module and link removed](docs/images/diff.png)
 
-Only the change is drawn, with the unchanged modules its imports connect in grey for context:
+The change is drawn over the whole graph: everything that did not change looks as on a plain
+diagram (depth colors, plain arrows, cycles as a red `<->`), and every change is dashed and in a
+color of its own:
 
 | Marker | Module | Dependency |
 | --- | --- | --- |
-| added | green spot `+`, `«added»` | green bold arrow, `added` |
-| removed | red spot `-`, `«removed»`, dashed frame | red dashed arrow, `removed` |
-| context | grey spot `M` | — (unchanged dependencies are hidden) |
-| new cycle | — | red bold `<->`, `NEW CYCLE` (with `--cycle-details`, plus a note listing its imports) |
+| added | green, spot `+`, `«added»`, dashed frame | green dashed arrow, `added` |
+| removed | red, spot `-`, `«removed»`, dashed frame | red dashed arrow, `removed` |
+| new cycle | — | red dashed `<->`, `NEW CYCLE` (with `--cycle-details`, plus a note listing its imports) |
 | cycle resolved | — | grey dashed arrow, `cycle resolved`, in the direction that remains (a bare line if neither does) |
+
+On a large project `--changes-only` draws just the changes and the unchanged modules their imports
+connect, without the unchanged dependencies.
 
 `diff` and `history` are for a quick look at what changed, so the notes listing every import on a
 cycle are off there; `--cycle-details` turns them on. Every marker carries text as well as color, so
-a grey-scale image stays readable. Nothing changed
-still gives a valid diagram ("No architectural changes"), so a CI job always has a picture to post.
+a grey-scale image stays readable. Nothing changed still gives a valid diagram — the graph, with
+"No architectural changes" in the legend — so a CI job always has a picture to post.
 
 `diff` exits like `diff(1)`: **0** when nothing changed, **1** when something did, **2** on any
 error. The diagram is written either way; to keep a drawing step green on a diff but red on an
@@ -191,7 +195,7 @@ versions of this tool.
 
 `history` walks the branch's first-parent history (one commit per merged merge request) and, for
 every commit that changed the graph, draws the full diagram and the diff against the frame before
-it. Commits that leave the graph alone are skipped, so the album is the architecture's changes and
+it (over the whole graph, like `diff`; `--changes-only` for just the changes). Commits that leave the graph alone are skipped, so the album is the architecture's changes and
 nothing else:
 
 ```shell

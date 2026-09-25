@@ -63,7 +63,7 @@ def test_cycle_introduced_in_the_working_tree(repo: Path) -> None:
     _restore_backward_import(repo)
     result = _diff(repo)
     assert result.returncode == _DIFFERENT, result.stderr
-    assert "pkg_a <-[#C0392B,bold]-> pkg_b : NEW CYCLE" in result.stdout
+    assert "pkg_a <-[#C0392B,dashed,thickness=3]-> pkg_b : NEW CYCLE" in result.stdout
     assert "- util → core" not in result.stdout  # the import notes are opt-in
     assert "- util → core" in _diff(repo, "--cycle-details").stdout
 
@@ -96,7 +96,7 @@ def test_package_added_wholesale_is_a_diff_not_an_error(repo: Path) -> None:
     shutil.copytree(repo / "src" / "pkg_b", repo / "src" / "pkg_c")
     result = _diff(repo, "-m", "pkg_c.*")
     assert result.returncode == _DIFFERENT, result.stderr
-    assert "class pkg_c.util <<(+, #2ECC71) added>>" in result.stdout
+    assert "class pkg_c.util <<(+, #00C853) added>>" in result.stdout
 
 
 def test_pattern_on_neither_side_is_still_an_error(repo: Path) -> None:

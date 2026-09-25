@@ -133,6 +133,33 @@ def test_cycle_details_on_request(repo: Path) -> None:
         assert "note " in path.read_text(encoding="utf-8"), path.name
 
 
+@pytest.mark.parametrize(("args", "shown"), [((), True), (("--changes-only",), False)])
+def test_diff_frame_shows_the_whole_graph(
+    tmp_path: Path,
+    args: tuple[str, ...],
+    shown: bool,
+) -> None:
+    """A module no change touches is on the diff too, unless --changes-only."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    _commit(
+        repo,
+        "pkg_a",
+        {"src/pkg_a/__init__.py": "", "src/pkg_a/core.py": "", "src/pkg_a/idle.py": ""},
+    )
+    _commit(
+        repo,
+        "pkg_b",
+        {"src/pkg_b/__init__.py": "", "src/pkg_b/util.py": "from pkg_a import core\n"},
+    )
+    assert _history(repo, *args).returncode == 0
+    [diff] = (repo / "album").glob("0002_*.diff.puml")
+    text = diff.read_text(encoding="utf-8")
+    assert "pkg_b.util <<(+" in text
+    assert ("class pkg_a.idle " in text) is shown
+
+
 def test_modules_narrow_the_roots(repo: Path) -> None:
     result = _history(repo, "-m", "pkg_b.*")
     assert result.returncode == 0, result.stderr
@@ -311,6 +338,21 @@ def test_failed_images_keep_the_work_for_a_rerun(repo: Path, tmp_path: Path) -> 
     assert len(list((repo / "album").glob("*.png"))) == 5
 
 
+@_posix_only
+def test_plantuml_is_not_cropped_at_its_default_size(
+    repo: Path,
+    tmp_path: Path,
+) -> None:
+    body = 'echo "$PLANTUML_LIMIT_SIZE" >> "$(dirname "$0")/limits"\n' + _DRAWS
+    assert _history(repo, "-f", "puml-png", env=_tool(tmp_path, body)).returncode == 0
+    assert set((tmp_path / "bin" / "limits").read_text().split()) == {"16384"}
+    # The user's own limit wins — and is another image, so it is drawn again.
+    (tmp_path / "bin" / "limits").unlink()
+    env = {**_tool(tmp_path, body), "PLANTUML_LIMIT_SIZE": "8192"}
+    assert _history(repo, "-f", "puml-png", env=env).returncode == 0
+    assert set((tmp_path / "bin" / "limits").read_text().split()) == {"8192"}
+
+
 def test_missing_image_tool_fails_before_any_work(repo: Path, tmp_path: Path) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
@@ -338,21 +380,6 @@ def test_d2_too_large_is_drawn_at_a_smaller_scale(repo: Path, tmp_path: Path) ->
     # The default size first, then halved twice.
     assert not first[0].startswith("--scale")
     assert first[1:] == ["--scale=0.5", "--scale=0.25"]
-@_posix_only
-def test_plantuml_is_not_cropped_at_its_default_size(
-    repo: Path,
-    tmp_path: Path,
-) -> None:
-    body = 'echo "$PLANTUML_LIMIT_SIZE" >> "$(dirname "$0")/limits"\n' + _DRAWS
-    assert _history(repo, "-f", "puml-png", env=_tool(tmp_path, body)).returncode == 0
-    assert set((tmp_path / "bin" / "limits").read_text().split()) == {"16384"}
-    # The user's own limit wins — and is another image, so it is drawn again.
-    (tmp_path / "bin" / "limits").unlink()
-    env = {**_tool(tmp_path, body), "PLANTUML_LIMIT_SIZE": "8192"}
-    assert _history(repo, "-f", "puml-png", env=env).returncode == 0
-    assert set((tmp_path / "bin" / "limits").read_text().split()) == {"8192"}
-
-
 
 
 @_posix_only

@@ -14,7 +14,9 @@ from arch_blueprint.diff import (
     PlantUmlDiffRenderer,
     diff_graphs,
 )
+from arch_blueprint.diff.render_base import ADDED_COLOR, REMOVED_COLOR, RESOLVED_COLOR
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
+from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, DEFAULT_OPTIONS
 from arch_blueprint.snapshot import load
 from tests.conftest import SELECTIONS, Selection, make_edge, make_graph, snapshot_path
 
@@ -34,12 +36,46 @@ def _statuses(diff: GraphDiff) -> dict[str, ChangeStatus]:
     return dict(diff.node_status)
 
 
+def _changes(old: BlueprintGraph, new: BlueprintGraph) -> GraphDiff:
+    return diff_graphs(old, new, changes_only=True)
+
+
 def test_identical_graphs_give_an_empty_diff() -> None:
     graph = _graph(NODES, [A_TO_B])
-    diff = diff_graphs(graph, _graph(NODES, [A_TO_B]))
+    diff = _changes(graph, _graph(NODES, [A_TO_B]))
     assert diff.is_empty
     assert diff.graph.nodes == []
     assert diff.link_status == {}
+
+
+def test_identical_graphs_in_full_are_all_context_and_still_empty() -> None:
+    both = [A_TO_B, B_TO_A]
+    diff = diff_graphs(_graph(NODES, [*both, A_TO_C]), _graph(NODES, [*both, A_TO_C]))
+    assert diff.is_empty
+    assert set(_statuses(diff)) == set(NODES)
+    assert set(diff.node_status.values()) == {ChangeStatus.CONTEXT}
+    assert diff.link_status == {("a", "c"): ChangeStatus.CONTEXT}
+    [cycle] = diff.context_cycles
+    assert {cycle.namespace_from, cycle.namespace_to} == {"a", "b"}
+
+
+def test_full_diff_draws_the_changes_against_the_whole_graph() -> None:
+    diff = diff_graphs(_graph(NODES, [A_TO_B]), _graph(NODES, [A_TO_B, A_TO_C]))
+    assert diff.link_status == {
+        ("a", "b"): ChangeStatus.CONTEXT,
+        ("a", "c"): ChangeStatus.ADDED,
+    }
+    # d.w takes no part in any link, and is drawn all the same.
+    assert _statuses(diff) == dict.fromkeys(NODES, ChangeStatus.CONTEXT)
+    assert {edge.target for edge in diff.graph.edges} == {"b.y", "c.z"}
+
+
+def test_link_that_became_a_cycle_is_not_also_drawn_as_context() -> None:
+    diff = diff_graphs(_graph(NODES, [A_TO_B]), _graph(NODES, [A_TO_B, B_TO_A]))
+    [change] = diff.cycle_changes
+    assert change.change is CycleChange.NEW
+    assert diff.link_status == {}
+    assert diff.context_cycles == ()
 
 
 @pytest.mark.parametrize("selection", SELECTIONS, ids=lambda s: s.name)
@@ -49,7 +85,7 @@ def test_every_golden_snapshot_is_equal_to_itself(selection: Selection) -> None:
 
 
 def test_added_and_removed_nodes() -> None:
-    diff = diff_graphs(_graph(["a.x", "b.y"], []), _graph(["a.x", "c.z"], []))
+    diff = _changes(_graph(["a.x", "b.y"], []), _graph(["a.x", "c.z"], []))
     assert _statuses(diff) == {
         "b.y": ChangeStatus.REMOVED,
         "c.z": ChangeStatus.ADDED,
@@ -58,7 +94,7 @@ def test_added_and_removed_nodes() -> None:
 
 
 def test_added_link_shows_its_unchanged_endpoints_as_context() -> None:
-    diff = diff_graphs(_graph(NODES, []), _graph(NODES, [A_TO_B]))
+    diff = _changes(_graph(NODES, []), _graph(NODES, [A_TO_B]))
     assert diff.link_status == {("a", "b"): ChangeStatus.ADDED}
     # d.w and c.z take no part in the change and are hidden.
     assert _statuses(diff) == {
@@ -68,13 +104,13 @@ def test_added_link_shows_its_unchanged_endpoints_as_context() -> None:
 
 
 def test_removed_link_is_taken_from_the_old_side() -> None:
-    diff = diff_graphs(_graph(NODES, [A_TO_B, A_TO_C]), _graph(NODES, [A_TO_B]))
+    diff = _changes(_graph(NODES, [A_TO_B, A_TO_C]), _graph(NODES, [A_TO_B]))
     assert diff.link_status == {("a", "c"): ChangeStatus.REMOVED}
     assert {edge.target for edge in diff.graph.edges} == {"c.z"}
 
 
 def test_link_to_a_removed_module() -> None:
-    diff = diff_graphs(_graph(NODES, [A_TO_C]), _graph(["a.x", "b.y", "d.w"], []))
+    diff = _changes(_graph(NODES, [A_TO_C]), _graph(["a.x", "b.y", "d.w"], []))
     assert diff.link_status == {("a", "c"): ChangeStatus.REMOVED}
     assert _statuses(diff) == {
         "a.x": ChangeStatus.CONTEXT,
@@ -89,7 +125,7 @@ def test_import_of_a_submodule_shows_the_node_that_contains_it() -> None:
     left ``accounting`` out of the diff, and the new arrow pointed at nothing.
     """
     into_submodule = make_edge("a.x", "b.y.constants", "a", "b")
-    diff = diff_graphs(_graph(NODES, []), _graph(NODES, [into_submodule]))
+    diff = _changes(_graph(NODES, []), _graph(NODES, [into_submodule]))
     assert _statuses(diff) == {
         "a.x": ChangeStatus.CONTEXT,
         "b.y": ChangeStatus.CONTEXT,
@@ -100,7 +136,7 @@ def test_import_of_a_package_facade_shows_the_nodes_under_it() -> None:
     """``pkg.*`` never makes ``pkg`` a node, so a facade import has no owner node."""
     into_facade = make_edge("a.x", "b", "a", "b")
     nodes = [*NODES, "b.z"]
-    diff = diff_graphs(_graph(nodes, []), _graph(nodes, [into_facade]))
+    diff = _changes(_graph(nodes, []), _graph(nodes, [into_facade]))
     assert _statuses(diff) == {
         "a.x": ChangeStatus.CONTEXT,
         "b.y": ChangeStatus.CONTEXT,
@@ -161,16 +197,17 @@ def test_resolved_cycle_is_drawn_as_the_dependency_that_remains(
     assert no_way in gone
 
 
-def test_unchanged_cycle_is_hidden() -> None:
+def test_unchanged_cycle_is_hidden_with_changes_only() -> None:
     both = [A_TO_B, B_TO_A]
-    diff = diff_graphs(_graph(NODES, both), _graph(NODES, [*both, A_TO_C]))
+    diff = _changes(_graph(NODES, both), _graph(NODES, [*both, A_TO_C]))
     assert diff.cycle_changes == ()
+    assert diff.context_cycles == ()
     assert diff.link_status == {("a", "c"): ChangeStatus.ADDED}
 
 
 def test_import_inside_an_existing_link_is_not_a_link_change() -> None:
     extra = make_edge("a.x2", "b.y", "a", "b")
-    diff = diff_graphs(
+    diff = _changes(
         _graph(NODES, [A_TO_B]),
         _graph([*NODES, "a.x2"], [A_TO_B, extra]),
     )
@@ -179,7 +216,7 @@ def test_import_inside_an_existing_link_is_not_a_link_change() -> None:
 
 
 def test_diff_graph_groups_nodes_under_the_changed_link_endpoints() -> None:
-    diff = diff_graphs(_graph(NODES, []), _graph(NODES, [A_TO_B]))
+    diff = _changes(_graph(NODES, []), _graph(NODES, [A_TO_B]))
     assert {group.namespace: group.members for group in diff.graph.groups} == {
         "a": ("a.x",),
         "b": ("b.y",),
@@ -222,7 +259,7 @@ def test_module_replaced_by_a_package_is_drawn_inside_it() -> None:
     Found on a real project: neither PlantUML nor D2 can draw ``a.x`` as a
     class and as the container of ``a.x.y`` — the whole diagram failed.
     """
-    diff = diff_graphs(
+    diff = _changes(
         _graph(["a.x", "b.y"], [make_edge("b.y", "a.x", "b", "a")]),
         _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x.y", "b", "a")]),
     )
@@ -231,8 +268,82 @@ def test_module_replaced_by_a_package_is_drawn_inside_it() -> None:
         "a.x.y": ChangeStatus.ADDED,
     }
     puml = DIFF_RENDERERS["puml"]().render(diff)
-    assert 'class "x" as a.x.(module) <<(-, #E74C3C) removed>>' in puml
+    assert 'class "x" as a.x.(module) <<(-, #FF1744) removed>>' in puml
     assert "class a.x " not in puml
     d2 = DIFF_RENDERERS["d2"]().render(diff)
     assert 'a.x."(module)": {' in d2
     assert 'label: "- x"' in d2
+
+
+def test_change_colors_stand_apart_from_a_plain_diagram() -> None:
+    """Unchanged nodes keep their depth color, so no change may share one."""
+    plain = {*DEFAULT_OPTIONS.depth_colors, CYCLE_HIGHLIGHT_COLOR}
+    assert not {ADDED_COLOR, REMOVED_COLOR, RESOLVED_COLOR} & plain
+
+
+@pytest.mark.parametrize(
+    ("fmt", "context_node", "added_node", "added_link", "cycle"),
+    [
+        (
+            "puml",
+            f"class d.w <<(M, {DEFAULT_OPTIONS.get_color_for_depth(2)})>>",
+            "<<(+, #00C853) added>> #00C853;line.dashed",
+            "a -[#00C853,dashed,thickness=3]-> c : added",
+            "a <-[#C0392B,bold]-> b\n",
+        ),
+        (
+            "d2",
+            f'fill: "{DEFAULT_OPTIONS.get_color_for_depth(2)}"',
+            'label: "+ v"',
+            "a -> c: added {",
+            'a <-> b: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}',
+        ),
+    ],
+)
+def test_unchanged_part_is_drawn_as_a_plain_diagram(
+    fmt: str,
+    context_node: str,
+    added_node: str,
+    added_link: str,
+    cycle: str,
+) -> None:
+    both = [A_TO_B, B_TO_A]
+    diff = diff_graphs(
+        _graph(NODES, both),
+        _graph([*NODES, "e.v"], [*both, A_TO_C]),
+    )
+    text = DIFF_RENDERERS[fmt]().render(diff)
+    assert context_node in text
+    assert added_node in text
+    assert added_link in text
+    assert cycle in text
+    assert ": NEW CYCLE" not in text
+
+
+@pytest.mark.parametrize("fmt", sorted(DIFF_RENDERERS))
+def test_every_change_is_dashed(fmt: str) -> None:
+    diff = diff_graphs(
+        _graph(NODES, [A_TO_C]),
+        _graph([*NODES, "e.v"], [A_TO_B, B_TO_A]),
+    )
+    text = DIFF_RENDERERS[fmt]().render(diff)
+    changed = [
+        line
+        for line in text.splitlines()
+        if any(mark in line for mark in (": added", ": removed", ": NEW CYCLE"))
+    ]
+    assert len(changed) == 2  # the removed link and the new cycle
+    if fmt == "puml":
+        assert all("dashed" in line for line in changed)
+        assert "#00C853;line.dashed" in text
+    else:
+        assert all("stroke-dash" in line for line in changed)
+        assert text.count("stroke-dash: 5") >= 3  # plus the added node
+
+
+@pytest.mark.parametrize("fmt", sorted(DIFF_RENDERERS))
+def test_no_change_in_full_draws_the_graph_and_says_so(fmt: str) -> None:
+    graph = _graph(NODES, [A_TO_B])
+    text = DIFF_RENDERERS[fmt]().render(diff_graphs(graph, _graph(NODES, [A_TO_B])))
+    assert "No architectural changes" in text
+    assert "d.w" in text

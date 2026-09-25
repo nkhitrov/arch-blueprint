@@ -5,19 +5,19 @@ top to bottom direction
 hide empty members
 
 legend top left
-  <color:#2ECC71>**+ added**</color> module / dependency
-  <color:#E74C3C>**- removed**</color> module / dependency (dashed)
-  <color:#95A5A6>**M**</color> unchanged, shown for context
-  <color:#C0392B>**NEW CYCLE**</color> cycle introduced
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
   <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
 package pkg_a {
-  class pkg_a.core <<(M, #D5D8DC)>>
-  class pkg_a.services <<(M, #D5D8DC)>>
+  class pkg_a.core <<(M, #2ECC71)>>
+  class pkg_a.services <<(M, #2ECC71)>>
 }
 package pkg_b {
-  class pkg_b.util <<(M, #D5D8DC)>>
+  class pkg_b.util <<(M, #2ECC71)>>
 }
 
 pkg_a -[#95A5A6,dashed]-> pkg_b : cycle resolved

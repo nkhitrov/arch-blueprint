@@ -7,33 +7,36 @@ diff_legend: Legend {
   new_cycle: "NEW CYCLE" {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
   resolved: "cycle resolved" {style.stroke: "#95A5A6"; style.stroke-dash: 5}
 }
-deep.api.v1.handlers: {
+app1.models: {
   shape: class
   style: {
-    fill: "#F39C12"
+    fill: "#2ECC71"
   }
 }
 
-deep.api.v1.schemas: {
+app2.service: {
   shape: class
   style: {
-    fill: "#F39C12"
+    fill: "#2ECC71"
   }
 }
 
-deep.core.models: {
+app3.api: {
   shape: class
+  label: "+ api"
   style: {
-    fill: "#1ABC9C"
+    fill: "#00C853"
+    stroke-dash: 5
   }
 }
 
-deep.core.services: {
+plugins.auth.backend: {
   shape: class
+  label: "- backend"
   style: {
-    fill: "#1ABC9C"
+    fill: "#FF1744"
+    stroke-dash: 5
   }
 }
-deep.api -> deep.core: added {style.stroke: "#00C853"; style.stroke-width: 3; style.stroke-dash: 5}
-deep.api.v1.handlers -> deep.api.v1.schemas
-deep.core.services -> deep.core.models
+app2 -> plugins: removed {style.stroke: "#FF1744"; style.stroke-dash: 5}
+app3 -> app1: added {style.stroke: "#00C853"; style.stroke-width: 3; style.stroke-dash: 5}

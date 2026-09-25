@@ -4,6 +4,26 @@
 top to bottom direction
 hide empty members
 
-note "No architectural changes" as no_changes
+legend top left
+  **No architectural changes**
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
+endlegend
+
+package app1 {
+  class app1.models <<(M, #2ECC71)>>
+}
+package app2 {
+  class app2.service <<(M, #2ECC71)>>
+}
+package plugins {
+  class plugins.auth.backend <<(M, #1ABC9C)>>
+}
+
+app2 ---> app1
+app2 ---> plugins
 @enduml
 
