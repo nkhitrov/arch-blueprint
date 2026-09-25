@@ -18,7 +18,7 @@ from arch_blueprint.git import (
     GitError,
     checkout,
     first_parent_commits,
-    has_module,
+    has_source,
     split_patterns,
     tree_id,
 )
@@ -26,12 +26,15 @@ from arch_blueprint.history import (
     DEFAULT_CACHE_DIR,
     IMAGE_RENDERERS,
     Frame,
+    ImageCache,
     ImageRenderer,
     SnapshotCache,
     collect,
-    image_of,
+    draw,
+    pages,
     write,
 )
+from arch_blueprint.history.album import IMAGE_EXTENSION
 from arch_blueprint.metrics import (
     MetricConfigError,
     MetricDisplay,
@@ -58,6 +61,15 @@ _RENDERERS: Final[MappingProxyType[str, type[BlueprintRenderer]]] = MappingProxy
 
 #: Not a diagram: the graph snapshot every diagram and diff is drawn from.
 _SNAPSHOT_FORMAT: Final = "json"
+
+#: ``history -f``: each diagram format as sources, and as images where a tool
+#: draws them — an album holds one kind of file, so it is easy to leaf through.
+_HISTORY_FORMATS: Final[MappingProxyType[str, tuple[str, bool]]] = MappingProxyType(
+    {
+        **{fmt: (fmt, False) for fmt in _RENDERERS},
+        **{f"{fmt}-{IMAGE_EXTENSION}": (fmt, True) for fmt in IMAGE_RENDERERS},
+    },
+)
 
 #: Bad input from the user; 1 is reserved for an analysis that could not finish.
 _EXIT_USAGE: Final = 2
@@ -456,18 +468,13 @@ def _history(argv: Sequence[str]) -> None:
         default=DEFAULT_CACHE_DIR,
         help=f"Snapshot cache, read and written (default: ./{DEFAULT_CACHE_DIR})",
     )
-    _add_format_arg(parser, _RENDERERS)
-    parser.add_argument(
-        "--png",
-        action="store_true",
-        help="Also draw PNG images, with plantuml or d2 from PATH",
-    )
+    _add_format_arg(parser, _HISTORY_FORMATS)
     parser.add_argument(
         "--scale",
         type=_positive_float,
         metavar="FACTOR",
         help=(
-            "d2 only: scale of the PNG images, e.g. 0.5 (default: d2's own). A "
+            "d2-png only: scale of the images, e.g. 0.5 (default: d2's own). A "
             "diagram too large for d2 to rasterize is halved automatically."
         ),
     )
@@ -476,19 +483,23 @@ def _history(argv: Sequence[str]) -> None:
     args = parser.parse_args(argv)
 
     patterns = _history_patterns(args.roots, args.modules)
+    diagram_fmt, as_images = _HISTORY_FORMATS[args.format]
     registry = default_registry()
     renderer = _renderer(
-        args.format,
+        diagram_fmt,
         args.metrics,
         cycle_details=args.cycle_details,
         registry=registry,
     )
-    diff_renderer = DIFF_RENDERERS[args.format](show_cycle_details=args.cycle_details)
+    diff_renderer = DIFF_RENDERERS[diagram_fmt](show_cycle_details=args.cycle_details)
     if args.scale is not None and not (
-        args.png and IMAGE_RENDERERS[args.format].scalable
+        as_images and IMAGE_RENDERERS[diagram_fmt].scalable
     ):
-        _abort("--scale applies to --png images drawn with d2 (-f d2)", _EXIT_USAGE)
-    images = _image_renderer(args.format, args.scale) if args.png else None
+        scalable = [
+            f"{fmt}-png" for fmt, cls in IMAGE_RENDERERS.items() if cls.scalable
+        ]
+        _abort(f"--scale applies to -f {' / '.join(scalable)}", _EXIT_USAGE)
+    images = _image_renderer(diagram_fmt, args.scale) if as_images else None
     if not Path(args.project_dir).is_dir():
         _abort(f"no such project directory: {args.project_dir}", _EXIT_USAGE)
 
@@ -516,33 +527,30 @@ def _history(argv: Sequence[str]) -> None:
         _no_match(patterns)
 
     out_dir = Path(args.output)
-    files = write(
+    album = pages(
         frames,
-        out_dir,
-        args.format,
         lambda snapshot: renderer.render(snapshot.graph),
         lambda old, new: diff_renderer.render(diff_graphs(old.graph, new.graph)),
-        images=images is not None,
     )
+    if images is None:
+        write(frames, album, out_dir, diagram_fmt)
+        failed: list[tuple[str, str]] = []
+    else:
+        image_cache = ImageCache(Path(args.cache_dir))
+        drawn, failed = draw(album, diagram_fmt, images, image_cache)
+        write(frames, album, out_dir, IMAGE_EXTENSION, drawn)
     _emit(
         sys.stderr,
         f"{len(frames)} frames from {len(commits)} commits in {out_dir}",
     )
-    if images is not None:
-        pending = [
-            source
-            for source in files.sources
-            if source in files.changed or not image_of(source).exists()
-        ]
-        failed = images.render(pending)
-        if failed:
-            for source, reason in failed:
-                _emit(sys.stderr, f"arch-blueprint: {source.name}: {reason}")
-            _abort(
-                f"{len(failed)} of {len(pending)} images failed; sources and "
-                "cached snapshots are kept — rerun to retry",
-                _EXIT_FAILURE,
-            )
+    if failed:
+        for name, reason in failed:
+            _emit(sys.stderr, f"arch-blueprint: {name}: {reason}")
+        _abort(
+            f"{len(failed)} of {len(album)} images failed; the rest and the "
+            "cached snapshots are kept — rerun to retry",
+            _EXIT_FAILURE,
+        )
 
 
 def _history_patterns(roots: Sequence[str], modules: Sequence[str]) -> list[str]:
@@ -568,7 +576,7 @@ def _image_renderer(fmt: str, scale: Optional[float]) -> ImageRenderer:
     executable = shutil.which(renderer_cls.binary)
     if executable is None:
         _abort(
-            f"--png needs '{renderer_cls.binary}' on PATH to draw {fmt} images",
+            f"-f {fmt}-{IMAGE_EXTENSION} needs '{renderer_cls.binary}' on PATH",
             _EXIT_USAGE,
         )
     return renderer_cls(executable, scale, lambda line: _emit(sys.stderr, line))
@@ -607,11 +615,11 @@ def _history_snapshot(
         except SnapshotError:
             pass  # damaged entry: build it again
         else:
-            statuses[commit.sha] = "cached"
+            statuses[commit.sha] = _NO_SOURCE if not snapshot.graph.nodes else "cached"
             return snapshot
     with checkout(project_dir, commit.sha) as root:
         # A root the commit does not have yet is not an error: it appears later.
-        present = [p for p in patterns if has_module(root, _root_of(p))]
+        present = [p for p in patterns if has_source(root, _root_of(p))]
         try:
             graph = _history_graph(root, present, registry)
         except (ImportError, OSError, GrimpException) as error:
@@ -619,8 +627,12 @@ def _history_snapshot(
             return None
     names = registry.names()
     cache.put(key, dump(graph, names))
-    statuses[commit.sha] = "built"
+    statuses[commit.sha] = _NO_SOURCE if not graph.nodes else "built"
     return Snapshot(graph, frozenset(names))
+
+
+#: A commit where no root has code to analyze yet — the start of a project.
+_NO_SOURCE: Final = "no source yet"
 
 
 def _history_graph(
@@ -658,13 +670,13 @@ def _progress_reporter(
     counter = iter(range(1, total + 1))
 
     def report(commit: Commit, frame: Optional[Frame]) -> None:
-        outcome = frame.stem if frame is not None else "unchanged"
         status = statuses.get(commit.sha, "")
-        _emit(
-            sys.stderr,
-            f"[{next(counter)}/{total}] {commit.short} {commit.date} "
-            f"{status}: {outcome}",
-        )
+        line = f"[{next(counter)}/{total}] {commit.short} {commit.date} {status}"
+        if frame is not None:
+            line = f"{line}: {frame.stem}"
+        elif status != _NO_SOURCE and not status.startswith("skipped"):
+            line = f"{line}: unchanged"
+        _emit(sys.stderr, line)
 
     return report
 

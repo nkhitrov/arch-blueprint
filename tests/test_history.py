@@ -12,8 +12,8 @@ import pytest
 
 from arch_blueprint.__main__ import _RENDERERS
 from arch_blueprint.analyze import analyze
-from arch_blueprint.git import Commit
-from arch_blueprint.history import IMAGE_RENDERERS, SnapshotCache, collect
+from arch_blueprint.git import Commit, has_source
+from arch_blueprint.history import IMAGE_RENDERERS, ImageCache, SnapshotCache, collect
 from arch_blueprint.snapshot import Snapshot
 from tests.conftest import CliResult, git, make_edge, make_graph, run_command
 
@@ -173,14 +173,12 @@ def test_frames_of_an_earlier_run_are_removed(repo: Path) -> None:
     album = repo / "album"
     album.mkdir()
     (album / "0009_2020-01-01_abcdef0.puml").write_text("stale")
-    (album / "0009_2020-01-01_abcdef0.png").write_text("stale")
-    (album / "0009_2020-01-01_abcdef0.d2").write_text("other format")
+    (album / "0009_2020-01-01_abcdef0.png").write_text("another kind of album")
     (album / "notes.txt").write_text("mine")
     assert _history(repo).returncode == 0
     names = _names(album)
     assert "0009_2020-01-01_abcdef0.puml" not in names
-    assert "0009_2020-01-01_abcdef0.png" not in names
-    assert "0009_2020-01-01_abcdef0.d2" in names
+    assert "0009_2020-01-01_abcdef0.png" in names
     assert "notes.txt" in names
 
 
@@ -191,6 +189,50 @@ def test_not_a_repository_is_an_error(tmp_path: Path) -> None:
     assert "git" in result.stderr
 
 
+def test_root_without_code_yet_is_no_source(tmp_path: Path) -> None:
+    """A project's first commits often have the package directory and no Python."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    _commit(repo, "skeleton", {"src/pkg_a/README": "soon\n"})
+    _commit(repo, "code", {"src/pkg_a/__init__.py": "", "src/pkg_a/core.py": ""})
+    result = run_command(
+        "history",
+        "src",
+        "pkg_a",
+        "-o",
+        "album",
+        "--cache-dir",
+        "cache",
+        check=False,
+        cwd=repo,
+    )
+    assert result.returncode == 0, result.stderr
+    first, second = result.stderr.splitlines()[:2]
+    assert first.endswith(" no source yet")
+    [frame] = (repo / "album").glob("0001_*")
+    assert second.endswith(f" built: {frame.stem}")
+    assert "warning" not in result.stderr
+    assert "skipped" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("layout", "expected"),
+    [
+        ({"pkg.py": ""}, True),
+        ({"pkg/__init__.py": ""}, True),
+        ({"pkg/ns/inner/__init__.py": ""}, True),  # a namespace package
+        ({"pkg/README": "", "pkg/loose/notes.txt": ""}, False),
+        ({"other.py": ""}, False),
+    ],
+)
+def test_has_source(tmp_path: Path, layout: dict[str, str], expected: bool) -> None:
+    for name, text in layout.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text)
+    assert has_source(str(tmp_path), "pkg") is expected
+
+
 # --- images through a stand-in tool on PATH --------------------------------
 
 _posix_only = pytest.mark.skipif(
@@ -198,38 +240,72 @@ _posix_only = pytest.mark.skipif(
     reason="the stand-in tool is a shell script",
 )
 
+#: Every stand-in logs its arguments, one call per line.
+_LOG_CALL = 'echo "$@" >> "$(dirname "$0")/calls"'
+
 
 def _tool(tmp_path: Path, body: str, name: str = "plantuml") -> dict[str, str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     tool = bin_dir / name
-    tool.write_text(f"#!/bin/sh\n{body}\n")
+    tool.write_text(f"#!/bin/sh\n{_LOG_CALL}\n{body}\n")
     tool.chmod(0o755)
     return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
 
 
-_DRAWS = 'for f in "$@"; do case "$f" in -*) ;; *) : > "${f%.puml}.png";; esac; done'
+def _calls(tmp_path: Path) -> list[str]:
+    log = tmp_path / "bin" / "calls"
+    return log.read_text().splitlines() if log.exists() else []
+
+
+_DRAWS = """for f in "$@"; do case "$f" in
+  -*) ;;
+  *) echo "png of $(basename "$f")" > "${f%.puml}.png";;
+esac; done"""
 
 
 @_posix_only
-def test_png_images_are_drawn_next_to_the_sources(repo: Path, tmp_path: Path) -> None:
-    result = _history(repo, "--png", env=_tool(tmp_path, _DRAWS))
+def test_png_album_holds_images_only(repo: Path, tmp_path: Path) -> None:
+    result = _history(repo, "-f", "puml-png", env=_tool(tmp_path, _DRAWS))
     assert result.returncode == 0, result.stderr
+    names = _names(repo / "album")
+    assert names[-1] == "index.md"
+    assert len(names) == 6, names
+    assert all(re.match(rf"^{_FRAME}(\.diff)?\.png$", name) for name in names[:-1])
+    index = (repo / "album" / "index.md").read_text(encoding="utf-8")
+    assert "![Diagram](0001_" in index
+    assert ".puml" not in index
+    # Each image is the one drawn from that frame's own source.
+    for path in (repo / "album").glob("*.png"):
+        assert path.read_text() == f"png of {path.stem}.puml\n"
+
+
+@_posix_only
+def test_png_rerun_draws_nothing(repo: Path, tmp_path: Path) -> None:
+    env = _tool(tmp_path, _DRAWS)
+    assert _history(repo, "-f", "puml-png", env=env).returncode == 0
     album = repo / "album"
-    sources = sorted(path.stem for path in album.glob("*.puml"))
-    assert sorted(path.stem for path in album.glob("*.png")) == sources
-    assert "(0001_" in (album / "index.md").read_text(encoding="utf-8")
+    before = {path.name: path.stat().st_mtime_ns for path in album.iterdir()}
+    (tmp_path / "bin" / "calls").unlink()
+    result = _history(repo, "-f", "puml-png", env=env)
+    assert result.returncode == 0, result.stderr
+    assert _calls(tmp_path) == []
+    assert {path.name: path.stat().st_mtime_ns for path in album.iterdir()} == before
+    # Another album of the same history reuses the drawn images as well.
+    other = _history(repo, "-f", "puml-png", "-o", "elsewhere", env=env)
+    assert other.returncode == 0, other.stderr
+    assert _calls(tmp_path) == []
 
 
 @_posix_only
 def test_failed_images_keep_the_work_for_a_rerun(repo: Path, tmp_path: Path) -> None:
-    failed = _history(repo, "--png", env=_tool(tmp_path, "echo broken >&2; exit 1"))
+    env = _tool(tmp_path, "echo broken >&2; exit 1")
+    failed = _history(repo, "-f", "puml-png", env=env)
     assert failed.returncode == _FAILURE
     assert "broken" in failed.stderr
-    assert len(list((repo / "album").glob("*.puml"))) == 5
     assert not list((repo / "album").glob("*.png"))
 
-    retried = _history(repo, "--png", env=_tool(tmp_path, _DRAWS))
+    retried = _history(repo, "-f", "puml-png", env=_tool(tmp_path, _DRAWS))
     assert retried.returncode == 0, retried.stderr
     assert "built" not in retried.stderr
     assert len(list((repo / "album").glob("*.png"))) == 5
@@ -238,16 +314,15 @@ def test_failed_images_keep_the_work_for_a_rerun(repo: Path, tmp_path: Path) -> 
 def test_missing_image_tool_fails_before_any_work(repo: Path, tmp_path: Path) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
-    result = _history(repo, "--png", env={"PATH": str(empty)})
+    result = _history(repo, "-f", "puml-png", env={"PATH": str(empty)})
     assert result.returncode == _USAGE
     assert "'plantuml' on PATH" in result.stderr
     assert not (repo / "cache").exists()
 
 
 # A d2 that, like the real one, refuses a diagram too large to rasterize — here
-# anything drawn above scale 0.25 — and logs every call's arguments.
-_D2_TOO_LARGE = """echo "$@" >> "$(dirname "$0")/calls"
-for a in "$@"; do last=$a; done
+# anything drawn above scale 0.25.
+_D2_TOO_LARGE = """for a in "$@"; do last=$a; done
 case "$1" in --scale=0.25|--scale=0.125) : > "$last"; exit 0;; esac
 echo "err: d2raster: scanline work 5 exceeds limit 4" >&2; exit 1"""
 
@@ -255,53 +330,46 @@ echo "err: d2raster: scanline work 5 exceeds limit 4" >&2; exit 1"""
 @_posix_only
 def test_d2_too_large_is_drawn_at_a_smaller_scale(repo: Path, tmp_path: Path) -> None:
     env = _tool(tmp_path, _D2_TOO_LARGE, "d2")
-    result = _history(repo, "-f", "d2", "--png", env=env)
+    result = _history(repo, "-f", "d2-png", env=env)
     assert result.returncode == 0, result.stderr
     assert len(list((repo / "album").glob("*.png"))) == 5
     assert "too large for d2, drawn at scale 0.25" in result.stderr
-    calls = (tmp_path / "bin" / "calls").read_text().splitlines()
-    # default size, then halved twice
-    assert [call.split()[0] for call in calls[:3]] == [
-        calls[0].split()[0],
-        "--scale=0.5",
-        "--scale=0.25",
-    ]
-    assert not calls[0].startswith("--scale")
+    first = [call.split()[0] for call in _calls(tmp_path)[:3]]
+    # The default size first, then halved twice.
+    assert not first[0].startswith("--scale")
+    assert first[1:] == ["--scale=0.5", "--scale=0.25"]
 
 
 @_posix_only
 def test_d2_scale_is_passed_and_halved_from(repo: Path, tmp_path: Path) -> None:
     env = _tool(tmp_path, _D2_TOO_LARGE, "d2")
-    result = _history(repo, "-f", "d2", "--png", "--scale", "0.5", env=env)
+    result = _history(repo, "-f", "d2-png", "--scale", "0.5", env=env)
     assert result.returncode == 0, result.stderr
-    calls = (tmp_path / "bin" / "calls").read_text().splitlines()
-    assert [call.split()[0] for call in calls[:2]] == ["--scale=0.5", "--scale=0.25"]
+    first = [call.split()[0] for call in _calls(tmp_path)[:2]]
+    assert first == ["--scale=0.5", "--scale=0.25"]
 
 
 @_posix_only
 def test_d2_too_large_at_every_scale_fails(repo: Path, tmp_path: Path) -> None:
-    refuses = 'echo "$@" >> "$(dirname "$0")/calls"; echo "exceeds limit" >&2; exit 1'
-    env = _tool(tmp_path, refuses, "d2")
-    result = _history(repo, "-f", "d2", "--png", env=env)
+    env = _tool(tmp_path, 'echo "exceeds limit" >&2; exit 1', "d2")
+    result = _history(repo, "-f", "d2-png", env=env)
     assert result.returncode == _FAILURE
     assert "exceeds limit" in result.stderr
     assert not list((repo / "album").glob("*.png"))
-    calls = (tmp_path / "bin" / "calls").read_text().splitlines()
-    assert len(calls) == 5 * (1 + 3)  # each source: default size, then 3 halvings
+    # Each source: the default size, then three halvings.
+    assert len(_calls(tmp_path)) == 5 * (1 + 3)
 
 
 @pytest.mark.parametrize(
     ("args", "expected"),
     [
-        (["--png", "--scale", "0.5"], "--scale applies to --png images drawn with d2"),
-        (
-            ["-f", "d2", "--scale", "0.5"],
-            "--scale applies to --png images drawn with d2",
-        ),
-        (["-f", "d2", "--png", "--scale", "0"], "expected a positive number"),
+        (["-f", "puml-png", "--scale", "0.5"], "--scale applies to -f d2-png"),
+        (["-f", "d2", "--scale", "0.5"], "--scale applies to -f d2-png"),
+        (["-f", "d2-png", "--scale", "0"], "expected a positive number"),
+        (["--png"], "unrecognized arguments: --png"),
     ],
 )
-def test_scale_misuse_is_rejected(repo: Path, args: list[str], expected: str) -> None:
+def test_option_misuse_is_rejected(repo: Path, args: list[str], expected: str) -> None:
     result = _history(repo, *args)
     assert result.returncode == _USAGE
     assert expected in result.stderr
@@ -356,4 +424,20 @@ def test_cache_round_trip_and_key(tmp_path: Path) -> None:
     assert cache.key("tree", ["a.**"]) == key
     assert cache.key("tree", ["a.*"]) != key
     assert cache.key("other", ["a.**"]) != key
+    assert not list((tmp_path / "cache").rglob("*.tmp"))
+
+
+def test_image_cache_is_keyed_by_what_the_image_shows(tmp_path: Path) -> None:
+    cache = ImageCache(tmp_path / "cache")
+    key = cache.key("d2", None, "a -> b")
+    assert cache.get(key) is None
+    drawn = tmp_path / "drawn.png"
+    image = b"png"
+    drawn.write_bytes(image)
+    stored = cache.store(key, drawn)
+    assert cache.get(key) == stored
+    assert stored.read_bytes() == image
+    assert cache.key("d2", 0.5, "a -> b") != key  # another scale, another image
+    assert cache.key("puml", None, "a -> b") != key
+    assert cache.key("d2", None, "a -> c") != key
     assert not list((tmp_path / "cache").rglob("*.tmp"))

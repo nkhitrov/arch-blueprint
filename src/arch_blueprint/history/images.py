@@ -11,10 +11,12 @@ import subprocess
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import MappingProxyType
 from typing import ClassVar, Final, Optional
 
-from arch_blueprint.history.album import image_of
+from arch_blueprint.history.album import Page, image_of
+from arch_blueprint.history.cache import ImageCache
 
 
 class ImageRenderer(ABC):
@@ -143,3 +145,35 @@ IMAGE_RENDERERS: Final[MappingProxyType[str, type[ImageRenderer]]] = MappingProx
         "d2": D2Images,
     },
 )
+
+
+def draw(
+    album: Sequence[Page],
+    fmt: str,
+    renderer: ImageRenderer,
+    cache: ImageCache,
+) -> tuple[dict[str, Optional[Path]], list[tuple[str, str]]]:
+    """An image for every page, drawing only those the cache does not hold.
+
+    Returns each page's cached image (``None`` where drawing failed) and the
+    failures with their reasons. Sources are written to a temporary directory
+    under the page's own name, so the tool's messages name the frame.
+    """
+    keys = {page.name: cache.key(fmt, renderer.scale, page.text) for page in album}
+    missing = [page for page in album if cache.get(keys[page.name]) is None]
+    failed: list[tuple[str, str]] = []
+    if missing:
+        with TemporaryDirectory(prefix="arch-blueprint-") as tmp:
+            sources = []
+            for page in missing:
+                source = Path(tmp) / f"{page.name}.{fmt}"
+                source.write_text(f"{page.text}\n", encoding="utf-8")
+                sources.append(source)
+            failed = [
+                (source.stem, reason) for source, reason in renderer.render(sources)
+            ]
+            failed_names = {name for name, _ in failed}
+            for source in sources:
+                if source.stem not in failed_names:
+                    cache.store(keys[source.stem], image_of(source))
+    return {page.name: cache.get(keys[page.name]) for page in album}, failed

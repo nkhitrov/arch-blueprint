@@ -197,29 +197,38 @@ nothing else:
 ```shell
 arch-blueprint history src myapp                                   # everything: myapp.**
 arch-blueprint history src app1 app2 -m 'app1.*' -m 'app2.core.*'  # roots, narrowed by -m
-arch-blueprint history src myapp --base v1.0 --head master -f d2 --png -o album
+arch-blueprint history src myapp --base v1.0 --head master -f d2-png -o album
 ```
 
 The roots are required, one or more top-level packages. Without `-m` each is graphed with everything
 under it (`ROOT.**`); with `-m` only those patterns are, and each must lie under one of the roots. A
-root that a commit does not have yet is no error — it shows up in the frame where it appears.
+root that a commit does not have yet — or has only as a directory with no Python in it — is no
+error: the commit is reported as `no source yet`, and the root shows up in the frame where its code
+appears.
+
+An album holds one kind of file, so it is easy to leaf through. `-f` picks it:
+
+| `-f` | Files |
+| --- | --- |
+| `puml` (default), `d2` | diagram sources |
+| `puml-png`, `d2-png` | PNG images only, drawn with `plantuml` / `d2` from `PATH` (checked before any work starts) |
 
 ```
 album/
-  0001_2026-05-02_ab12cd3.puml        the first frame: the diagram only
-  0002_2026-05-12_ef45ab6.diff.puml   what changed
-  0002_2026-05-12_ef45ab6.puml        what it became
+  0001_2026-05-02_ab12cd3.png         the first frame: the diagram only
+  0002_2026-05-12_ef45ab6.diff.png    what changed
+  0002_2026-05-12_ef45ab6.png         what it became
   index.md                            the frames in order, with dates and commit subjects
 ```
 
-`--png` draws an image next to each source with `plantuml` or `d2` from `PATH` (checked before any
-work starts). d2 refuses to rasterize a very large diagram; such a diagram is redrawn at half the
-scale, then half again, and `--scale FACTOR` (d2 only) sets the starting scale. Every commit's snapshot is cached in `./.arch-blueprint` (or `--cache-dir`), keyed by
-the project's git tree: if drawing images fails, the run exits 1 with the sources and snapshots in
-place, and a rerun rebuilds nothing — it redraws only the images that are missing or out of date.
-Frame files from an earlier run that this one did not produce are removed; nothing else in the
-directory is touched. Images are named after the frame whatever the format, so keep one format per
-directory. A commit whose code cannot be analyzed is reported and skipped.
+Everything is cached in `./.arch-blueprint` (or `--cache-dir`): every commit's snapshot, keyed by
+the project's git tree, and every image, keyed by the diagram it shows. If drawing fails, the run
+exits 1 and a rerun builds nothing and draws only the images still missing; another album of the
+same history reuses them too. d2 refuses to rasterize a very large diagram; such a diagram is
+redrawn at half the scale, then half again, and `--scale FACTOR` (`d2-png` only) sets the starting
+scale. A file whose content is unchanged is not rewritten, and frame files of the same kind from an
+earlier run that this one did not produce are removed; nothing else in the directory is touched. A
+commit whose code cannot be analyzed is reported as `skipped` with the reason.
 
 ## Development
 

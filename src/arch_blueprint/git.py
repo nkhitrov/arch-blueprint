@@ -111,14 +111,38 @@ def split_patterns(
     return old, new
 
 
-def has_module(root: str, name: str) -> bool:
-    """Whether the dotted module ``name`` exists as a package or file under ``root``."""
-    path = Path(root).joinpath(*name.split("."))
-    return path.is_dir() or path.with_name(f"{path.name}.py").is_file()
+def has_source(root: str, name: str) -> bool:
+    """Whether the dotted module ``name`` exists under ``root`` with code to analyze.
+
+    A directory alone is not enough: a project's first commits often have the
+    package directory before any Python in it. The test on the top-level
+    package mirrors what ``GrimpSource`` can build — a module file, a regular
+    package, or a namespace package with a regular package somewhere below.
+    """
+    base = Path(root)
+    parts = name.split(".")
+    path = base.joinpath(*parts)
+    if not (path.is_dir() or path.with_name(f"{path.name}.py").is_file()):
+        return False
+    top = base / parts[0]
+    return top.with_name(f"{top.name}.py").is_file() or _has_package_below(top)
+
+
+def _has_package_below(directory: Path) -> bool:
+    if (directory / "__init__.py").is_file():
+        return True
+    try:
+        children = list(directory.iterdir())
+    except OSError:
+        return False
+    return any(
+        child.is_dir() and child.name.isidentifier() and _has_package_below(child)
+        for child in children
+    )
 
 
 def _has_package(root: str, pattern: str) -> bool:
-    return has_module(root, pattern.split(".", 1)[0])
+    return has_source(root, pattern.split(".", 1)[0])
 
 
 def _locate(project_dir: str) -> tuple[Path, str]:

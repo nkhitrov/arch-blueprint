@@ -43,8 +43,8 @@ This project uses `uv` for environment and dependency management.
   - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> -m '<pattern>'` — both sides
     built from git (`--head` defaults to the working tree).
   - `uv run arch-blueprint history <project_dir> ROOT [ROOT ...] [-m '<pattern>'] [--base REV]
-    [--head REV] [-o DIR] [--png]` — an album: a diagram and a diff per commit that changed the
-    graph (see **History album** below).
+    [--head REV] [-o DIR] [-f puml|d2|puml-png|d2-png]` — an album: a diagram and a diff per commit
+    that changed the graph (see **History album** below).
 - Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
@@ -76,7 +76,7 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   `tests/fixtures/diff/`.
 - `test_diff_git.py` — `diff --base` end to end in a throwaway git repository.
 - `test_history.py` — `history` end to end over a throwaway repository's commits (frames, cache,
-  stale frames, `--png` through a stand-in `plantuml` on `PATH`), plus `collect` and the cache
+  stale frames, `*-png` through a stand-in `plantuml` / `d2` on `PATH`), plus `collect` and the caches
   in-process.
 
 A scenario is a `Selection` (project + `-m` patterns — what the snapshot golden is keyed by) plus
@@ -179,9 +179,9 @@ Diff renderers (`render_base.py` Template Method, `render_puml.py`, `render_d2.p
 `git.py` (shared by `diff` and `history`): `checkout(project_dir, rev)` resolves the repo root,
 `git archive`s only the project's subtree for that commit into a temp dir, and yields the project
 path inside it.
-`split_patterns` gives each side only the `-m` patterns whose top-level package it has (a package
-added or removed wholesale is a diff, not an error); a pattern on neither side goes to both, so a
-typo still fails.
+`split_patterns` gives each side only the `-m` patterns whose top-level package it has code for
+(`has_source`; a package added or removed wholesale is a diff, not an error); a pattern on neither
+side goes to both, so a typo still fails.
 
 ### History album
 
@@ -190,23 +190,30 @@ typo still fails.
 - `git.first_parent_commits` lists the commits on `--head`'s first-parent line that touched the
   project (plus `--base` itself, as the start). `git.tree_id` is the cache key: a snapshot is a
   function of the project's tree and the patterns.
-- `history/cache.py:SnapshotCache` — entries keyed by `sha256(tree, patterns, snapshot version,
-  tool version)`, written atomically; creates a `.gitignore` of `*` in its root. Every metric is
-  computed into a cached snapshot, so any `--metric` can be drawn from it.
+- `history/cache.py` — `SnapshotCache`: entries keyed by `sha256(tree, patterns, snapshot version,
+  tool version)`. Every metric is computed into a cached snapshot, so any `--metric` can be drawn
+  from it. `ImageCache`: images keyed by `sha256(format, scale, diagram source)` — drawn once for
+  every run and album showing the same diagram. Both write atomically and share one root with a
+  `.gitignore` of `*`.
 - `history/album.py` — pure: `collect(commits, snapshot_for)` keeps a commit only when
   `diff_graphs` against the previous kept frame is non-empty (a leading empty graph — no root yet —
-  is skipped). `write()` rewrites only files whose content changed, removes the image of a changed
-  source, and removes this format's frame files that the run did not produce.
+  is skipped). `pages()` is the one place frames become named diagrams; `write()` writes either the
+  sources or, given the drawn images, only the images (an album holds one kind of file), rewrites
+  only files whose bytes change, and removes this extension's frame files the run did not produce.
 - `history/images.py` — `ImageRenderer` per format in `IMAGE_RENDERERS` (keys must match
-  `_RENDERERS`, a test checks). PlantUML runs one batch and, since it draws an error picture and
-  only reports the batch's exit code, redoes a failed batch file by file to learn which failed. A
-  failed source never keeps an image. d2 refuses to rasterize past a fixed amount of work (a large
-  project's full diagram): `D2Images` retries at half the scale up to `HALVINGS` times, starting
-  from `--scale` if given (`scalable` renderers only; `--scale` elsewhere is exit 2).
-- CLI (`_history`): roots are positional and required; `-m` defaults to `ROOT.**` and must lie under
-  a root. A root missing at a commit is dropped for that commit (`git.has_module`); a commit whose
-  analysis fails is skipped with a message. Exit 2 for bad input (including a missing image tool,
-  checked before any work), 1 when images failed — sources and cache are kept for the rerun.
+  `_RENDERERS`, a test checks); `draw()` renders only the pages `ImageCache` lacks, from sources in
+  a temporary directory named after the page. PlantUML runs one batch and, since it draws an error
+  picture and only reports the batch's exit code, redoes a failed batch file by file to learn which
+  failed. A failed source never gets an image. d2 refuses to rasterize past a fixed amount of work
+  (a large project's full diagram): `D2Images` retries at half the scale up to `HALVINGS` times,
+  starting from `--scale` if given (`scalable` renderers only; `--scale` elsewhere is exit 2).
+- CLI (`_history`): `_HISTORY_FORMATS` maps `-f` to (diagram format, images?), built from
+  `_RENDERERS` and `IMAGE_RENDERERS` — a format with an image renderer gets `<fmt>-png`. Roots are
+  positional and required; `-m` defaults to `ROOT.**` and must lie under a root. A root is dropped
+  for a commit where `git.has_source` finds no analyzable code (mirroring what `GrimpSource` can
+  build, so grimp never warns); a commit with none is `no source yet`. A commit whose analysis fails
+  is `skipped (reason)`. Exit 2 for bad input (including a missing image tool, checked before any
+  work), 1 when images failed — caches keep everything else for the rerun.
 
 ### Render plan
 

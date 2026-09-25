@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from collections.abc import Sequence
 from importlib import metadata
 from pathlib import Path
@@ -26,6 +27,20 @@ def _tool_version() -> str:
         return metadata.version("arch-blueprint")
     except metadata.PackageNotFoundError:  # pragma: no cover - run from source
         return "unknown"
+
+
+def _make_dir(root: Path, name: str) -> Path:
+    """``<root>/<name>``, created with a ``.gitignore`` of ``*`` in ``root``.
+
+    The cache is made where the tool runs — usually inside a repository.
+    """
+    directory = root / name
+    if not directory.is_dir():
+        directory.mkdir(parents=True, exist_ok=True)
+        ignore = root / ".gitignore"
+        if not ignore.exists():
+            ignore.write_text("# Created by arch-blueprint.\n*\n", encoding="utf-8")
+    return directory
 
 
 class SnapshotCache:
@@ -55,17 +70,36 @@ class SnapshotCache:
 
     def put(self, key: str, text: str) -> None:
         """Store an entry atomically: an interrupted run leaves no half of one."""
-        self._ensure_dir()
-        path = self._dir / f"{key}.json"
+        path = _make_dir(self.root, "snapshots") / f"{key}.json"
         partial = path.with_name(f"{path.name}.{os.getpid()}.tmp")
         partial.write_text(text, encoding="utf-8")
         partial.replace(path)
 
-    def _ensure_dir(self) -> None:
-        if self._dir.is_dir():
-            return
-        self._dir.mkdir(parents=True, exist_ok=True)
-        # The cache is made where the tool runs — usually inside a repository.
-        ignore = self.root / ".gitignore"
-        if not ignore.exists():
-            ignore.write_text("# Created by arch-blueprint.\n*\n", encoding="utf-8")
+
+class ImageCache:
+    """Drawn images under ``<root>/images/<key>.png``, keyed by what they show.
+
+    The key is the diagram source itself (with the tool and its scale), so an
+    image is drawn once for all runs, albums and frames that show the same
+    thing, and a rerun after a failure draws only what is still missing.
+    """
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    @staticmethod
+    def key(fmt: str, scale: Optional[float], source: str) -> str:
+        material = json.dumps([fmt, scale, source])
+        return hashlib.sha256(material.encode()).hexdigest()
+
+    def get(self, key: str) -> Optional[Path]:
+        path = self.root / "images" / f"{key}.png"
+        return path if path.is_file() else None
+
+    def store(self, key: str, drawn: Path) -> Path:
+        """Copy a freshly drawn image in, atomically: no half image is ever cached."""
+        path = _make_dir(self.root, "images") / f"{key}.png"
+        partial = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        shutil.copyfile(drawn, partial)
+        partial.replace(path)
+        return path

@@ -1,15 +1,17 @@
-from arch_blueprint.history.album import AlbumFiles, Frame, collect, image_of, write
-from arch_blueprint.history.cache import DEFAULT_CACHE_DIR, SnapshotCache
-from arch_blueprint.history.images import IMAGE_RENDERERS, ImageRenderer
+from arch_blueprint.history.album import Frame, Page, collect, pages, write
+from arch_blueprint.history.cache import DEFAULT_CACHE_DIR, ImageCache, SnapshotCache
+from arch_blueprint.history.images import IMAGE_RENDERERS, ImageRenderer, draw
 
 __all__ = [
     "DEFAULT_CACHE_DIR",
     "IMAGE_RENDERERS",
-    "AlbumFiles",
     "Frame",
+    "ImageCache",
     "ImageRenderer",
+    "Page",
     "SnapshotCache",
     "collect",
-    "image_of",
+    "draw",
+    "pages",
     "write",
 ]

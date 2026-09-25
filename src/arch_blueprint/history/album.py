@@ -8,7 +8,7 @@ is chronological; the date and short sha in the name are for the reader.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Optional
@@ -74,76 +74,85 @@ def _is_change(previous: Optional[Snapshot], snapshot: Snapshot) -> bool:
 
 
 @dataclass(frozen=True)
-class AlbumFiles:
-    """Diagram sources of an album, in frame order, and which of them changed."""
+class Page:
+    """One diagram of the album: a frame's full diagram, or its diff."""
 
-    sources: tuple[Path, ...]
-    changed: frozenset[Path]
+    #: The file name without its extension.
+    name: str
+    #: The diagram source.
+    text: str
+
+
+def pages(
+    frames: Sequence[Frame],
+    draw: Callable[[Snapshot], str],
+    draw_diff: Callable[[Snapshot, Snapshot], str],
+) -> list[Page]:
+    """Every frame's diagrams in album order: the diff first, then the result."""
+    result = []
+    for frame in frames:
+        if frame.previous is not None:
+            text = draw_diff(frame.previous, frame.snapshot)
+            result.append(Page(f"{frame.stem}.diff", text))
+        result.append(Page(frame.stem, draw(frame.snapshot)))
+    return result
 
 
 def write(
     frames: Sequence[Frame],
+    album: Sequence[Page],
     out_dir: Path,
     extension: str,
-    draw: Callable[[Snapshot], str],
-    draw_diff: Callable[[Snapshot, Snapshot], str],
-    *,
-    images: bool,
-) -> AlbumFiles:
-    """Write every frame's sources and the index; drop frames of earlier runs.
+    images: Optional[Mapping[str, Optional[Path]]] = None,
+) -> None:
+    """Write the album's sources — or, given ``images``, only its images — and index.
 
-    A file whose content is unchanged is left alone, and so is its image: a
-    rerun redraws only what changed. The image of a changed source is removed,
-    since it no longer shows the source.
+    ``images`` maps a page name to its drawn image, ``None`` where drawing
+    failed: that frame is left without a file rather than with a stale one. A
+    file whose content is unchanged is not rewritten. Frame files of this
+    extension that this run did not produce are removed.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    sources: list[Path] = []
-    changed: set[Path] = set()
-    for frame in frames:
-        pages = []
-        if frame.previous is not None:
-            pages.append(
-                (f"{frame.stem}.diff", draw_diff(frame.previous, frame.snapshot)),
-            )
-        pages.append((frame.stem, draw(frame.snapshot)))
-        for name, text in pages:
-            path = out_dir / f"{name}.{extension}"
-            sources.append(path)
-            if _write_if_changed(path, text):
-                changed.add(path)
-                image_of(path).unlink(missing_ok=True)
-    _write_if_changed(out_dir / INDEX_NAME, _index(frames, extension, images=images))
-    _remove_stale(out_dir, sources, extension)
-    return AlbumFiles(tuple(sources), frozenset(changed))
+    for page in album:
+        path = out_dir / f"{page.name}.{extension}"
+        if images is None:
+            _write_if_changed(path, f"{page.text}\n".encode())
+            continue
+        image = images[page.name]
+        if image is None:
+            path.unlink(missing_ok=True)
+        else:
+            _write_if_changed(path, image.read_bytes())
+    index = _index(frames, extension, images=images is not None)
+    _write_if_changed(out_dir / INDEX_NAME, f"{index}\n".encode())
+    _remove_stale(out_dir, album, extension)
 
 
 def image_of(source: Path) -> Path:
-    """Where a diagram's image goes: next to it, same name."""
+    """Where an image tool draws a diagram: next to it, same name."""
     return source.with_name(f"{source.stem}.{IMAGE_EXTENSION}")
 
 
-def _write_if_changed(path: Path, text: str) -> bool:
-    content = f"{text}\n"
+def _write_if_changed(path: Path, content: bytes) -> None:
+    """Replace ``path`` atomically, and only when its bytes would change."""
     try:
-        if path.read_text(encoding="utf-8") == content:
-            return False
+        if path.read_bytes() == content:
+            return
     except FileNotFoundError:
         pass
-    path.write_text(content, encoding="utf-8")
-    return True
+    partial = path.with_name(f".{path.name}.tmp")
+    partial.write_bytes(content)
+    partial.replace(path)
 
 
-def _remove_stale(out_dir: Path, sources: Sequence[Path], extension: str) -> None:
+def _remove_stale(out_dir: Path, album: Sequence[Page], extension: str) -> None:
     """Remove frame files this run did not produce — a shorter or other range.
 
-    Only this format's sources and images; the other format's sources are left
-    alone. Images of both formats share names, so give each format its own
-    directory.
+    Only this run's extension: an album of another kind in the same directory
+    is left alone (though a png album of the other format shares its names).
     """
-    ours = re.compile(
-        rf"^{_FRAME_STEM}\.({re.escape(extension)}|{IMAGE_EXTENSION})$",
-    )
-    keep = {path.name for path in sources} | {image_of(path).name for path in sources}
+    ours = re.compile(rf"^{_FRAME_STEM}\.{re.escape(extension)}$")
+    keep = {f"{page.name}.{extension}" for page in album}
     for path in out_dir.iterdir():
         if path.is_file() and ours.match(path.name) and path.name not in keep:
             path.unlink()
@@ -159,8 +168,6 @@ def _index(frames: Sequence[Frame], extension: str, *, images: bool) -> str:
         names = [f"{frame.stem}.diff", frame.stem] if frame.previous else [frame.stem]
         for name in names:
             label = "What changed" if name.endswith(".diff") else "Diagram"
-            if images:
-                lines += ["", f"![{label}]({name}.{IMAGE_EXTENSION})"]
-            else:
-                lines += ["", f"[{label}]({name}.{extension})"]
+            link = f"[{label}]({name}.{extension})"
+            lines += ["", f"!{link}" if images else link]
     return "\n".join(lines)
