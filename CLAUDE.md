@@ -30,6 +30,9 @@ This project uses `uv` for environment and dependency management.
     endpoints belong to the selected set — which includes a dependency *on* a package whose
     children were selected, since `pkg.*` never selects `pkg` itself.
   - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
+    `diff` and `history` are quick looks and invert the default: the notes are off unless
+    `--cycle-details` is given. Both draw the diff over the whole graph; `--changes-only` draws
+    just the changes and the modules they touch.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
@@ -40,6 +43,9 @@ This project uses `uv` for environment and dependency management.
   - `uv run arch-blueprint diff OLD.json NEW.json [-f puml|d2]` — draw what changed.
   - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> -m '<pattern>'` — both sides
     built from git (`--head` defaults to the working tree).
+  - `uv run arch-blueprint history <project_dir> ROOT [ROOT ...] [-m '<pattern>'] [--base REV]
+    [--head REV] [-o DIR] [-f puml|d2|puml-png|d2-png]` — an album: a diagram and a diff per commit
+    that changed the graph (see **History album** below).
 - Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
@@ -70,6 +76,9 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   including the exit code. Inputs are golden snapshots or small edits of them in
   `tests/fixtures/diff/`.
 - `test_diff_git.py` — `diff --base` end to end in a throwaway git repository.
+- `test_history.py` — `history` end to end over a throwaway repository's commits (frames, cache,
+  stale frames, `*-png` through a stand-in `plantuml` / `d2` on `PATH`), plus `collect` and the caches
+  in-process.
 
 A scenario is a `Selection` (project + `-m` patterns — what the snapshot golden is keyed by) plus
 `render_args` (drawing-only options, passed unchanged to `render`).
@@ -152,23 +161,68 @@ renderer and no parser. `-f json` computes every registered metric so `render` c
   side's `Cycle`, `RESOLVED` the old side's) and is **not** in `link_status` — drawn as one
   connection. A resolved one carries `remaining`, the direction that survived, and is drawn as that
   single arrow (a bare line when none did): who depends on whom afterwards is what a reviewer needs.
-- context is exact: unchanged modules that the changed links' edges actually connect (an edge
-  endpoint may be a package facade, not a node — filtered).
-- `GraphDiff.graph` holds shown nodes + changed edges, with `groups` built but `cycles` left empty on
+- context is everything unchanged by default: every node of both sides, every link present on both
+  (`CONTEXT` in `link_status`), and every cycle present on both (`context_cycles`, not
+  `cycle_changes`). With `changes_only=True` context is exact instead: unchanged modules that the
+  changed links' edges actually connect (an edge endpoint may be a package facade, not a node —
+  filtered), and no unchanged link. `is_empty` ignores context either way.
+- `GraphDiff.graph` holds shown nodes + shown edges, with `groups` built but `cycles` left empty on
   purpose (cycle detection on a partial edge set would report a resolved cycle as present).
 - a change to the imports inside a link present on both sides is not a change (YAGNI).
+- within one graph no node lies under another (the extractor keeps leaves), but a diff joins two:
+  a module `pkg.py` removed and a package `pkg/` added are both shown. Such a node is drawn as
+  `shadowed_id(pkg)` = `pkg.(module)` (not a possible module name), labelled via `display_name`, so
+  it sits inside the `pkg` container — both formats reject a class that is also a container.
 
 Diff renderers (`render_base.py` Template Method, `render_puml.py`, `render_d2.py`, registry
 `diff/__init__.py:DIFF_RENDERERS`) reuse `wrap_groups` (`renderer/base.py`), `format_package` /
 `format_cycle_note` (`renderer/puml.py`) and `quote_label` / `format_cycle_note` /
-`format_cycle_notes_container` (`renderer/d2.py`). Colors and labels are constants in
-`render_base.py`; every marker also carries text. An empty diff is still a valid diagram.
+`format_cycle_notes_container` / `CYCLE_CONNECTION_TEMPLATE` (`renderer/d2.py`). Unchanged parts are
+drawn as a plain diagram draws them — node fill by depth from `RendererOptions` (`depth_of` keeps a
+shadowed node at its module's depth), plain arrows, cycles — and every change is dashed. So the
+change colors in `render_base.py` must stay out of `depth_colors` and `CYCLE_HIGHLIGHT_COLOR`
+(`test_diff.py` checks); every marker also carries text. An empty diff is still a valid diagram: the
+graph with "No architectural changes" in the legend, or just that note when nothing is shown.
 
-`diff/git.py`: `checkout(project_dir, rev)` resolves the repo root, `git archive`s only the
-project's subtree for that commit into a temp dir, and yields the project path inside it.
-`split_patterns` gives each side only the `-m` patterns whose top-level package it has (a package
-added or removed wholesale is a diff, not an error); a pattern on neither side goes to both, so a
-typo still fails.
+`git.py` (shared by `diff` and `history`): `checkout(project_dir, rev)` resolves the repo root,
+`git archive`s only the project's subtree for that commit into a temp dir, and yields the project
+path inside it.
+`split_patterns` gives each side only the `-m` patterns whose top-level package it has code for
+(`has_source`; a package added or removed wholesale is a diff, not an error); a pattern on neither
+side goes to both, so a typo still fails.
+
+### History album
+
+`history/` builds on the snapshot and the diff; it adds no graph logic of its own.
+
+- `git.first_parent_commits` lists the commits on `--head`'s first-parent line that touched the
+  project (plus `--base` itself, as the start). `git.tree_id` is the cache key: a snapshot is a
+  function of the project's tree and the patterns.
+- `history/cache.py` — `SnapshotCache`: entries keyed by `sha256(tree, patterns, snapshot version,
+  tool version)`. Every metric is computed into a cached snapshot, so any `--metric` can be drawn
+  from it. `ImageCache`: images keyed by `sha256(format, tool settings, diagram source)` — the
+  settings being d2's scale or PlantUML's size limit — drawn once for every run and album showing
+  the same diagram. Both write atomically and share one root with a
+  `.gitignore` of `*`.
+- `history/album.py` — pure: `collect(commits, snapshot_for)` keeps a commit only when
+  `diff_graphs` against the previous kept frame is non-empty (a leading empty graph — no root yet —
+  is skipped). `pages()` is the one place frames become named diagrams; `write()` writes either the
+  sources or, given the drawn images, only the images (an album holds one kind of file), rewrites
+  only files whose bytes change, and removes this extension's frame files the run did not produce.
+- `history/images.py` — `ImageRenderer` per format in `IMAGE_RENDERERS` (keys must match
+  `_RENDERERS`, a test checks); `draw()` renders only the pages `ImageCache` lacks, from sources in
+  a temporary directory named after the page. PlantUML runs one batch and, since it draws an error
+  picture and only reports the batch's exit code, redoes a failed batch file by file to learn which
+  failed. A failed source never gets an image. d2 refuses to rasterize past a fixed amount of work
+  (a large project's full diagram): `D2Images` retries at half the scale up to `HALVINGS` times,
+  starting from `--scale` if given (`scalable` renderers only; `--scale` elsewhere is exit 2).
+- CLI (`_history`): `_HISTORY_FORMATS` maps `-f` to (diagram format, images?), built from
+  `_RENDERERS` and `IMAGE_RENDERERS` — a format with an image renderer gets `<fmt>-png`. Roots are
+  positional and required; `-m` defaults to `ROOT.**` and must lie under a root. A root is dropped
+  for a commit where `git.has_source` finds no analyzable code (mirroring what `GrimpSource` can
+  build, so grimp never warns); a commit with none is `no source yet`. A commit whose analysis fails
+  is `skipped (reason)`. Exit 2 for bad input (including a missing image tool, checked before any
+  work), 1 when images failed — caches keep everything else for the rerun.
 
 ### Render plan
 
@@ -246,12 +300,12 @@ Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer
 
 ### CLI behaviour
 
-`main()` dispatches on the first argument: `render` / `diff` select a subcommand, anything else is
+`main()` dispatches on the first argument: `render` / `diff` / `history` select a subcommand, anything else is
 the original `<project_dir> -m ...` interface, unchanged. Failures are one line on stderr with no
 traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
 matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
-for an analysis that could not finish. `diff` exits like `diff(1)` instead: **0** no change, **1**
-any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
+for an analysis that could not finish (`history`: images that could not be drawn). `diff` exits
+like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
 diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
 details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all
 the work is done.

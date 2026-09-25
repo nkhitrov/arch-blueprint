@@ -7,6 +7,8 @@ from arch_blueprint.diff.model import (
     CycleChange,
     CycleDelta,
     GraphDiff,
+    display_name,
+    shadowed_id,
 )
 from arch_blueprint.diff.render_base import DiffRenderer
 from arch_blueprint.diff.render_d2 import D2LangDiffRenderer
@@ -31,4 +33,6 @@ __all__ = [
     "GraphDiff",
     "PlantUmlDiffRenderer",
     "diff_graphs",
+    "display_name",
+    "shadowed_id",
 ]

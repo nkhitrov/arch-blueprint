@@ -17,7 +17,8 @@ usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2,json}]
                       project_dir
 
 Generate architecture diagrams for Python applications. Subcommands: 'render'
-draws a snapshot, 'diff' compares two.
+draws a snapshot, 'diff' compares two, 'history' draws one diagram per commit
+that changed the graph.
 
 positional arguments:
   project_dir           Path to root directory of target project
@@ -157,18 +158,24 @@ arch-blueprint diff --base origin/master src -m 'myapp.*' > diff.puml
 
 ![Diff: a module and link added, a module and link removed](docs/images/diff.png)
 
-Only the change is drawn, with the unchanged modules its imports connect in grey for context:
+The change is drawn over the whole graph: everything that did not change looks as on a plain
+diagram (depth colors, plain arrows, cycles as a red `<->`), and every change is dashed and in a
+color of its own:
 
 | Marker | Module | Dependency |
 | --- | --- | --- |
-| added | green spot `+`, `«added»` | green bold arrow, `added` |
-| removed | red spot `-`, `«removed»`, dashed frame | red dashed arrow, `removed` |
-| context | grey spot `M` | — (unchanged dependencies are hidden) |
-| new cycle | — | red bold `<->`, `NEW CYCLE`, plus a note listing the imports that close it |
+| added | green, spot `+`, `«added»`, dashed frame | green dashed arrow, `added` |
+| removed | red, spot `-`, `«removed»`, dashed frame | red dashed arrow, `removed` |
+| new cycle | — | red dashed `<->`, `NEW CYCLE` (with `--cycle-details`, plus a note listing its imports) |
 | cycle resolved | — | grey dashed arrow, `cycle resolved`, in the direction that remains (a bare line if neither does) |
 
-Every marker carries text as well as color, so a grey-scale image stays readable. Nothing changed
-still gives a valid diagram ("No architectural changes"), so a CI job always has a picture to post.
+On a large project `--changes-only` draws just the changes and the unchanged modules their imports
+connect, without the unchanged dependencies.
+
+`diff` and `history` are for a quick look at what changed, so the notes listing every import on a
+cycle are off there; `--cycle-details` turns them on. Every marker carries text as well as color, so
+a grey-scale image stays readable. Nothing changed still gives a valid diagram — the graph, with
+"No architectural changes" in the legend — so a CI job always has a picture to post.
 
 `diff` exits like `diff(1)`: **0** when nothing changed, **1** when something did, **2** on any
 error. The diagram is written either way; to keep a drawing step green on a diff but red on an
@@ -178,10 +185,55 @@ error:
 arch-blueprint diff --base origin/master src -m 'myapp.*' > diff.puml || test $? -eq 1
 ```
 
-A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
+A module replaced by a package of the same name (`api.py` → `api/`) is drawn inside that package,
+since no diagram can have one name be both a module and a container. A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
 treats a change to the imports inside a link present on both sides as no change. Graphing
 `arch_blueprint` itself always resolves to the running copy, so `diff --base` cannot compare two
 versions of this tool.
+
+### History album
+
+`history` walks the branch's first-parent history (one commit per merged merge request) and, for
+every commit that changed the graph, draws the full diagram and the diff against the frame before
+it (over the whole graph, like `diff`; `--changes-only` for just the changes). Commits that leave the graph alone are skipped, so the album is the architecture's changes and
+nothing else:
+
+```shell
+arch-blueprint history src myapp                                   # everything: myapp.**
+arch-blueprint history src app1 app2 -m 'app1.*' -m 'app2.core.*'  # roots, narrowed by -m
+arch-blueprint history src myapp --base v1.0 --head master -f d2-png -o album
+```
+
+The roots are required, one or more top-level packages. Without `-m` each is graphed with everything
+under it (`ROOT.**`); with `-m` only those patterns are, and each must lie under one of the roots. A
+root that a commit does not have yet — or has only as a directory with no Python in it — is no
+error: the commit is reported as `no source yet`, and the root shows up in the frame where its code
+appears.
+
+An album holds one kind of file, so it is easy to leaf through. `-f` picks it:
+
+| `-f` | Files |
+| --- | --- |
+| `puml` (default), `d2` | diagram sources |
+| `puml-png`, `d2-png` | PNG images only, drawn with `plantuml` / `d2` from `PATH` (checked before any work starts) |
+
+```
+album/
+  0001_2026-05-02_ab12cd3.png         the first frame: the diagram only
+  0002_2026-05-12_ef45ab6.diff.png    what changed
+  0002_2026-05-12_ef45ab6.png         what it became
+  index.md                            the frames in order, with dates and commit subjects
+```
+
+Everything is cached in `./.arch-blueprint` (or `--cache-dir`): every commit's snapshot, keyed by
+the project's git tree, and every image, keyed by the diagram it shows. If drawing fails, the run
+exits 1 and a rerun builds nothing and draws only the images still missing; another album of the
+same history reuses them too. d2 refuses to rasterize a very large diagram; such a diagram is
+redrawn at half the scale, then half again, and `--scale FACTOR` (`d2-png` only) sets the starting
+scale. PlantUML crops an image at 4096 px unless told otherwise; `history` raises that to 16384
+(`PLANTUML_LIMIT_SIZE`, your own value wins). A file whose content is unchanged is not rewritten, and frame files of the same kind from an
+earlier run that this one did not produce are removed; nothing else in the directory is touched. A
+commit whose code cannot be analyzed is reported as `skipped` with the reason.
 
 ## Development
 

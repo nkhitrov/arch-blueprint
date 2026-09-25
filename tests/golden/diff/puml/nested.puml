@@ -5,22 +5,24 @@ top to bottom direction
 hide empty members
 
 legend top left
-  <color:#2ECC71>**+ added**</color> module / dependency
-  <color:#E74C3C>**- removed**</color> module / dependency (dashed)
-  <color:#95A5A6>**M**</color> unchanged, shown for context
-  <color:#C0392B>**NEW CYCLE**</color> cycle introduced
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
   <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
 package deep.api {
-  class deep.api.v1.handlers <<(M, #D5D8DC)>>
-  class deep.api.v1.schemas <<(M, #D5D8DC)>>
+  class deep.api.v1.handlers <<(M, #F39C12)>>
+  class deep.api.v1.schemas <<(M, #F39C12)>>
 }
 package deep.core {
-  class deep.core.models <<(M, #D5D8DC)>>
-  class deep.core.services <<(M, #D5D8DC)>>
+  class deep.core.models <<(M, #1ABC9C)>>
+  class deep.core.services <<(M, #1ABC9C)>>
 }
 
-deep.api -[#2ECC71,bold]-> deep.core : added
+deep.api -[#00C853,dashed,thickness=3]-> deep.core : added
+deep.api.v1.handlers ---> deep.api.v1.schemas
+deep.core.services ---> deep.core.models
 @enduml
 

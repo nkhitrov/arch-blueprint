@@ -25,7 +25,6 @@ package plugins {
   class plugins.auth.backend <<(-, #FF1744) removed>> #FF1744;line.dashed
 }
 
-app2 ---> app1
 app2 -[#FF1744,dashed,thickness=2]-> plugins : removed
 app3 -[#00C853,dashed,thickness=3]-> app1 : added
 @enduml

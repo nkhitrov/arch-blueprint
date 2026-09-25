@@ -120,20 +120,42 @@ class DiffCase:
     name: str
     old: Path
     new: Path
+    args: tuple[str, ...] = ()
 
 
 DIFF_CASES = [
-    # Removed module with its link, added module with its link, one unchanged
-    # link hidden, and the unchanged module the new link points at as context.
+    # Removed module with its link, added module with its link, drawn over the
+    # rest of the graph as a plain diagram shows it.
     DiffCase(
         "changes",
         GOLDEN_DIR / "json" / "example.json",
         _DIFF_FIXTURES / "example_changed.json",
     ),
+    # The same with --changes-only: unchanged links hidden, and only the
+    # unchanged modules the changed links touch shown.
+    DiffCase(
+        "changes_only",
+        GOLDEN_DIR / "json" / "example.json",
+        _DIFF_FIXTURES / "example_changed.json",
+        ("--changes-only",),
+    ),
     DiffCase(
         "new_cycle",
         _DIFF_FIXTURES / "cyclic_one_way.json",
         GOLDEN_DIR / "json" / "cyclic.json",
+    ),
+    # The import notes are opt-in for a diff: pinned once, on the new cycle.
+    DiffCase(
+        "new_cycle_details",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        ("--cycle-details",),
+    ),
+    DiffCase(
+        "new_cycle_changes_only",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        ("--changes-only",),
     ),
     DiffCase(
         "resolved_cycle",
@@ -213,6 +235,16 @@ def run_command(
         stdout=result.stdout,
         stderr=result.stderr,
         returncode=result.returncode,
+    )
+
+
+def git(repo: Path, *args: str) -> None:
+    """Run git in ``repo`` as a throwaway identity, failing the test on error."""
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+        cwd=repo,
+        check=True,
+        capture_output=True,
     )
 
 

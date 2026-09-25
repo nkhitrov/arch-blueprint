@@ -196,15 +196,16 @@ def test_diff_of_different_snapshots_exits_one_and_still_draws() -> None:
     assert result.stderr == ""
 
 
-def test_diff_hides_new_cycle_details_on_request() -> None:
+def test_diff_shows_new_cycle_details_on_request_only() -> None:
+    """A diff is a quick look: the notes listing a cycle's imports are opt-in."""
     [new_cycle] = [case for case in DIFF_CASES if case.name == "new_cycle"]
     one_way = str(new_cycle.old)
-    shown = run_command("diff", one_way, _CYCLIC_SNAPSHOT, check=False).stdout
-    hidden = run_command(
+    hidden = run_command("diff", one_way, _CYCLIC_SNAPSHOT, check=False).stdout
+    shown = run_command(
         "diff",
         one_way,
         _CYCLIC_SNAPSHOT,
-        "--no-cycle-details",
+        "--cycle-details",
         check=False,
     ).stdout
     assert "note on link" in shown

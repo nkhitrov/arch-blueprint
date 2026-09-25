@@ -3,24 +3,14 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from tests.conftest import CYCLIC_MODULES, CYCLIC_PROJECT, CliResult, run_command
+from tests.conftest import CYCLIC_MODULES, CYCLIC_PROJECT, CliResult, git, run_command
 
 _DIFFERENT = 1
 _TROUBLE = 2
-
-
-def _git(repo: Path, *args: str) -> None:
-    subprocess.run(
-        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
 
 
 @pytest.fixture
@@ -37,9 +27,9 @@ def repo(tmp_path: Path) -> Path:
         ignore=shutil.ignore_patterns("__pycache__"),
     )
     (project / "pkg_b" / "util.py").write_text("def work() -> None:\n    pass\n")
-    _git(tmp_path, "init", "-q")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "no cycle")
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "no cycle")
     return tmp_path
 
 
@@ -73,13 +63,14 @@ def test_cycle_introduced_in_the_working_tree(repo: Path) -> None:
     _restore_backward_import(repo)
     result = _diff(repo)
     assert result.returncode == _DIFFERENT, result.stderr
-    assert "pkg_a <-[#C0392B,bold]-> pkg_b : NEW CYCLE" in result.stdout
-    assert "- util → core" in result.stdout
+    assert "pkg_a <-[#C0392B,dashed,thickness=3]-> pkg_b : NEW CYCLE" in result.stdout
+    assert "- util → core" not in result.stdout  # the import notes are opt-in
+    assert "- util → core" in _diff(repo, "--cycle-details").stdout
 
 
 def test_head_revision_instead_of_the_working_tree(repo: Path) -> None:
     _restore_backward_import(repo)
-    _git(repo, "commit", "-q", "-am", "cycle")
+    git(repo, "commit", "-q", "-am", "cycle")
     (repo / "src" / "pkg_b" / "util.py").write_text("")  # must be ignored
     result = _diff(repo, "--head", "HEAD", "-f", "d2")
     assert result.returncode == 0, result.stderr
@@ -105,7 +96,7 @@ def test_package_added_wholesale_is_a_diff_not_an_error(repo: Path) -> None:
     shutil.copytree(repo / "src" / "pkg_b", repo / "src" / "pkg_c")
     result = _diff(repo, "-m", "pkg_c.*")
     assert result.returncode == _DIFFERENT, result.stderr
-    assert "class pkg_c.util <<(+, #2ECC71) added>>" in result.stdout
+    assert "class pkg_c.util <<(+, #00C853) added>>" in result.stdout
 
 
 def test_pattern_on_neither_side_is_still_an_error(repo: Path) -> None:
