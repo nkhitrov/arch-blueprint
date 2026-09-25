@@ -1,0 +1,9 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+note "No architectural changes" as no_changes
+@enduml
+

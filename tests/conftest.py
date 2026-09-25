@@ -42,54 +42,131 @@ SHOW_METRICS_REORDERED = [
 
 
 @dataclass(frozen=True)
-class Scenario:
-    """A format-agnostic CLI scenario shared by every renderer's golden tests.
+class Selection:
+    """What to graph: a project and its ``-m`` patterns — one snapshot golden each.
 
-    The golden file for a scenario lives at ``golden/<fmt>/<name>.<fmt>`` and is
-    produced by appending ``-f <fmt>`` to ``args``.
+    Its snapshot lives at ``golden/json/<name>.json``; every scenario drawn from
+    the same selection renders from that one snapshot.
     """
 
     name: str
     project: Path
-    args: list[str] = field(default_factory=list)
+    modules: list[str]
+
+
+EXAMPLE = Selection("example", EXAMPLE_PROJECT, EXAMPLE_MODULES)
+CYCLIC = Selection("cyclic", CYCLIC_PROJECT, CYCLIC_MODULES)
+# Single root with deep namespaces: link endpoints collide byte-for-byte with node
+# ids and nest inside one another — the two cases that break naive grouping.
+DEEP = Selection("deep", DEEP_PROJECT, DEEP_MODULES)
+# A package whose __init__.py imports a sibling: the edge exists only if a
+# module's own imports survive alongside its descendants'.
+INIT_IMPORTS = Selection("init_imports", INIT_IMPORTS_PROJECT, INIT_IMPORTS_MODULES)
+# An import of a package facade whose children are selected: the edge exists
+# only if selection matches upward as well as down.
+ANCESTOR_DEP = Selection("ancestor_dep", ANCESTOR_DEP_PROJECT, ANCESTOR_DEP_MODULES)
+
+SELECTIONS = [EXAMPLE, CYCLIC, DEEP, INIT_IMPORTS, ANCESTOR_DEP]
+
+
+@dataclass(frozen=True)
+class Scenario:
+    """A format-agnostic CLI scenario shared by every renderer's golden tests.
+
+    The golden file for a scenario lives at ``golden/<fmt>/<name>.<fmt>`` and is
+    produced by appending ``-f <fmt>`` to ``args``. ``render_args`` are the
+    options that apply to drawing only, so they apply unchanged to ``render``.
+    """
+
+    name: str
+    selection: Selection
+    render_args: list[str] = field(default_factory=list)
+
+    @property
+    def project(self) -> Path:
+        return self.selection.project
+
+    @property
+    def args(self) -> list[str]:
+        return [*self.selection.modules, *self.render_args]
 
 
 SCENARIOS = [
-    Scenario("example", EXAMPLE_PROJECT, EXAMPLE_MODULES),
-    Scenario("cyclic", CYCLIC_PROJECT, CYCLIC_MODULES),
-    Scenario(
-        "cyclic_nodetails",
-        CYCLIC_PROJECT,
-        [*CYCLIC_MODULES, "--no-cycle-details"],
-    ),
-    Scenario("metrics", CYCLIC_PROJECT, [*CYCLIC_MODULES, *SHOW_METRICS]),
-    Scenario("link_metrics", EXAMPLE_PROJECT, [*EXAMPLE_MODULES, *SHOW_LINK_METRIC]),
-    Scenario(
-        "metrics_reordered",
-        CYCLIC_PROJECT,
-        [*CYCLIC_MODULES, *SHOW_METRICS_REORDERED],
-    ),
-    # Single root with deep namespaces: link endpoints collide byte-for-byte with node
-    # ids and nest inside one another — the two cases that break naive grouping.
-    Scenario("deep", DEEP_PROJECT, DEEP_MODULES),
+    Scenario("example", EXAMPLE),
+    Scenario("cyclic", CYCLIC),
+    Scenario("cyclic_nodetails", CYCLIC, ["--no-cycle-details"]),
+    Scenario("metrics", CYCLIC, SHOW_METRICS),
+    Scenario("link_metrics", EXAMPLE, SHOW_LINK_METRIC),
+    Scenario("metrics_reordered", CYCLIC, SHOW_METRICS_REORDERED),
+    Scenario("deep", DEEP),
     # A link metric on a connection that is a cycle: two directions, two values.
-    Scenario(
-        "cyclic_link_metrics",
-        CYCLIC_PROJECT,
-        [*CYCLIC_MODULES, *SHOW_LINK_METRIC],
+    Scenario("cyclic_link_metrics", CYCLIC, SHOW_LINK_METRIC),
+    Scenario("init_imports", INIT_IMPORTS),
+    Scenario("ancestor_dep", ANCESTOR_DEP),
+]
+
+
+_DIFF_FIXTURES = _FIXTURES / "diff"
+
+
+@dataclass(frozen=True)
+class DiffCase:
+    """Two snapshots and the diff between them, pinned per format.
+
+    The golden lives at ``golden/diff/<fmt>/<name>.<fmt>``. The inputs are
+    golden snapshots or small edits of them under ``fixtures/diff``.
+    """
+
+    name: str
+    old: Path
+    new: Path
+
+
+DIFF_CASES = [
+    # Removed module with its link, added module with its link, one unchanged
+    # link hidden, and the unchanged module the new link points at as context.
+    DiffCase(
+        "changes",
+        GOLDEN_DIR / "json" / "example.json",
+        _DIFF_FIXTURES / "example_changed.json",
     ),
-    # A package whose __init__.py imports a sibling: the edge exists only if a
-    # module's own imports survive alongside its descendants'.
-    Scenario("init_imports", INIT_IMPORTS_PROJECT, INIT_IMPORTS_MODULES),
-    # An import of a package facade whose children are selected: the edge exists
-    # only if selection matches upward as well as down.
-    Scenario("ancestor_dep", ANCESTOR_DEP_PROJECT, ANCESTOR_DEP_MODULES),
+    DiffCase(
+        "new_cycle",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+        GOLDEN_DIR / "json" / "cyclic.json",
+    ),
+    DiffCase(
+        "resolved_cycle",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+    ),
+    # Nested namespaces: the changed link's endpoints need containers.
+    DiffCase(
+        "nested",
+        _DIFF_FIXTURES / "deep_unlinked.json",
+        GOLDEN_DIR / "json" / "deep.json",
+    ),
+    DiffCase(
+        "no_changes",
+        GOLDEN_DIR / "json" / "example.json",
+        GOLDEN_DIR / "json" / "example.json",
+    ),
 ]
 
 
 def golden_path(fmt: str, name: str) -> Path:
     """Path to the golden output for a scenario in a given format."""
     return GOLDEN_DIR / fmt / f"{name}.{fmt}"
+
+
+def diff_golden_path(fmt: str, name: str) -> Path:
+    """Path to the golden diff output for a diff case in a given format."""
+    return GOLDEN_DIR / "diff" / fmt / f"{name}.{fmt}"
+
+
+def snapshot_path(name: str) -> Path:
+    """Path to the golden snapshot of a selection."""
+    return GOLDEN_DIR / "json" / f"{name}.json"
 
 
 @dataclass(frozen=True)
@@ -107,19 +184,29 @@ def run_cli(
     check: bool = True,
     extra_env: Optional[dict[str, str]] = None,
 ) -> CliResult:
-    """Run the arch-blueprint CLI end-to-end.
+    """Run the arch-blueprint CLI end-to-end on a project directory."""
+    return run_command(str(project_dir), *args, check=check, extra_env=extra_env)
+
+
+def run_command(
+    *args: str,
+    check: bool = True,
+    extra_env: Optional[dict[str, str]] = None,
+    cwd: Optional[Path] = None,
+) -> CliResult:
+    """Run the arch-blueprint CLI with arbitrary arguments (subcommands too).
 
     Invoked as a subprocess so a run is isolated from whatever the CLI does to
     the interpreter, and decoded as UTF-8 explicitly so the assertions do not
     depend on the machine's locale — diagram output contains arrows.
     """
     result = subprocess.run(
-        [sys.executable, "-m", "arch_blueprint", str(project_dir), *args],
+        [sys.executable, "-m", "arch_blueprint", *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
         check=check,
-        cwd=REPO_ROOT,
+        cwd=cwd or REPO_ROOT,
         env={**os.environ, **extra_env} if extra_env else None,
     )
     return CliResult(

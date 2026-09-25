@@ -1,0 +1,35 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 1,
+  "metrics": [],
+  "nodes": [
+    {
+      "id": "app1.models",
+      "kind": "module"
+    },
+    {
+      "id": "app2.service",
+      "kind": "module"
+    },
+    {
+      "id": "app3.api",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "app2.service",
+      "target": "app1.models",
+      "source_namespace": "app2",
+      "target_namespace": "app1"
+    },
+    {
+      "source": "app3.api",
+      "target": "app1.models",
+      "source_namespace": "app3",
+      "target_namespace": "app1"
+    }
+  ],
+  "node_metrics": {},
+  "link_metrics": []
+}

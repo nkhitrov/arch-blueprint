@@ -14,7 +14,7 @@ from arch_blueprint.renderer.base import (
 )
 from arch_blueprint.renderer.cycles import cycle_detail_sections
 
-_HEADER: Final = textwrap.dedent(
+PUML_HEADER: Final = textwrap.dedent(
     """\
     @startuml
     !theme amiga
@@ -43,6 +43,23 @@ _SPOT_LETTER: Final = {NodeKind.MODULE: "M"}
 _DEFAULT_SPOT: Final = "M"
 
 
+def format_package(namespace: str, nodes: list[str]) -> list[str]:
+    """Declare ``namespace`` as a package holding the already-rendered ``nodes``."""
+    body = "\n".join(f"  {line}" for node in nodes for line in node.splitlines())
+    return [f"package {namespace} {{\n{body}\n}}"]
+
+
+def format_cycle_note(cycle: Cycle) -> str:
+    """The ``note on link`` listing both directions' imports of a cycle."""
+    forward_details, backward_details = cycle_detail_sections(cycle)
+    return _CYCLE_NOTE_TEMPLATE.substitute(
+        ns_a=cycle.namespace_from,
+        ns_b=cycle.namespace_to,
+        forward_details=forward_details,
+        backward_details=backward_details,
+    )
+
+
 class PlantUmlRenderer(BlueprintRenderer):
     """PlantUML diagram renderer."""
 
@@ -67,8 +84,7 @@ class PlantUmlRenderer(BlueprintRenderer):
         No stereotype: on a package PlantUML draws one as literal text inside the
         frame rather than as a colored spot, which is noise on every container.
         """
-        body = "\n".join(f"  {line}" for node in nodes for line in node.splitlines())
-        return [f"package {namespace} {{\n{body}\n}}"]
+        return format_package(namespace, nodes)
 
     def _format_link(
         self,
@@ -91,14 +107,7 @@ class PlantUmlRenderer(BlueprintRenderer):
         if not self.options.show_cycle_details:
             return CycleRender(inline=link)
 
-        forward_details, backward_details = cycle_detail_sections(cycle)
-        note = _CYCLE_NOTE_TEMPLATE.substitute(
-            ns_a=cycle.namespace_from,
-            ns_b=cycle.namespace_to,
-            forward_details=forward_details,
-            backward_details=backward_details,
-        )
-        return CycleRender(inline=f"{link}\n{note}")
+        return CycleRender(inline=f"{link}\n{format_cycle_note(cycle)}")
 
     def _combine_output(
         self,
@@ -108,4 +117,4 @@ class PlantUmlRenderer(BlueprintRenderer):
     ) -> str:
         nodes_section = "\n".join(nodes)
         links_section = "\n".join(links) + "\n" if links else ""
-        return f"{_HEADER}{nodes_section}\n\n{links_section}@enduml\n"
+        return f"{PUML_HEADER}{nodes_section}\n\n{links_section}@enduml\n"

@@ -34,6 +34,12 @@ This project uses `uv` for environment and dependency management.
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
     not a silent no-op.
+- Snapshot / render / diff (see **Snapshot and diff** below):
+  - `uv run arch-blueprint <project_dir> -m '<pattern>' -f json > graph.json` — graph snapshot.
+  - `uv run arch-blueprint render graph.json [-f puml|d2] [--metric NAME]` — draw a snapshot.
+  - `uv run arch-blueprint diff OLD.json NEW.json [-f puml|d2]` — draw what changed.
+  - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> -m '<pattern>'` — both sides
+    built from git (`--head` defaults to the working tree).
 - Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
@@ -55,7 +61,18 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   `tests/conftest.py:SCENARIOS` and assert byte-exact output against `tests/golden/<fmt>/`. When
   output changes *intentionally*, regenerate the affected golden.
 - `test_golden_structure.py` — invariants the goldens must satisfy, not just their bytes: every link
-  endpoint is declared, and no package wraps a class of its own name.
+  endpoint is declared, and no package wraps a class of its own name. Covers diff goldens too.
+- `test_snapshot.py` — golden snapshots (`tests/golden/json/<selection>.json`, one per
+  `conftest.py:SELECTIONS`), and the key invariant: `render` of a snapshot equals every
+  `tests/golden/<fmt>/` diagram byte for byte. Plus validation errors.
+- `test_diff.py` — `diff_graphs` logic and the diff renderers in-process.
+- `test_golden_diff.py` — `diff` over `conftest.py:DIFF_CASES` against `tests/golden/diff/<fmt>/`,
+  including the exit code. Inputs are golden snapshots or small edits of them in
+  `tests/fixtures/diff/`.
+- `test_diff_git.py` — `diff --base` end to end in a throwaway git repository.
+
+A scenario is a `Selection` (project + `-m` patterns — what the snapshot golden is keyed by) plus
+`render_args` (drawing-only options, passed unchanged to `render`).
 
 A hand-built `BlueprintGraph` has **empty `cycles` and `groups`** until the analyze step fills them.
 A renderer test that needs either must populate them explicitly, or it will silently assert against
@@ -64,7 +81,8 @@ ungrouped nodes and plain arrows.
 Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
-`tests/fixtures/ancestor_dep` (an import of a package facade). Fixture projects are excluded from
+`tests/fixtures/ancestor_dep` (an import of a package facade), `tests/fixtures/diff` (snapshot
+edits used as diff inputs — regenerate them if the snapshot format changes). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 
 ## Git conventions
@@ -75,10 +93,12 @@ ruff and mypy — they are analysis subjects, not code we ship.
 
 ## Architecture
 
-`ArchBlueprint` (`src/arch_blueprint/blueprint.py`) is a thin orchestrator: `build()` runs
-everything up to rendering, `render(graph)` draws, and `run()` is the two together. The CLI uses
-`build()`/`render()` separately because it must see the graph — an empty selection is a user error,
-not a diagram.
+`build_graph(...)` (`src/arch_blueprint/blueprint.py`) runs everything up to rendering: source →
+extract → metrics → `analyze(graph)`. `ArchBlueprint` is a thin orchestrator around it (`build()`,
+`render(graph)`, `run()`). The CLI calls `build_graph` directly because it must see the graph — an
+empty selection is a user error, not a diagram — and because a snapshot or a diff side has no
+renderer. `analyze()` (`analyze/__init__.py`) derives cycles then groups, and is the one place that
+happens, for a fresh extraction and a loaded snapshot alike.
 
 1. **Source** (`extract/source.py`) — `GrimpSource` owns all grimp/`sys.path` mechanics: resolves
    every `--modules` pattern to a top-level package and builds the grimp graph (multiple roots
@@ -86,9 +106,13 @@ not a diagram.
    ones with no analyzable source with a stderr warning). It exposes `selected_modules()` and
    `imports_of(module)` (a module's own imports **and** its descendants').
    Resolution uses `importlib.util.find_spec`, never `import_module`: analysing a project must not
-   execute it. `sys.path` and `sys.modules` are restored afterwards, which is what makes the library
-   re-runnable in one process — restoring the path alone is not enough, since `sys.modules` is
-   consulted first.
+   execute it. The project dir goes to the **front** of `sys.path` — the project is usually also
+   installed in the venv, and an older checkout of it (`diff --base`) must not resolve to the
+   installed, current copy. `sys.path` and `sys.modules` are restored afterwards, which is what
+   makes the library re-runnable in one process — restoring the path alone is not enough, since
+   `sys.modules` is consulted first. `use_cache=False` bypasses grimp's cache, which is keyed by
+   module **name** and mtime, not path: `git archive` stamps every file with the commit time, so two
+   revisions committed within a second would otherwise share one graph. Diff sides always opt out.
 2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`, no constructor
    dictated) turns the source into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected
    module, and an edge when a selected module imports another across a namespace boundary. Selection
@@ -109,6 +133,42 @@ not a diagram.
    dependencies; `GroupAnalyzer.build` decides which link endpoints need a container (see below).
    Both are agnostic to node kind, and both run in the pipeline — **not** in a renderer.
 6. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
+
+### Snapshot and diff
+
+`snapshot.py` is the one intermediate format: `dump(graph, metrics)` / `load(text) -> Snapshot`
+(graph + names of the metrics computed into it — stored, not inferred, since a graph with no links
+has no `edge_weight` values yet computed it). It holds **primary data only** — nodes (extractor
+order, which renderers draw in), edges, node/link metrics — and `load` re-derives links, cycles and
+groups via `analyze()`. `format` + `version` are checked; anything unexpected is `SnapshotError`.
+Rendering and diffing read snapshots, never rendered diagrams, so a new output format needs a
+renderer and no parser. `-f json` computes every registered metric so `render` can show any of them;
+`render` rejects a `--metric` the snapshot does not hold.
+
+`diff/` compares two analyzed graphs. `diff_graphs(old, new) -> GraphDiff` (`compute.py`):
+
+- nodes and links by set difference; links by **directed** namespace pair, so `A→B` becoming `A↔B`
+  is a new cycle. A pair whose cycle appeared/disappeared is a `CycleDelta` (`NEW` carries the new
+  side's `Cycle`, `RESOLVED` the old side's) and is **not** in `link_status` — drawn as one
+  connection. A resolved one carries `remaining`, the direction that survived, and is drawn as that
+  single arrow (a bare line when none did): who depends on whom afterwards is what a reviewer needs.
+- context is exact: unchanged modules that the changed links' edges actually connect (an edge
+  endpoint may be a package facade, not a node — filtered).
+- `GraphDiff.graph` holds shown nodes + changed edges, with `groups` built but `cycles` left empty on
+  purpose (cycle detection on a partial edge set would report a resolved cycle as present).
+- a change to the imports inside a link present on both sides is not a change (YAGNI).
+
+Diff renderers (`render_base.py` Template Method, `render_puml.py`, `render_d2.py`, registry
+`diff/__init__.py:DIFF_RENDERERS`) reuse `wrap_groups` (`renderer/base.py`), `format_package` /
+`format_cycle_note` (`renderer/puml.py`) and `quote_label` / `format_cycle_note` /
+`format_cycle_notes_container` (`renderer/d2.py`). Colors and labels are constants in
+`render_base.py`; every marker also carries text. An empty diff is still a valid diagram.
+
+`diff/git.py`: `checkout(project_dir, rev)` resolves the repo root, `git archive`s only the
+project's subtree for that commit into a temp dir, and yields the project path inside it.
+`split_patterns` gives each side only the `-m` patterns whose top-level package it has (a package
+added or removed wholesale is a diff, not an error); a pattern on neither side goes to both, so a
+typo still fails.
 
 ### Render plan
 
@@ -177,14 +237,21 @@ To add a new output format:
 1. Subclass `BlueprintRenderer` in a new `renderer/<name>.py`, set `fmt`, implement the abstract
    hooks, and override `_format_group` if the format does not nest by dotted name.
 2. Register it in the `_RENDERERS` mapping in `__main__.py`.
+3. Subclass `DiffRenderer` in `diff/render_<name>.py` and register it in `DIFF_RENDERERS` —
+   `test_diff.py` fails while the two registries disagree. No parser is ever needed: diagrams and
+   diffs are drawn from snapshots.
 
 Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer/d2.py`
 (`D2LangRenderer`). Both are stateless and reuse the shared helpers.
 
 ### CLI behaviour
 
-`__main__.py` reports failures as one line on stderr with no traceback: exit **2** for bad input
-(missing project directory, unresolvable pattern, no modules matched, bad `--metric`), exit **1** for
-an analysis that could not finish. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
+`main()` dispatches on the first argument: `render` / `diff` select a subcommand, anything else is
+the original `<project_dir> -m ...` interface, unchanged. Failures are one line on stderr with no
+traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
+matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
+for an analysis that could not finish. `diff` exits like `diff(1)` instead: **0** no change, **1**
+any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
+diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
 details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all
 the work is done.

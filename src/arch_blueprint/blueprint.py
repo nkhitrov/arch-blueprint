@@ -3,14 +3,35 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from typing import Optional
 
-from arch_blueprint.analyze.cycles import CycleAnalyzer
-from arch_blueprint.analyze.groups import GroupAnalyzer
+from arch_blueprint.analyze import analyze
 from arch_blueprint.domain.graph import BlueprintGraph
 from arch_blueprint.extract.base import GraphExtractor
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
 from arch_blueprint.metrics import MetricRegistry, default_registry
 from arch_blueprint.renderer.base import BlueprintRenderer
+
+
+def build_graph(
+    project_dir: str,
+    target_names: Sequence[str],
+    extractor_factory: Callable[[GrimpSource], GraphExtractor] = ModuleExtractor,
+    registry: Optional[MetricRegistry] = None,
+    metric_names: Optional[Iterable[str]] = None,
+    *,
+    use_cache: bool = True,
+) -> BlueprintGraph:
+    """Everything up to rendering: extract, compute metrics, analyze.
+
+    A function rather than only a method so a caller that never renders — a
+    snapshot dump, either side of a diff — does not need a renderer to get here.
+    ``metric_names=None`` computes every registered metric. ``use_cache=False``
+    is for graphing several checkouts of one project (see ``GrimpSource``).
+    """
+    source = GrimpSource(project_dir, target_names, use_cache=use_cache)
+    graph = extractor_factory(source).extract()
+    (registry or default_registry()).compute(graph, metric_names)
+    return analyze(graph)
 
 
 class ArchBlueprint:
@@ -44,12 +65,13 @@ class ArchBlueprint:
         Exposed separately so a caller can inspect the graph — the CLI needs to
         know an empty selection produced nothing before it prints a diagram.
         """
-        source = GrimpSource(self.project_dir, self.target_names)
-        graph = self.extractor_factory(source).extract()
-        self.registry.compute(graph, self.metric_names)
-        graph.cycles = CycleAnalyzer.detect_cycles(graph.links)
-        graph.groups = GroupAnalyzer.build(graph)
-        return graph
+        return build_graph(
+            self.project_dir,
+            self.target_names,
+            self.extractor_factory,
+            self.registry,
+            self.metric_names,
+        )
 
     def render(self, graph: BlueprintGraph) -> str:
         return self.renderer.render(graph)

@@ -1,0 +1,25 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+legend top left
+  <color:#2ECC71>**+ added**</color> module / dependency
+  <color:#E74C3C>**- removed**</color> module / dependency (dashed)
+  <color:#95A5A6>**M**</color> unchanged, shown for context
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
+endlegend
+
+package pkg_a {
+  class pkg_a.core <<(M, #D5D8DC)>>
+  class pkg_a.services <<(M, #D5D8DC)>>
+}
+package pkg_b {
+  class pkg_b.util <<(M, #D5D8DC)>>
+}
+
+pkg_a -[#95A5A6,dashed]-> pkg_b : cycle resolved
+@enduml
+
