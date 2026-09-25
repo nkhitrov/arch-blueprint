@@ -30,6 +30,8 @@ This project uses `uv` for environment and dependency management.
     endpoints belong to the selected set — which includes a dependency *on* a package whose
     children were selected, since `pkg.*` never selects `pkg` itself.
   - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
+    `diff` and `history` are quick looks and invert the default: the notes are off unless
+    `--cycle-details` is given.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,

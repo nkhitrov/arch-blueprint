@@ -120,6 +120,7 @@ class DiffCase:
     name: str
     old: Path
     new: Path
+    args: tuple[str, ...] = ()
 
 
 DIFF_CASES = [
@@ -134,6 +135,13 @@ DIFF_CASES = [
         "new_cycle",
         _DIFF_FIXTURES / "cyclic_one_way.json",
         GOLDEN_DIR / "json" / "cyclic.json",
+    ),
+    # The import notes are opt-in for a diff: pinned once, on the new cycle.
+    DiffCase(
+        "new_cycle_details",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        ("--cycle-details",),
     ),
     DiffCase(
         "resolved_cycle",

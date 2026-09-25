@@ -165,10 +165,12 @@ Only the change is drawn, with the unchanged modules its imports connect in grey
 | added | green spot `+`, `«added»` | green bold arrow, `added` |
 | removed | red spot `-`, `«removed»`, dashed frame | red dashed arrow, `removed` |
 | context | grey spot `M` | — (unchanged dependencies are hidden) |
-| new cycle | — | red bold `<->`, `NEW CYCLE`, plus a note listing the imports that close it |
+| new cycle | — | red bold `<->`, `NEW CYCLE` (with `--cycle-details`, plus a note listing its imports) |
 | cycle resolved | — | grey dashed arrow, `cycle resolved`, in the direction that remains (a bare line if neither does) |
 
-Every marker carries text as well as color, so a grey-scale image stays readable. Nothing changed
+`diff` and `history` are for a quick look at what changed, so the notes listing every import on a
+cycle are off there; `--cycle-details` turns them on. Every marker carries text as well as color, so
+a grey-scale image stays readable. Nothing changed
 still gives a valid diagram ("No architectural changes"), so a CI job always has a picture to post.
 
 `diff` exits like `diff(1)`: **0** when nothing changed, **1** when something did, **2** on any

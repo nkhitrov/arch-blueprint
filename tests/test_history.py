@@ -101,7 +101,13 @@ def test_album_has_a_frame_per_graph_change(repo: Path) -> None:
     assert [name[:4] for name in frames] == ["0001", "0002", "0002", "0003", "0003"]
     assert not any(name.startswith("0001") and ".diff" in name for name in frames)
     [cycle_diff] = (repo / "album").glob("0003_*.diff.puml")
+    [cycle_full] = [
+        path for path in (repo / "album").glob("0003_*.puml") if path != cycle_diff
+    ]
     assert "NEW CYCLE" in cycle_diff.read_text(encoding="utf-8")
+    # A quick look: neither the diff nor the diagram lists the cycle's imports.
+    assert "note " not in cycle_diff.read_text(encoding="utf-8")
+    assert "note " not in cycle_full.read_text(encoding="utf-8")
     index = (repo / "album" / "index.md").read_text(encoding="utf-8")
     assert len([line for line in index.splitlines() if line.startswith("## ")]) == 3
     assert "close a cycle" in index
@@ -119,6 +125,12 @@ def test_rerun_builds_nothing_and_rewrites_nothing(repo: Path) -> None:
     assert result.stderr.count("cached") == 4  # the commits touching src/
     assert {path.name: path.stat().st_mtime_ns for path in album.iterdir()} == before
     assert (repo / "cache" / ".gitignore").read_text().splitlines()[-1] == "*"
+
+
+def test_cycle_details_on_request(repo: Path) -> None:
+    assert _history(repo, "--cycle-details").returncode == 0
+    for path in (repo / "album").glob("0003_*.puml"):
+        assert "note " in path.read_text(encoding="utf-8"), path.name
 
 
 def test_modules_narrow_the_roots(repo: Path) -> None:

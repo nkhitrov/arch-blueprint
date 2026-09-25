@@ -64,7 +64,8 @@ def test_cycle_introduced_in_the_working_tree(repo: Path) -> None:
     result = _diff(repo)
     assert result.returncode == _DIFFERENT, result.stderr
     assert "pkg_a <-[#C0392B,bold]-> pkg_b : NEW CYCLE" in result.stdout
-    assert "- util → core" in result.stdout
+    assert "- util → core" not in result.stdout  # the import notes are opt-in
+    assert "- util → core" in _diff(repo, "--cycle-details").stdout
 
 
 def test_head_revision_instead_of_the_working_tree(repo: Path) -> None:

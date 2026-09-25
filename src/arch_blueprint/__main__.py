@@ -152,6 +152,20 @@ def _add_cycle_details_arg(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_quick_look_cycle_details_arg(parser: argparse.ArgumentParser) -> None:
+    """For ``diff`` and ``history``: a quick look, so the import notes are opt-in.
+
+    A note lists every import on both sides of a cycle — detail for digging
+    into one, noise when the question is what changed.
+    """
+    parser.add_argument(
+        "--cycle-details",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Add a note listing the imports on each cycle",
+    )
+
+
 # --- shared steps ---------------------------------------------------------
 
 
@@ -330,7 +344,7 @@ def _diff(argv: Sequence[str]) -> None:
     )
     _add_modules_arg(parser, required=False)
     _add_format_arg(parser, DIFF_RENDERERS)
-    _add_cycle_details_arg(parser)
+    _add_quick_look_cycle_details_arg(parser)
     args = parser.parse_args(argv)
 
     if args.base is None:
@@ -449,7 +463,7 @@ def _history(argv: Sequence[str]) -> None:
         help="Also draw PNG images, with plantuml or d2 from PATH",
     )
     _add_metric_arg(parser)
-    _add_cycle_details_arg(parser)
+    _add_quick_look_cycle_details_arg(parser)
     args = parser.parse_args(argv)
 
     patterns = _history_patterns(args.roots, args.modules)
