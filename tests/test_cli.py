@@ -89,6 +89,19 @@ def test_output_is_utf8_whatever_the_console_encoding() -> None:
     assert "→" in result.stdout
 
 
+def test_errors_are_utf8_whatever_the_console_encoding() -> None:
+    """A message can carry any path; a cp1252 stderr must not mangle it."""
+    result = run_cli(
+        EXAMPLE_PROJECT / "проект",
+        "-m",
+        "app1.*",
+        check=False,
+        extra_env={"PYTHONIOENCODING": "cp1252"},
+    )
+    assert result.returncode == _USAGE_ERROR
+    assert "проект" in result.stderr
+
+
 def test_link_metrics_reach_cyclic_connections() -> None:
     """A cycle stands for two links, so its label carries both values."""
     result = run_cli(CYCLIC_PROJECT, *CYCLIC_MODULES, "--metric", "edge_weight")

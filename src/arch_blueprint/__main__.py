@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable, Sequence
 from contextlib import ExitStack
 from pathlib import Path
 from types import MappingProxyType
-from typing import Final, NoReturn, Optional
+from typing import Final, NoReturn, Optional, TextIO
 
 from arch_blueprint.blueprint import build_graph
 from arch_blueprint.diff import DIFF_RENDERERS, diff_graphs
@@ -48,23 +48,29 @@ _EXIT_DIFF_TROUBLE: Final = 2
 
 def _abort(message: str, code: int) -> NoReturn:
     """Report a failure the way a CLI should: one line on stderr, no traceback."""
-    sys.stderr.write(f"arch-blueprint: {message}\n")
+    _emit(sys.stderr, f"arch-blueprint: {message}")
     raise SystemExit(code)
 
 
 def _write(text: str) -> None:
-    """Write UTF-8 regardless of the console's encoding.
+    """Write the result to stdout as UTF-8 (see ``_emit``)."""
+    _emit(sys.stdout, text)
 
-    Diagram output contains arrows, so printing through a non-UTF-8 stdout (a
-    Windows console, a locale-restricted CI) raises UnicodeEncodeError and the
-    run dies after doing all the work.
+
+def _emit(stream: TextIO, text: str) -> None:
+    """Write a line as UTF-8 regardless of the console's encoding.
+
+    Diagram output contains arrows, and messages may carry any path or git
+    error, so writing through a non-UTF-8 stream (a Windows console, a
+    locale-restricted CI) either raises UnicodeEncodeError after all the work
+    is done or hands the reader bytes that are not UTF-8.
     """
-    payload = f"{text}\n".encode()
-    buffer = getattr(sys.stdout, "buffer", None)
-    if buffer is None:  # a stdout replacement without a byte layer
-        sys.stdout.write(f"{text}\n")
+    buffer = getattr(stream, "buffer", None)
+    if buffer is None:  # a stream replacement without a byte layer
+        stream.write(f"{text}\n")
         return
-    buffer.write(payload)
+    stream.flush()  # keep order with anything already written as text
+    buffer.write(f"{text}\n".encode())
     buffer.flush()
 
 
