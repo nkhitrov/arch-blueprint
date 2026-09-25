@@ -194,9 +194,11 @@ versions of this tool.
 ### History album
 
 `history` walks the branch's first-parent history (one commit per merged merge request) and, for
-every commit that changed the graph, draws the full diagram and the diff against the frame before
-it (over the whole graph, like `diff`; `--changes-only` for just the changes). Commits that leave the graph alone are skipped, so the album is the architecture's changes and
-nothing else:
+every commit that changed the graph, draws one picture: the first frame is the plain diagram, every
+later one the same diagram with what changed since the frame before marked on it (like `diff`;
+`--changes-only` for just the changes). A diff declares everything in the plain diagram's order, so
+consecutive frames lay out alike. Commits that leave the graph alone are skipped, so the album is
+the architecture's changes and nothing else:
 
 ```shell
 arch-blueprint history src myapp                                   # everything: myapp.**
@@ -219,10 +221,9 @@ An album holds one kind of file, so it is easy to leaf through. `-f` picks it:
 
 ```
 album/
-  0001_2026-05-02_ab12cd3.png         the first frame: the diagram only
-  0002_2026-05-12_ef45ab6.diff.png    what changed
-  0002_2026-05-12_ef45ab6.png         what it became
-  index.md                            the frames in order, with dates and commit subjects
+  0001_2026-05-02_ab12cd3.png    the first frame: the plain diagram
+  0002_2026-05-12_ef45ab6.png    the diagram at that commit, its changes marked
+  index.md                       the frames in order, with dates and commit subjects
 ```
 
 Everything is cached in `./.arch-blueprint` (or `--cache-dir`): every commit's snapshot, keyed by

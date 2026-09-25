@@ -183,6 +183,10 @@ shadowed node at its module's depth), plain arrows, cycles — and every change 
 change colors in `render_base.py` must stay out of `depth_colors` and `CYCLE_HIGHLIGHT_COLOR`
 (`test_diff.py` checks); every marker also carries text. An empty diff is still a valid diagram: the
 graph with "No architectural changes" in the legend, or just that note when nothing is shown.
+Connections are declared in the plain renderer's order (by first namespace pair, a cycle at its
+smaller pair), since the layout engine places things by declaration order: a diff of a graph with
+itself equals its plain diagram less the legend (`test_diff.py` checks), so album frames lay out
+alike.
 
 `git.py` (shared by `diff` and `history`): `checkout(project_dir, rev)` resolves the repo root,
 `git archive`s only the project's subtree for that commit into a temp dir, and yields the project
@@ -206,7 +210,8 @@ side goes to both, so a typo still fails.
   `.gitignore` of `*`.
 - `history/album.py` — pure: `collect(commits, snapshot_for)` keeps a commit only when
   `diff_graphs` against the previous kept frame is non-empty (a leading empty graph — no root yet —
-  is skipped). `pages()` is the one place frames become named diagrams; `write()` writes either the
+  is skipped). `pages()` is the one place frames become named diagrams — one per frame: the first
+  plain, the rest a full-context diff (a plain second picture would repeat it); `write()` writes either the
   sources or, given the drawn images, only the images (an album holds one kind of file), rewrites
   only files whose bytes change, and removes this extension's frame files the run did not produce.
 - `history/images.py` — `ImageRenderer` per format in `IMAGE_RENDERERS` (keys must match
