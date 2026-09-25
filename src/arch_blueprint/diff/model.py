@@ -3,9 +3,32 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Final, Optional
 
 from arch_blueprint.domain.graph import BlueprintGraph, Cycle
+
+#: Appended to a node id that another shown node lies under — a module ``pkg.py``
+#: replaced by a package ``pkg/`` puts both in one diff, and neither format can
+#: draw a class that is also a container. Not an identifier a module can have.
+SHADOWED_SUFFIX: Final = "(module)"
+
+
+def shadowed_id(node_id: str) -> str:
+    """The id a node is drawn under when another shown node lies under it."""
+    return f"{node_id}.{SHADOWED_SUFFIX}"
+
+
+def display_name(node_id: str) -> str:
+    """A node's own name, the last part of its id: what a diagram labels it."""
+    parts = node_id.split(".")
+    if parts[-1] == SHADOWED_SUFFIX and len(parts) > 1:
+        return parts[-2]
+    return parts[-1]
+
+
+def is_shadowed(node_id: str) -> bool:
+    """Whether ``node_id`` is a :func:`shadowed_id`."""
+    return node_id.endswith(f".{SHADOWED_SUFFIX}")
 
 
 class ChangeStatus(Enum):

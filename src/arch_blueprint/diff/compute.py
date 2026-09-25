@@ -3,8 +3,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from arch_blueprint.analyze.groups import GroupAnalyzer
-from arch_blueprint.diff.model import ChangeStatus, CycleChange, CycleDelta, GraphDiff
+from arch_blueprint.diff.model import (
+    ChangeStatus,
+    CycleChange,
+    CycleDelta,
+    GraphDiff,
+    shadowed_id,
+)
 from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge, Link
+from arch_blueprint.domain.node import Node
 
 
 def diff_graphs(old: BlueprintGraph, new: BlueprintGraph) -> GraphDiff:
@@ -35,10 +42,14 @@ def diff_graphs(old: BlueprintGraph, new: BlueprintGraph) -> GraphDiff:
     for delta in cycle_changes:
         edges |= delta.cycle.forward_edges | delta.cycle.backward_edges
 
-    node_status = _node_status(old, new, edges)
-    nodes = {node.id: node for node in (*old.nodes, *new.nodes)}
+    kinds = {node.id: node.kind for node in (*old.nodes, *new.nodes)}
+    shown = _node_status(old, new, edges)
+    node_status = {_drawn_id(node_id, shown): st for node_id, st in shown.items()}
     graph = BlueprintGraph(
-        nodes=[nodes[node_id] for node_id in sorted(node_status)],
+        nodes=[
+            Node(id=_drawn_id(node_id, shown), kind=kinds[node_id])
+            for node_id in sorted(shown)
+        ],
         edges=frozenset(edges),
     )
     # Groups only: cycle detection over this partial edge set would report a
@@ -50,6 +61,20 @@ def diff_graphs(old: BlueprintGraph, new: BlueprintGraph) -> GraphDiff:
         link_status=dict(sorted(link_status.items())),
         cycle_changes=cycle_changes,
     )
+
+
+def _drawn_id(node_id: str, shown: Iterable[str]) -> str:
+    """``node_id``, or its shadowed form when another shown node lies under it.
+
+    Within one graph no node lies under another (the extractor keeps leaves),
+    but a diff joins two: a module ``pkg.py`` removed and a package ``pkg/``
+    added with it are both drawn, and ``pkg`` cannot be both a class and the
+    container of ``pkg.child``.
+    """
+    prefix = f"{node_id}."
+    if any(other.startswith(prefix) for other in shown):
+        return shadowed_id(node_id)
+    return node_id
 
 
 def _links_by_pair(graph: BlueprintGraph) -> dict[tuple[str, str], Link]:

@@ -165,6 +165,10 @@ renderer and no parser. `-f json` computes every registered metric so `render` c
 - `GraphDiff.graph` holds shown nodes + changed edges, with `groups` built but `cycles` left empty on
   purpose (cycle detection on a partial edge set would report a resolved cycle as present).
 - a change to the imports inside a link present on both sides is not a change (YAGNI).
+- within one graph no node lies under another (the extractor keeps leaves), but a diff joins two:
+  a module `pkg.py` removed and a package `pkg/` added are both shown. Such a node is drawn as
+  `shadowed_id(pkg)` = `pkg.(module)` (not a possible module name), labelled via `display_name`, so
+  it sits inside the `pkg` container — both formats reject a class that is also a container.
 
 Diff renderers (`render_base.py` Template Method, `render_puml.py`, `render_d2.py`, registry
 `diff/__init__.py:DIFF_RENDERERS`) reuse `wrap_groups` (`renderer/base.py`), `format_package` /
@@ -196,7 +200,9 @@ typo still fails.
 - `history/images.py` — `ImageRenderer` per format in `IMAGE_RENDERERS` (keys must match
   `_RENDERERS`, a test checks). PlantUML runs one batch and, since it draws an error picture and
   only reports the batch's exit code, redoes a failed batch file by file to learn which failed. A
-  failed source never keeps an image.
+  failed source never keeps an image. d2 refuses to rasterize past a fixed amount of work (a large
+  project's full diagram): `D2Images` retries at half the scale up to `HALVINGS` times, starting
+  from `--scale` if given (`scalable` renderers only; `--scale` elsewhere is exit 2).
 - CLI (`_history`): roots are positional and required; `-m` defaults to `ROOT.**` and must lie under
   a root. A root missing at a commit is dropped for that commit (`git.has_module`); a commit whose
   analysis fails is skipped with a message. Exit 2 for bad input (including a missing image tool,

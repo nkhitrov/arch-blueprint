@@ -199,10 +199,10 @@ _posix_only = pytest.mark.skipif(
 )
 
 
-def _tool(tmp_path: Path, body: str) -> dict[str, str]:
+def _tool(tmp_path: Path, body: str, name: str = "plantuml") -> dict[str, str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
-    tool = bin_dir / "plantuml"
+    tool = bin_dir / name
     tool.write_text(f"#!/bin/sh\n{body}\n")
     tool.chmod(0o755)
     return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
@@ -242,6 +242,69 @@ def test_missing_image_tool_fails_before_any_work(repo: Path, tmp_path: Path) ->
     assert result.returncode == _USAGE
     assert "'plantuml' on PATH" in result.stderr
     assert not (repo / "cache").exists()
+
+
+# A d2 that, like the real one, refuses a diagram too large to rasterize — here
+# anything drawn above scale 0.25 — and logs every call's arguments.
+_D2_TOO_LARGE = """echo "$@" >> "$(dirname "$0")/calls"
+for a in "$@"; do last=$a; done
+case "$1" in --scale=0.25|--scale=0.125) : > "$last"; exit 0;; esac
+echo "err: d2raster: scanline work 5 exceeds limit 4" >&2; exit 1"""
+
+
+@_posix_only
+def test_d2_too_large_is_drawn_at_a_smaller_scale(repo: Path, tmp_path: Path) -> None:
+    env = _tool(tmp_path, _D2_TOO_LARGE, "d2")
+    result = _history(repo, "-f", "d2", "--png", env=env)
+    assert result.returncode == 0, result.stderr
+    assert len(list((repo / "album").glob("*.png"))) == 5
+    assert "too large for d2, drawn at scale 0.25" in result.stderr
+    calls = (tmp_path / "bin" / "calls").read_text().splitlines()
+    # default size, then halved twice
+    assert [call.split()[0] for call in calls[:3]] == [
+        calls[0].split()[0],
+        "--scale=0.5",
+        "--scale=0.25",
+    ]
+    assert not calls[0].startswith("--scale")
+
+
+@_posix_only
+def test_d2_scale_is_passed_and_halved_from(repo: Path, tmp_path: Path) -> None:
+    env = _tool(tmp_path, _D2_TOO_LARGE, "d2")
+    result = _history(repo, "-f", "d2", "--png", "--scale", "0.5", env=env)
+    assert result.returncode == 0, result.stderr
+    calls = (tmp_path / "bin" / "calls").read_text().splitlines()
+    assert [call.split()[0] for call in calls[:2]] == ["--scale=0.5", "--scale=0.25"]
+
+
+@_posix_only
+def test_d2_too_large_at_every_scale_fails(repo: Path, tmp_path: Path) -> None:
+    refuses = 'echo "$@" >> "$(dirname "$0")/calls"; echo "exceeds limit" >&2; exit 1'
+    env = _tool(tmp_path, refuses, "d2")
+    result = _history(repo, "-f", "d2", "--png", env=env)
+    assert result.returncode == _FAILURE
+    assert "exceeds limit" in result.stderr
+    assert not list((repo / "album").glob("*.png"))
+    calls = (tmp_path / "bin" / "calls").read_text().splitlines()
+    assert len(calls) == 5 * (1 + 3)  # each source: default size, then 3 halvings
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (["--png", "--scale", "0.5"], "--scale applies to --png images drawn with d2"),
+        (
+            ["-f", "d2", "--scale", "0.5"],
+            "--scale applies to --png images drawn with d2",
+        ),
+        (["-f", "d2", "--png", "--scale", "0"], "expected a positive number"),
+    ],
+)
+def test_scale_misuse_is_rejected(repo: Path, args: list[str], expected: str) -> None:
+    result = _history(repo, *args)
+    assert result.returncode == _USAGE
+    assert expected in result.stderr
 
 
 def test_every_diagram_format_has_an_image_renderer() -> None:

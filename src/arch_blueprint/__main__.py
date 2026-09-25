@@ -462,6 +462,15 @@ def _history(argv: Sequence[str]) -> None:
         action="store_true",
         help="Also draw PNG images, with plantuml or d2 from PATH",
     )
+    parser.add_argument(
+        "--scale",
+        type=_positive_float,
+        metavar="FACTOR",
+        help=(
+            "d2 only: scale of the PNG images, e.g. 0.5 (default: d2's own). A "
+            "diagram too large for d2 to rasterize is halved automatically."
+        ),
+    )
     _add_metric_arg(parser)
     _add_quick_look_cycle_details_arg(parser)
     args = parser.parse_args(argv)
@@ -475,7 +484,11 @@ def _history(argv: Sequence[str]) -> None:
         registry=registry,
     )
     diff_renderer = DIFF_RENDERERS[args.format](show_cycle_details=args.cycle_details)
-    images = _image_renderer(args.format) if args.png else None
+    if args.scale is not None and not (
+        args.png and IMAGE_RENDERERS[args.format].scalable
+    ):
+        _abort("--scale applies to --png images drawn with d2 (-f d2)", _EXIT_USAGE)
+    images = _image_renderer(args.format, args.scale) if args.png else None
     if not Path(args.project_dir).is_dir():
         _abort(f"no such project directory: {args.project_dir}", _EXIT_USAGE)
 
@@ -550,7 +563,7 @@ def _history_patterns(roots: Sequence[str], modules: Sequence[str]) -> list[str]
     return list(modules)
 
 
-def _image_renderer(fmt: str) -> ImageRenderer:
+def _image_renderer(fmt: str, scale: Optional[float]) -> ImageRenderer:
     renderer_cls = IMAGE_RENDERERS[fmt]
     executable = shutil.which(renderer_cls.binary)
     if executable is None:
@@ -558,7 +571,18 @@ def _image_renderer(fmt: str) -> ImageRenderer:
             f"--png needs '{renderer_cls.binary}' on PATH to draw {fmt} images",
             _EXIT_USAGE,
         )
-    return renderer_cls(executable)
+    return renderer_cls(executable, scale, lambda line: _emit(sys.stderr, line))
+
+
+def _positive_float(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        value = 0.0
+    if not value > 0:
+        msg = f"expected a positive number, got {text!r}"
+        raise argparse.ArgumentTypeError(msg)
+    return value
 
 
 def _history_snapshot(

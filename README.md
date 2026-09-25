@@ -181,7 +181,8 @@ error:
 arch-blueprint diff --base origin/master src -m 'myapp.*' > diff.puml || test $? -eq 1
 ```
 
-A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
+A module replaced by a package of the same name (`api.py` → `api/`) is drawn inside that package,
+since no diagram can have one name be both a module and a container. A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
 treats a change to the imports inside a link present on both sides as no change. Graphing
 `arch_blueprint` itself always resolves to the running copy, so `diff --base` cannot compare two
 versions of this tool.
@@ -212,7 +213,8 @@ album/
 ```
 
 `--png` draws an image next to each source with `plantuml` or `d2` from `PATH` (checked before any
-work starts). Every commit's snapshot is cached in `./.arch-blueprint` (or `--cache-dir`), keyed by
+work starts). d2 refuses to rasterize a very large diagram; such a diagram is redrawn at half the
+scale, then half again, and `--scale FACTOR` (d2 only) sets the starting scale. Every commit's snapshot is cached in `./.arch-blueprint` (or `--cache-dir`), keyed by
 the project's git tree: if drawing images fails, the run exits 1 with the sources and snapshots in
 place, and a rerun rebuilds nothing — it redraws only the images that are missing or out of date.
 Frame files from an earlier run that this one did not produce are removed; nothing else in the

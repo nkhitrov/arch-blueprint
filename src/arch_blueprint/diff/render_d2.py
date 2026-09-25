@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from typing import Final
 
-from arch_blueprint.diff.model import ChangeStatus, CycleChange, CycleDelta
+from arch_blueprint.diff.model import (
+    SHADOWED_SUFFIX,
+    ChangeStatus,
+    CycleChange,
+    CycleDelta,
+    display_name,
+    is_shadowed,
+)
 from arch_blueprint.diff.render_base import (
     ADDED_COLOR,
     CONTEXT_COLOR,
@@ -68,10 +75,9 @@ class D2LangDiffRenderer(DiffRenderer):
     fmt = "d2"
 
     def _format_node(self, node_id: str, status: ChangeStatus) -> str:
-        lines = [f"{node_id}: {{", "  shape: class"]
-        if _NODE_PREFIX[status]:
-            leaf = node_id.rsplit(".", 1)[-1]
-            lines.append(f'  label: "{_NODE_PREFIX[status]}{leaf}"')
+        lines = [f"{_key_of(node_id)}: {{", "  shape: class"]
+        if _NODE_PREFIX[status] or is_shadowed(node_id):
+            lines.append(f'  label: "{_NODE_PREFIX[status]}{display_name(node_id)}"')
         lines += ["  style: {", f'    fill: "{_NODE_FILL[status]}"']
         if status is ChangeStatus.CONTEXT:
             # D2 writes a class name in white, unreadable on the light grey.
@@ -131,3 +137,10 @@ class D2LangDiffRenderer(DiffRenderer):
         if deferred:
             sections.append(format_cycle_notes_container(deferred))
         return "\n".join(sections)
+
+
+def _key_of(node_id: str) -> str:
+    """A node's D2 key: a shadowed id's last part is quoted, it is not a name."""
+    if is_shadowed(node_id):
+        return f'{node_id.removesuffix(SHADOWED_SUFFIX)}"{SHADOWED_SUFFIX}"'
+    return node_id

@@ -214,3 +214,25 @@ def test_diff_renderer_without_a_format_is_rejected() -> None:
 def test_every_diagram_format_has_a_diff_renderer() -> None:
     """``diff -f`` must accept every format ``render -f`` does."""
     assert set(DIFF_RENDERERS) == set(_RENDERERS)
+
+
+def test_module_replaced_by_a_package_is_drawn_inside_it() -> None:
+    """``a/x.py`` becoming ``a/x/`` puts ``a.x`` and ``a.x.y`` in one diff.
+
+    Found on a real project: neither PlantUML nor D2 can draw ``a.x`` as a
+    class and as the container of ``a.x.y`` — the whole diagram failed.
+    """
+    diff = diff_graphs(
+        _graph(["a.x", "b.y"], [make_edge("b.y", "a.x", "b", "a")]),
+        _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x.y", "b", "a")]),
+    )
+    assert _statuses(diff) == {
+        "a.x.(module)": ChangeStatus.REMOVED,
+        "a.x.y": ChangeStatus.ADDED,
+    }
+    puml = DIFF_RENDERERS["puml"]().render(diff)
+    assert 'class "x" as a.x.(module) <<(-, #E74C3C) removed>>' in puml
+    assert "class a.x " not in puml
+    d2 = DIFF_RENDERERS["d2"]().render(diff)
+    assert 'a.x."(module)": {' in d2
+    assert 'label: "- x"' in d2

@@ -3,7 +3,13 @@ from __future__ import annotations
 import textwrap
 from typing import Final
 
-from arch_blueprint.diff.model import ChangeStatus, CycleChange, CycleDelta
+from arch_blueprint.diff.model import (
+    ChangeStatus,
+    CycleChange,
+    CycleDelta,
+    display_name,
+    is_shadowed,
+)
 from arch_blueprint.diff.render_base import (
     ADDED_COLOR,
     CONTEXT_COLOR,
@@ -52,6 +58,11 @@ class PlantUmlDiffRenderer(DiffRenderer):
     fmt = "puml"
 
     def _format_node(self, node_id: str, status: ChangeStatus) -> str:
+        if is_shadowed(node_id):  # quoted: the id's last part is not a name
+            return (
+                f'class "{display_name(node_id)}" as {node_id} '
+                f"{_NODE_STEREOTYPE[status]}"
+            )
         return f"class {node_id} {_NODE_STEREOTYPE[status]}"
 
     def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:

@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import subprocess
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import ClassVar, Final
+from typing import ClassVar, Final, Optional
 
 from arch_blueprint.history.album import image_of
 
@@ -22,9 +22,22 @@ class ImageRenderer(ABC):
 
     #: The executable looked up on ``PATH``.
     binary: ClassVar[str]
+    #: Whether the tool takes an output scale (``--scale``).
+    scalable: ClassVar[bool] = False
 
-    def __init__(self, executable: str) -> None:
+    def __init__(
+        self,
+        executable: str,
+        scale: Optional[float] = None,
+        report: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        """``report`` receives a line about anything worth telling the user."""
+        if scale is not None and not self.scalable:
+            msg = f"{self.binary} images take no scale"
+            raise ValueError(msg)
         self.executable = executable
+        self.scale = scale
+        self._report = report
 
     @abstractmethod
     def render(self, sources: Sequence[Path]) -> list[tuple[Path, str]]:
@@ -73,18 +86,54 @@ class PlantUmlImages(ImageRenderer):
 
 
 class D2Images(ImageRenderer):
-    """``d2 SOURCE IMAGE``, one file at a time."""
+    """``d2 [--scale S] SOURCE IMAGE``, one file at a time.
+
+    d2 refuses to rasterize past a fixed amount of work, which a large project's
+    full diagram exceeds at the default size. Such a diagram is redrawn at half
+    the scale, and half again, rather than left without an image.
+    """
 
     binary = "d2"
+    scalable = True
+
+    #: How many times a too-large diagram is halved before giving up.
+    HALVINGS: ClassVar[int] = 3
+    _TOO_LARGE: ClassVar[str] = "exceeds limit"
 
     def render(self, sources: Sequence[Path]) -> list[tuple[Path, str]]:
         failed = []
         for source in sources:
-            reason = self._run(str(source), str(image_of(source)))
+            reason = self._draw(source)
             if reason:
                 image_of(source).unlink(missing_ok=True)
                 failed.append((source, reason))
         return failed
+
+    def _draw(self, source: Path) -> str:
+        reason = self._run(
+            *self._scale_args(self.scale),
+            str(source),
+            str(image_of(source)),
+        )
+        scale = 1.0 if self.scale is None else self.scale
+        for _ in range(self.HALVINGS):
+            if self._TOO_LARGE not in reason:
+                break
+            scale /= 2
+            reason = self._run(
+                *self._scale_args(scale),
+                str(source),
+                str(image_of(source)),
+            )
+            if not reason and self._report is not None:
+                self._report(
+                    f"{source.name}: too large for d2, drawn at scale {scale:g}",
+                )
+        return reason
+
+    @staticmethod
+    def _scale_args(scale: Optional[float]) -> list[str]:
+        return [] if scale is None else [f"--scale={scale:g}"]
 
 
 #: One image renderer per diagram format, keyed like the CLI's renderers.
