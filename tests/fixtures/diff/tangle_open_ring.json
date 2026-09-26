@@ -1,0 +1,186 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 2,
+  "links": "module",
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "api.handlers",
+      "kind": "module"
+    },
+    {
+      "id": "nest.a",
+      "kind": "module"
+    },
+    {
+      "id": "nest.b",
+      "kind": "module"
+    },
+    {
+      "id": "ring.a",
+      "kind": "module"
+    },
+    {
+      "id": "ring.b",
+      "kind": "module"
+    },
+    {
+      "id": "ring.c",
+      "kind": "module"
+    },
+    {
+      "id": "services.engine",
+      "kind": "module"
+    },
+    {
+      "id": "services.other",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "api.handlers",
+      "target": "services",
+      "source_endpoint": "api.handlers",
+      "target_endpoint": "services"
+    },
+    {
+      "source": "nest.a",
+      "target": "nest.b.x",
+      "source_endpoint": "nest.a",
+      "target_endpoint": "nest.b"
+    },
+    {
+      "source": "nest.b",
+      "target": "nest.a",
+      "source_endpoint": "nest.b",
+      "target_endpoint": "nest.a"
+    },
+    {
+      "source": "ring.a",
+      "target": "ring.b",
+      "source_endpoint": "ring.a",
+      "target_endpoint": "ring.b"
+    },
+    {
+      "source": "ring.b",
+      "target": "ring.c",
+      "source_endpoint": "ring.b",
+      "target_endpoint": "ring.c"
+    },
+    {
+      "source": "services.engine",
+      "target": "api.handlers",
+      "source_endpoint": "services.engine",
+      "target_endpoint": "api.handlers"
+    }
+  ],
+  "facade_edges": [
+    {
+      "source": "services",
+      "target": "services.engine",
+      "source_endpoint": "services",
+      "target_endpoint": "services.engine"
+    }
+  ],
+  "node_metrics": {
+    "api.handlers": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "nest.a": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "nest.b": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "ring.a": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "ring.b": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "ring.c": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "services.engine": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "services.other": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 0,
+      "instability": 0.0
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "api.handlers",
+      "target": "services",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "nest.a",
+      "target": "nest.b",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "nest.b",
+      "target": "nest.a",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "ring.a",
+      "target": "ring.b",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "ring.b",
+      "target": "ring.c",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "services.engine",
+      "target": "api.handlers",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

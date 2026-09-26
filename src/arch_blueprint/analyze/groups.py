@@ -6,8 +6,9 @@ from arch_blueprint.domain.graph import BlueprintGraph, Group
 class GroupAnalyzer:
     """Works out which nodes a renderer may draw inside a namespace container.
 
-    Links are aggregated to namespaces, while nodes are individual modules, so a
-    link endpoint is frequently a name no node carries. A renderer that declares
+    At the namespace link level links are aggregated to namespaces, while nodes
+    are individual modules, so a link endpoint is frequently a name no node
+    carries; at the module level only a package facade is. A renderer that declares
     nothing for it emits an arrow to an undeclared element; PlantUML then invents
     an empty box and the real, metric-carrying nodes sit unconnected beside it.
     """
@@ -28,8 +29,8 @@ class GroupAnalyzer:
            always was.
         """
         node_ids = {node.id for node in graph.nodes}
-        endpoints = {link.source_namespace for link in graph.links}
-        endpoints |= {link.target_namespace for link in graph.links}
+        endpoints = {link.source for link in graph.links}
+        endpoints |= {link.target for link in graph.links}
         containers = sorted(endpoints - node_ids)
 
         members: dict[str, list[str]] = {namespace: [] for namespace in containers}

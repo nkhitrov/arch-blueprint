@@ -7,7 +7,7 @@ from arch_blueprint.domain.graph import BlueprintGraph, MetricValue
 
 
 class EdgeWeightMetric:
-    """Number of underlying node edges aggregated into a namespace link.
+    """Number of underlying node edges aggregated into a link.
 
     A link metric: it labels each connection with how many imports it represents.
     """
@@ -19,7 +19,4 @@ class EdgeWeightMetric:
         self,
         graph: BlueprintGraph,
     ) -> Mapping[tuple[str, str], MetricValue]:
-        return {
-            (link.source_namespace, link.target_namespace): len(link.edges)
-            for link in graph.links
-        }
+        return {(link.source, link.target): len(link.edges) for link in graph.links}

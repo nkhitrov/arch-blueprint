@@ -1,0 +1,53 @@
+direction: down
+"pkg_a.core": {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+"pkg_a.services": {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+"pkg_b.util": {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+"pkg_a.core" <-> "pkg_b.util": CYCLE edge_weight=1/1 {style.stroke: "#C0392B"; style.stroke-width: 4}
+"pkg_a.services" -> "pkg_b.util": edge_weight=1
+"Cycle Details": {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.stroke-width: 2
+  style.border-radius: 12
+
+  grid: {
+    label: ""
+    grid-rows: 1
+    grid-gap: 32
+    style.stroke: transparent
+    style.fill: transparent
+
+    "cycle pkg_a.core pkg_b.util": |md
+      **pkg_a.core ↔ pkg_b.util**
+
+      **pkg_a.core → pkg_b.util:**
+
+      - core → util
+
+      **pkg_b.util → pkg_a.core:**
+
+      - util → core
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+  }
+}

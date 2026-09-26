@@ -112,6 +112,7 @@ def test_link_metrics_reach_cyclic_connections() -> None:
 
 _CYCLIC_SNAPSHOT = str(snapshot_path("cyclic"))
 _EXAMPLE_SNAPSHOT = str(snapshot_path("example"))
+_CYCLIC_MODULE_SNAPSHOT = str(snapshot_path("cyclic_module_links"))
 
 
 def test_snapshot_rejects_drawing_options() -> None:
@@ -163,6 +164,24 @@ def test_render_rejects_a_metric_the_snapshot_lacks(tmp_path: Path) -> None:
             "two snapshots",
             id="diff_files_with_modules",
         ),
+        # A snapshot is already built at a level; drawing cannot change it.
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT, "--links", "module"],
+            "a snapshot already records its link level",
+            id="diff_files_with_links",
+        ),
+        # Even the default: it would read as a request to re-aggregate.
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT, "--links", "namespace"],
+            "a snapshot already records its link level",
+            id="diff_files_with_default_links",
+        ),
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_MODULE_SNAPSHOT],
+            "cannot diff a namespace-level snapshot against a module-level one: "
+            "they aggregate imports differently",
+            id="diff_across_link_levels",
+        ),
         pytest.param(
             ["diff", "--base", "HEAD", "src"],
             "-m pattern",
@@ -211,3 +230,10 @@ def test_diff_shows_new_cycle_details_on_request_only() -> None:
     assert "note on link" in shown
     assert "note on link" not in hidden
     assert "NEW CYCLE" in hidden
+
+
+def test_unknown_link_level_is_a_usage_error() -> None:
+    result = run_cli(EXAMPLE_PROJECT, "-m", "app1.*", "--links", "class", check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "invalid choice: 'class'" in result.stderr
+    assert "Traceback" not in result.stderr

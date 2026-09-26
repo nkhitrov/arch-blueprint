@@ -1,0 +1,34 @@
+direction: down
+diff_legend: Legend {
+  near: top-left
+  unchanged: "unchanged: drawn as on a plain diagram"
+  added: "+ added" {style.fill: "#00C853"; style.stroke-dash: 5}
+  removed: "- removed" {style.fill: "#FF1744"; style.stroke-dash: 5}
+  new_cycle: "NEW CYCLE" {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
+  resolved: "cycle resolved" {style.stroke: "#95A5A6"; style.stroke-dash: 5}
+}
+app.other: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app.pkg."(module)": {
+  shape: class
+  label: "- pkg"
+  style: {
+    fill: "#FF1744"
+    stroke-dash: 5
+  }
+}
+
+app.pkg.child: {
+  shape: class
+  label: "+ child"
+  style: {
+    fill: "#00C853"
+    stroke-dash: 5
+  }
+}
+app.other -> app.pkg

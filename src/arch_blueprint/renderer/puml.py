@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import textwrap
+from collections.abc import Callable
 from string import Template
 from typing import Final
 
-from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
@@ -12,7 +13,12 @@ from arch_blueprint.renderer.base import (
     CycleRender,
     LinkDecoration,
 )
-from arch_blueprint.renderer.cycles import cycle_detail_sections
+from arch_blueprint.renderer.cycles import (
+    cycle_detail_sections,
+    tangle_detail_sections,
+    tangle_note_id,
+    tangle_title,
+)
 
 PUML_HEADER: Final = textwrap.dedent(
     """\
@@ -25,13 +31,26 @@ PUML_HEADER: Final = textwrap.dedent(
     """,
 )
 
+# PlantUML reads the dots of ``class a.b.c`` as packages and nests the class in
+# them; with no separator the class is one box under its full name.
+_FLAT_HEADER: Final = PUML_HEADER.replace(
+    "hide empty members\n",
+    "hide empty members\nset separator none\n",
+)
+
+
+def puml_header(*, nested: bool) -> str:
+    """The diagram preamble; ``nested=False`` keeps dotted names flat."""
+    return PUML_HEADER if nested else _FLAT_HEADER
+
+
 _CYCLE_NOTE_TEMPLATE: Final = Template(
     textwrap.dedent(
         """\
         note on link
-          **$ns_a -> $ns_b:**
+          **$a -> $b:**
         $forward_details
-          **$ns_b -> $ns_a:**
+          **$b -> $a:**
         $backward_details
         end note
         """,
@@ -53,17 +72,38 @@ def format_cycle_note(cycle: Cycle) -> str:
     """The ``note on link`` listing both directions' imports of a cycle."""
     forward_details, backward_details = cycle_detail_sections(cycle)
     return _CYCLE_NOTE_TEMPLATE.substitute(
-        ns_a=cycle.namespace_from,
-        ns_b=cycle.namespace_to,
+        a=cycle.endpoint_from,
+        b=cycle.endpoint_to,
         forward_details=forward_details,
         backward_details=backward_details,
     )
+
+
+def format_tangle_note(
+    tangle: Tangle,
+    ref: Callable[[str], str] = lambda endpoint: endpoint,
+) -> str:
+    """A note listing every import on a longer cycle, tied to each member.
+
+    The dotted lines are what ties it to the cycle rather than to one arrow:
+    the pairs on it get no note of their own, so this is the one place its
+    imports are listed. ``ref`` spells a member as an arrow endpoint.
+    """
+    note_id = tangle_note_id(tangle)
+    lines = [f"note as {note_id}", f"  **{tangle_title(tangle)}**"]
+    for heading, imports in tangle_detail_sections(tangle):
+        lines.append(f"  **{heading}:**")
+        lines.extend(f"  {line}" for line in imports)
+    lines.append("end note")
+    lines.extend(f"{note_id} .. {ref(member)}" for member in tangle.members)
+    return "\n".join(lines)
 
 
 class PlantUmlRenderer(BlueprintRenderer):
     """PlantUML diagram renderer."""
 
     fmt = "puml"
+    cyclic_link_styles = (CYCLE_HIGHLIGHT_COLOR, "bold")
 
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
         spot = _SPOT_LETTER.get(node.kind, _DEFAULT_SPOT)
@@ -98,16 +138,25 @@ class PlantUmlRenderer(BlueprintRenderer):
             link = f"{link} : {' '.join(decoration.labels)}"
         return link
 
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+    def _format_cycle(
+        self,
+        cycle: Cycle,
+        decoration: LinkDecoration,
+        *,
+        details: bool,
+    ) -> CycleRender:
         color = CYCLE_HIGHLIGHT_COLOR
-        link = f"{cycle.namespace_from} <-[{color},bold]-> {cycle.namespace_to}"
+        link = f"{cycle.endpoint_from} <-[{color},bold]-> {cycle.endpoint_to}"
         if decoration.labels:
             link = f"{link} : {' '.join(decoration.labels)}"
 
-        if not self.options.show_cycle_details:
+        if not details:
             return CycleRender(inline=link)
 
         return CycleRender(inline=f"{link}\n{format_cycle_note(cycle)}")
+
+    def _format_tangle(self, tangle: Tangle) -> CycleRender:
+        return CycleRender(inline=format_tangle_note(tangle))
 
     def _combine_output(
         self,
@@ -117,4 +166,5 @@ class PlantUmlRenderer(BlueprintRenderer):
     ) -> str:
         nodes_section = "\n".join(nodes)
         links_section = "\n".join(links) + "\n" if links else ""
-        return f"{PUML_HEADER}{nodes_section}\n\n{links_section}@enduml\n"
+        header = puml_header(nested=self.options.nested)
+        return f"{header}{nodes_section}\n\n{links_section}@enduml\n"

@@ -10,7 +10,10 @@ keywords = ["graphs", "plantuml", "architecture", "diagrams"]
 classifiers = ["Topic :: Multimedia :: Graphics", "Topic :: Utilities"]
 
 requires-python = ">=3.9"
-dependencies = ["grimp>=3.13"]
+dependencies = [
+    "grimp>=3.13",
+    "networkx>=3.2",
+]
 
 [project.urls]
 Homepage = "https://github.com/nkhitrov/arch-blueprint"

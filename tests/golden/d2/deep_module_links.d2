@@ -1,0 +1,32 @@
+direction: down
+"deep.api.v1.handlers": {
+  shape: class
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+"deep.api.v1.schemas": {
+  shape: class
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+"deep.core.models": {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+}
+
+"deep.core.services": {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+}
+"deep.api.v1.handlers" -> "deep.api.v1.schemas"
+"deep.api.v1.handlers" -> "deep.core.services"
+"deep.api.v1.schemas" -> "deep.core.models"
+"deep.core.services" -> "deep.core.models"

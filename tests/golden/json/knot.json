@@ -1,0 +1,103 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 2,
+  "links": "module",
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "knot.a",
+      "kind": "module"
+    },
+    {
+      "id": "knot.b",
+      "kind": "module"
+    },
+    {
+      "id": "knot.c",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "knot.a",
+      "target": "knot.b",
+      "source_endpoint": "knot.a",
+      "target_endpoint": "knot.b"
+    },
+    {
+      "source": "knot.b",
+      "target": "knot.a",
+      "source_endpoint": "knot.b",
+      "target_endpoint": "knot.a"
+    },
+    {
+      "source": "knot.b",
+      "target": "knot.c",
+      "source_endpoint": "knot.b",
+      "target_endpoint": "knot.c"
+    },
+    {
+      "source": "knot.c",
+      "target": "knot.a",
+      "source_endpoint": "knot.c",
+      "target_endpoint": "knot.a"
+    }
+  ],
+  "facade_edges": [],
+  "node_metrics": {
+    "knot.a": {
+      "depth": 2,
+      "fan_in": 2,
+      "fan_out": 1,
+      "instability": 0.33
+    },
+    "knot.b": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 2,
+      "instability": 0.67
+    },
+    "knot.c": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "knot.a",
+      "target": "knot.b",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "knot.b",
+      "target": "knot.a",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "knot.b",
+      "target": "knot.c",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "knot.c",
+      "target": "knot.a",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

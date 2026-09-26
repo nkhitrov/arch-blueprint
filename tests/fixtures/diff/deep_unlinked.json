@@ -1,6 +1,7 @@
 {
   "format": "arch-blueprint-graph",
-  "version": 1,
+  "version": 2,
+  "links": "namespace",
   "metrics": [],
   "nodes": [
     {
@@ -24,16 +25,17 @@
     {
       "source": "deep.api.v1.handlers",
       "target": "deep.api.v1.schemas",
-      "source_namespace": "deep.api.v1.handlers",
-      "target_namespace": "deep.api.v1.schemas"
+      "source_endpoint": "deep.api.v1.handlers",
+      "target_endpoint": "deep.api.v1.schemas"
     },
     {
       "source": "deep.core.services",
       "target": "deep.core.models",
-      "source_namespace": "deep.core.services",
-      "target_namespace": "deep.core.models"
+      "source_endpoint": "deep.core.services",
+      "target_endpoint": "deep.core.models"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {},
   "link_metrics": []
 }

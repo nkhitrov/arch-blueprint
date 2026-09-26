@@ -19,9 +19,11 @@ CYCLIC_PROJECT = _FIXTURES / "cyclic"
 DEEP_PROJECT = _FIXTURES / "deep_ns"
 INIT_IMPORTS_PROJECT = _FIXTURES / "init_imports"
 ANCESTOR_DEP_PROJECT = _FIXTURES / "ancestor_dep"
+TANGLE_PROJECT = _FIXTURES / "tangle"
 
 INIT_IMPORTS_MODULES = ["-m", "writer", "-m", "storage.*"]
 ANCESTOR_DEP_MODULES = ["-m", "api.*", "-m", "services.*"]
+TANGLE_MODULES = ["-m", "api.*", "-m", "services.*", "-m", "ring.*", "-m", "nest.*"]
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
 CYCLIC_MODULES = ["-m", "pkg_a.*", "-m", "pkg_b.*"]
@@ -43,7 +45,10 @@ SHOW_METRICS_REORDERED = [
 
 @dataclass(frozen=True)
 class Selection:
-    """What to graph: a project and its ``-m`` patterns — one snapshot golden each.
+    """What to graph: a project, its ``-m`` patterns and ``--links`` level.
+
+    One snapshot golden each; ``build_args`` are the options that shape the
+    graph itself, so ``render`` never takes them.
 
     Its snapshot lives at ``golden/json/<name>.json``; every scenario drawn from
     the same selection renders from that one snapshot.
@@ -52,6 +57,11 @@ class Selection:
     name: str
     project: Path
     modules: list[str]
+    build_args: list[str] = field(default_factory=list)
+
+    @property
+    def args(self) -> list[str]:
+        return [*self.modules, *self.build_args]
 
 
 EXAMPLE = Selection("example", EXAMPLE_PROJECT, EXAMPLE_MODULES)
@@ -66,7 +76,69 @@ INIT_IMPORTS = Selection("init_imports", INIT_IMPORTS_PROJECT, INIT_IMPORTS_MODU
 # only if selection matches upward as well as down.
 ANCESTOR_DEP = Selection("ancestor_dep", ANCESTOR_DEP_PROJECT, ANCESTOR_DEP_MODULES)
 
-SELECTIONS = [EXAMPLE, CYCLIC, DEEP, INIT_IMPORTS, ANCESTOR_DEP]
+# The same projects linked node to node: every arrow ends on a declared node, a
+# cycle is between two modules, and a package facade stays a container.
+MODULE_LINKS = ["--links", "module"]
+EXAMPLE_MODULE_LINKS = Selection(
+    "example_module_links",
+    EXAMPLE_PROJECT,
+    EXAMPLE_MODULES,
+    MODULE_LINKS,
+)
+CYCLIC_MODULE_LINKS = Selection(
+    "cyclic_module_links",
+    CYCLIC_PROJECT,
+    CYCLIC_MODULES,
+    MODULE_LINKS,
+)
+DEEP_MODULE_LINKS = Selection(
+    "deep_module_links",
+    DEEP_PROJECT,
+    DEEP_MODULES,
+    MODULE_LINKS,
+)
+ANCESTOR_DEP_MODULE_LINKS = Selection(
+    "ancestor_dep_module_links",
+    ANCESTOR_DEP_PROJECT,
+    ANCESTOR_DEP_MODULES,
+    MODULE_LINKS,
+)
+
+# Longer cycles: a ring of three modules, a cycle closed only by a package
+# facade's own imports (found, not drawn), and a pair through a nested package.
+TANGLE = Selection("tangle", TANGLE_PROJECT, TANGLE_MODULES)
+TANGLE_MODULE_LINKS = Selection(
+    "tangle_module_links",
+    TANGLE_PROJECT,
+    TANGLE_MODULES,
+    MODULE_LINKS,
+)
+# A pair inside a longer cycle: knot.a <-> knot.b, then b -> c -> a. The pair
+# gets no note of its own; the cycle's note lists every import, once.
+KNOT = Selection("knot", TANGLE_PROJECT, ["-m", "knot.*"], MODULE_LINKS)
+# Package nodes at the module level: every import lands inside a node.
+DEEP_PACKAGES_MODULE_LINKS = Selection(
+    "deep_packages_module_links",
+    DEEP_PROJECT,
+    ["-m", "deep.*"],
+    MODULE_LINKS,
+)
+
+SELECTIONS = [
+    EXAMPLE,
+    CYCLIC,
+    DEEP,
+    INIT_IMPORTS,
+    ANCESTOR_DEP,
+    EXAMPLE_MODULE_LINKS,
+    CYCLIC_MODULE_LINKS,
+    DEEP_MODULE_LINKS,
+    ANCESTOR_DEP_MODULE_LINKS,
+    TANGLE,
+    TANGLE_MODULE_LINKS,
+    KNOT,
+    DEEP_PACKAGES_MODULE_LINKS,
+]
 
 
 @dataclass(frozen=True)
@@ -88,7 +160,7 @@ class Scenario:
 
     @property
     def args(self) -> list[str]:
-        return [*self.selection.modules, *self.render_args]
+        return [*self.selection.args, *self.render_args]
 
 
 SCENARIOS = [
@@ -103,6 +175,16 @@ SCENARIOS = [
     Scenario("cyclic_link_metrics", CYCLIC, SHOW_LINK_METRIC),
     Scenario("init_imports", INIT_IMPORTS),
     Scenario("ancestor_dep", ANCESTOR_DEP),
+    Scenario("example_module_links", EXAMPLE_MODULE_LINKS),
+    Scenario("cyclic_module_links", CYCLIC_MODULE_LINKS),
+    Scenario("cyclic_module_links_metrics", CYCLIC_MODULE_LINKS, SHOW_LINK_METRIC),
+    Scenario("deep_module_links", DEEP_MODULE_LINKS),
+    Scenario("ancestor_dep_module_links", ANCESTOR_DEP_MODULE_LINKS),
+    Scenario("tangle", TANGLE),
+    Scenario("tangle_module_links", TANGLE_MODULE_LINKS),
+    Scenario("tangle_nodetails", TANGLE_MODULE_LINKS, ["--no-cycle-details"]),
+    Scenario("knot", KNOT),
+    Scenario("deep_packages_module_links", DEEP_PACKAGES_MODULE_LINKS),
 ]
 
 
@@ -167,6 +249,50 @@ DIFF_CASES = [
         "nested",
         _DIFF_FIXTURES / "deep_unlinked.json",
         GOLDEN_DIR / "json" / "deep.json",
+    ),
+    # A ring of three closed by one new import: a new longer cycle, marked on
+    # every link of it, with the notes on request.
+    DiffCase(
+        "new_tangle",
+        _DIFF_FIXTURES / "tangle_open_ring.json",
+        GOLDEN_DIR / "json" / "tangle_module_links.json",
+        ("--cycle-details",),
+    ),
+    # The pair and the longer cycle around it appear at once: one note, the
+    # cycle's, lists the imports of both.
+    DiffCase(
+        "new_knot",
+        _DIFF_FIXTURES / "knot_chain.json",
+        GOLDEN_DIR / "json" / "knot.json",
+        ("--cycle-details",),
+    ),
+    DiffCase(
+        "resolved_tangle",
+        GOLDEN_DIR / "json" / "tangle_module_links.json",
+        _DIFF_FIXTURES / "tangle_open_ring.json",
+    ),
+    # Only a facade's own imports changed: no drawn link did, yet a cycle
+    # appeared, so the diff is not empty.
+    DiffCase(
+        "facade_closes_cycle",
+        _DIFF_FIXTURES / "tangle_no_facade_import.json",
+        GOLDEN_DIR / "json" / "tangle_module_links.json",
+        ("--changes-only",),
+    ),
+    # A module ``app/pkg.py`` replaced by a package ``app/pkg/``: the removed
+    # module is drawn shadowed inside the new container. At the module level
+    # the removed link must follow it there, not end on the container.
+    DiffCase(
+        "module_became_package_module_links",
+        _DIFF_FIXTURES / "pkg_module_links_module.json",
+        _DIFF_FIXTURES / "pkg_package_links_module.json",
+    ),
+    # At the namespace level both sides link to ``app.pkg``: one link, drawn
+    # as the new side has it — to the container.
+    DiffCase(
+        "module_became_package",
+        _DIFF_FIXTURES / "pkg_module.json",
+        _DIFF_FIXTURES / "pkg_package.json",
     ),
     DiffCase(
         "no_changes",
@@ -255,13 +381,13 @@ def assert_scenario_matches_golden(scenario: Scenario, fmt: str) -> None:
     assert actual.stdout == expected
 
 
-def make_edge(source: str, target: str, src_ns: str, tgt_ns: str) -> Edge:
+def make_edge(source: str, target: str, src: str, tgt: str) -> Edge:
     """Build an Edge without repeating four keyword arguments in every test."""
     return Edge(
         source=source,
         target=target,
-        source_namespace=src_ns,
-        target_namespace=tgt_ns,
+        source_endpoint=src,
+        target_endpoint=tgt,
     )
 
 

@@ -20,7 +20,7 @@ from tests.conftest import (
 @pytest.mark.parametrize("selection", SELECTIONS, ids=lambda s: s.name)
 def test_snapshot_matches_golden(selection: Selection) -> None:
     expected = snapshot_path(selection.name).read_text(encoding="utf-8")
-    actual = run_cli(selection.project, *selection.modules, "-f", "json")
+    actual = run_cli(selection.project, *selection.args, "-f", "json")
     assert actual.stdout == expected
 
 
@@ -45,13 +45,13 @@ def test_render_from_snapshot_equals_direct_render(
 def test_dump_of_a_load_is_the_same_bytes(selection: Selection) -> None:
     text = snapshot_path(selection.name).read_text(encoding="utf-8").rstrip("\n")
     snapshot = load(text)
-    assert dump(snapshot.graph, snapshot.metrics) == text
+    assert dump(snapshot.graph, snapshot.metrics, snapshot.links) == text
 
 
 def test_load_re_derives_cycles_and_groups() -> None:
     snapshot = load(snapshot_path("cyclic").read_text(encoding="utf-8"))
     [cycle] = snapshot.graph.cycles
-    assert {cycle.namespace_from, cycle.namespace_to} == {"pkg_a", "pkg_b"}
+    assert {cycle.endpoint_from, cycle.endpoint_to} == {"pkg_a", "pkg_b"}
     assert {group.namespace for group in snapshot.graph.groups} == {"pkg_a", "pkg_b"}
 
 
@@ -86,6 +86,16 @@ def _without(key: str) -> dict[str, object]:
             json.dumps(_without("edges")),
             "missing field 'edges'",
             id="edges",
+        ),
+        pytest.param(
+            json.dumps(_without("links")),
+            "missing field 'links'",
+            id="links",
+        ),
+        pytest.param(
+            json.dumps({**_valid(), "links": "class"}),
+            "unknown link level 'class'",
+            id="link_level",
         ),
         pytest.param(
             json.dumps({**_valid(), "nodes": [{"id": "a", "kind": "planet"}]}),

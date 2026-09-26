@@ -5,8 +5,14 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import ClassVar, Final, Optional, final
 
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Group, MetricValue
-from arch_blueprint.domain.node import Node
+from arch_blueprint.domain.graph import (
+    BlueprintGraph,
+    Cycle,
+    Group,
+    MetricValue,
+    Tangle,
+)
+from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.metrics import RenderContext, RenderPlan
 
 # A distinct danger red for cycles; intentionally not one of DEFAULT_OPTIONS'
@@ -25,6 +31,9 @@ class RendererOptions:
 
     depth_colors: Sequence[str]
     show_cycle_details: bool = False
+    #: Draw nodes inside the namespaces of their dotted names; off, each node is
+    #: a flat box under its full name (the link level decides, ``Level.nested``).
+    nested: bool = True
 
     def __post_init__(self) -> None:
         if not self.depth_colors:
@@ -82,6 +91,32 @@ def wrap_groups(
     return result
 
 
+def flat_nodes(
+    rendered: Sequence[tuple[str, str]],
+    endpoints: Iterable[str],
+    format_facade: Callable[[str], str],
+) -> list[str]:
+    """Rendered ``(node_id, text)`` pairs, plus every endpoint no node carries.
+
+    Flat, nothing contains anything, so a package an arrow ends on (its facade,
+    ``__init__.py``) is declared as a node of its own. It goes before the first
+    node under it, shallower first — where its container would have been — and
+    last when no drawn node lies under it. From the endpoints, not the groups: a
+    group needs members of its own, which a facade above another facade lacks.
+    """
+    facades = sorted(set(endpoints) - {node_id for node_id, _ in rendered})
+    result: list[str] = []
+    emitted: set[str] = set()
+    for node_id, text in rendered:
+        for facade in facades:  # sorted: a prefix before the names under it
+            if facade not in emitted and node_id.startswith(f"{facade}."):
+                emitted.add(facade)
+                result.append(format_facade(facade))
+        result.append(text)
+    result += [format_facade(facade) for facade in facades if facade not in emitted]
+    return result
+
+
 @dataclass(frozen=True)
 class CycleRender:
     """A rendered cycle: an ``inline`` fragment and optional ``deferred`` block.
@@ -113,6 +148,11 @@ class BlueprintRenderer(ABC):
     #: Output format id (``"puml"`` / ``"d2"``) passed to render plugins.
     #: Concrete renderers must set this; it is what a plan is built against.
     fmt: ClassVar[str] = ""
+
+    #: Style payloads marking a one-way link that lies on a longer cycle (a
+    #: :class:`Tangle`). Empty draws it as any other link, so a renderer written
+    #: outside this package keeps working without knowing about tangles.
+    cyclic_link_styles: ClassVar[tuple[str, ...]] = ()
 
     def __init__(
         self,
@@ -151,7 +191,22 @@ class BlueprintRenderer(ABC):
                 self._render_metric_blocks(node, metrics),
             )
             rendered.append((node.id, text))
-        return wrap_groups(graph.groups, rendered, self._format_group)
+        if self.options.nested:
+            return wrap_groups(graph.groups, rendered, self._format_group)
+        endpoints = {end for link in graph.links for end in (link.source, link.target)}
+        endpoints.update(
+            member for tangle in graph.tangles for member in tangle.members
+        )
+        return flat_nodes(rendered, endpoints, self._format_facade)
+
+    def _format_facade(self, namespace: str) -> str:
+        """A package an arrow ends on, drawn flat: a node like any other.
+
+        Importing ``pkg`` runs ``pkg/__init__.py``, a module like any other, so
+        drawing it as a box beside the modules under it is what the import means.
+        """
+        color = self.options.get_color_for_depth(len(namespace.split(".")))
+        return self._format_node(Node(namespace, NodeKind.MODULE), color, [])
 
     def _render_metric_blocks(
         self,
@@ -171,7 +226,13 @@ class BlueprintRenderer(ABC):
     def _render_links(self, graph: BlueprintGraph) -> tuple[list[str], list[str]]:
         all_links = graph.links
         cycle_map = {
-            frozenset({c.namespace_from, c.namespace_to}): c for c in graph.cycles
+            frozenset({c.endpoint_from, c.endpoint_to}): c for c in graph.cycles
+        }
+        # A pair inside a longer cycle is listed in that cycle's note, once.
+        in_tangle = {
+            frozenset({link.source, link.target})
+            for tangle in graph.tangles
+            for link in tangle.links
         }
 
         links: list[str] = []
@@ -180,9 +241,9 @@ class BlueprintRenderer(ABC):
 
         for link in sorted(
             all_links,
-            key=lambda x: (x.source_namespace, x.target_namespace),
+            key=lambda x: (x.source, x.target),
         ):
-            pair = (link.source_namespace, link.target_namespace)
+            pair = (link.source, link.target)
             if pair in processed:
                 continue
 
@@ -192,6 +253,8 @@ class BlueprintRenderer(ABC):
                 rendered = self._format_cycle(
                     cycle,
                     self._cycle_decoration(graph, cycle),
+                    details=self.options.show_cycle_details
+                    and cycle_key not in in_tangle,
                 )
                 links.append(rendered.inline)
                 if rendered.deferred is not None:
@@ -203,14 +266,45 @@ class BlueprintRenderer(ABC):
                 links.append(self._format_link(pair[0], pair[1], decoration))
                 processed.add(pair)
 
-        return links, deferred
+        notes, deferred_notes = self._render_tangle_notes(graph)
+        return [*links, *notes], [*deferred, *deferred_notes]
+
+    def _render_tangle_notes(
+        self,
+        graph: BlueprintGraph,
+    ) -> tuple[list[str], list[str]]:
+        """Each longer cycle's note, after every link: it belongs to no one arrow."""
+        inline: list[str] = []
+        deferred: list[str] = []
+        if not self.options.show_cycle_details:
+            return inline, deferred
+        for tangle in graph.tangles:
+            note = self._format_tangle(tangle)
+            if note is None:
+                continue
+            if note.inline:
+                inline.append(note.inline)
+            if note.deferred is not None:
+                deferred.append(note.deferred)
+        return inline, deferred
 
     def _link_decoration(
         self,
         graph: BlueprintGraph,
         pair: tuple[str, str],
     ) -> LinkDecoration:
-        return self._decorate(graph.link_metrics.get(pair, {}))
+        decoration = self._decorate(graph.link_metrics.get(pair, {}))
+        on_cycle = any(
+            (link.source, link.target) == pair
+            for tangle in graph.tangles
+            for link in tangle.links
+        )
+        if not on_cycle:
+            return decoration
+        return LinkDecoration(
+            labels=decoration.labels,
+            styles=(*self.cyclic_link_styles, *decoration.styles),
+        )
 
     def _cycle_decoration(
         self,
@@ -224,9 +318,9 @@ class BlueprintRenderer(ABC):
         arbitrary choice; they are combined as ``forward/backward``, matching the
         order the cycle's own detail block lists them in.
         """
-        forward = graph.link_metrics.get((cycle.namespace_from, cycle.namespace_to), {})
+        forward = graph.link_metrics.get((cycle.endpoint_from, cycle.endpoint_to), {})
         backward = graph.link_metrics.get(
-            (cycle.namespace_to, cycle.namespace_from),
+            (cycle.endpoint_to, cycle.endpoint_from),
             {},
         )
         combined: dict[str, MetricValue] = {}
@@ -265,6 +359,14 @@ class BlueprintRenderer(ABC):
         """
         return nodes
 
+    def _format_tangle(self, tangle: Tangle) -> Optional[CycleRender]:
+        """The note listing a longer cycle's imports; by default, none.
+
+        Concrete for the same reason as ``_format_group``: the cycle is still
+        marked on its links through ``cyclic_link_styles``.
+        """
+        return None
+
     @abstractmethod
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
         """Format a single node, optionally embedding metric blocks."""
@@ -277,12 +379,22 @@ class BlueprintRenderer(ABC):
         target: str,
         decoration: LinkDecoration,
     ) -> str:
-        """Format a unidirectional link between namespaces, with any decoration."""
+        """Format a unidirectional link between endpoints, with any decoration."""
         ...
 
     @abstractmethod
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
-        """Format a bidirectional cycle between namespaces, with any decoration."""
+    def _format_cycle(
+        self,
+        cycle: Cycle,
+        decoration: LinkDecoration,
+        *,
+        details: bool,
+    ) -> CycleRender:
+        """Format a bidirectional cycle between endpoints, with any decoration.
+
+        ``details`` says whether to list the cycle's imports: off without cycle
+        details, and off for a pair on a longer cycle, whose note lists them.
+        """
         ...
 
     @abstractmethod

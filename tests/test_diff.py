@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable
 
 import pytest
 
-from arch_blueprint.__main__ import _RENDERERS, _renderer
+from arch_blueprint.__main__ import _RENDERERS, _diff_renderer, _renderer
 from arch_blueprint.analyze import analyze
 from arch_blueprint.diff import (
     DIFF_RENDERERS,
@@ -16,6 +16,7 @@ from arch_blueprint.diff import (
 )
 from arch_blueprint.diff.render_base import ADDED_COLOR, REMOVED_COLOR, RESOLVED_COLOR
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
+from arch_blueprint.extract import DEFAULT_LINK_LEVEL
 from arch_blueprint.metrics import default_registry
 from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, DEFAULT_OPTIONS
 from arch_blueprint.snapshot import load
@@ -57,7 +58,7 @@ def test_identical_graphs_in_full_are_all_context_and_still_empty() -> None:
     assert set(diff.node_status.values()) == {ChangeStatus.CONTEXT}
     assert diff.link_status == {("a", "c"): ChangeStatus.CONTEXT}
     [cycle] = diff.context_cycles
-    assert {cycle.namespace_from, cycle.namespace_to} == {"a", "b"}
+    assert {cycle.endpoint_from, cycle.endpoint_to} == {"a", "b"}
 
 
 def test_full_diff_draws_the_changes_against_the_whole_graph() -> None:
@@ -276,6 +277,65 @@ def test_module_replaced_by_a_package_is_drawn_inside_it() -> None:
     assert 'label: "- x"' in d2
 
 
+def test_link_to_a_shadowed_module_follows_it_into_the_container() -> None:
+    """At the module link level every endpoint is a node id, the shadowed one too.
+
+    The removed link ended on ``a.x`` — the container the new side's package
+    is drawn as — instead of the removed module it stood for.
+    """
+    diff = _changes(
+        _graph(["a.x", "b.y"], [make_edge("b.y", "a.x", "b.y", "a.x")]),
+        _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x.y", "b.y", "a.x.y")]),
+    )
+    assert diff.link_status == {
+        ("b.y", "a.x.(module)"): ChangeStatus.REMOVED,
+        ("b.y", "a.x.y"): ChangeStatus.ADDED,
+    }
+    endpoints = {e for link in diff.graph.links for e in (link.source, link.target)}
+    assert endpoints <= {node.id for node in diff.graph.nodes}
+    puml = DIFF_RENDERERS["puml"]().render(diff)
+    assert 'b.y -[#FF1744,dashed,thickness=2]-> "a.x.(module)" : removed' in puml
+    d2 = DIFF_RENDERERS["d2"]().render(diff)
+    assert 'b.y -> a.x."(module)": removed' in d2
+
+
+def test_link_to_the_package_that_shadows_a_module_stays_on_the_container() -> None:
+    """Only the side holding the module node follows it; ``a.x`` there is the package.
+
+    At the namespace level the new side links to ``a.x``, the package: the same
+    pair as the old side's link to the module, so it is context, drawn as the
+    new side has it.
+    """
+    diff = diff_graphs(
+        _graph(["a.x", "b.y"], [make_edge("b.y", "a.x", "b", "a.x")]),
+        _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x.y", "b", "a.x")]),
+    )
+    assert diff.link_status == {("b", "a.x"): ChangeStatus.CONTEXT}
+    assert "a.x" in {group.namespace for group in diff.graph.groups}
+
+
+def test_resolved_cycle_with_a_shadowed_module_remains_on_the_container() -> None:
+    """The cycle is the old side's, with the module; what remains is the new side's."""
+    diff = _changes(
+        _graph(
+            ["a.x", "b.y"],
+            [
+                make_edge("b.y", "a.x", "b.y", "a.x"),
+                make_edge("a.x", "b.y", "a.x", "b.y"),
+            ],
+        ),
+        _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x", "b.y", "a.x")]),
+    )
+    (delta,) = diff.cycle_changes
+    assert delta.change is CycleChange.RESOLVED
+    assert {delta.cycle.endpoint_from, delta.cycle.endpoint_to} == {
+        "a.x.(module)",
+        "b.y",
+    }
+    assert delta.remaining == ("b.y", "a.x")
+    assert "a.x" in {group.namespace for group in diff.graph.groups}
+
+
 def test_change_colors_stand_apart_from_a_plain_diagram() -> None:
     """Unchanged nodes keep their depth color, so no change may share one."""
     plain = {*DEFAULT_OPTIONS.depth_colors, CYCLE_HIGHLIGHT_COLOR}
@@ -350,14 +410,21 @@ def test_no_change_in_full_draws_the_graph_and_says_so(fmt: str) -> None:
     assert "d.w" in text
 
 
-def _snapshot_graph(name: str) -> BlueprintGraph:
-    return load(snapshot_path(name).read_text(encoding="utf-8")).graph
+def _snapshot_graph(name: str) -> tuple[BlueprintGraph, str]:
+    snapshot = load(snapshot_path(name).read_text(encoding="utf-8"))
+    return snapshot.graph, snapshot.links
 
 
 _SAME_GRAPHS = [
     *((s.name, lambda name=s.name: _snapshot_graph(name)) for s in SELECTIONS),
     # A cycle whose pair sorts before a plain link: declared first on both.
-    ("cycle_first", lambda: _with_metrics(_graph(NODES, [A_TO_B, B_TO_A, A_TO_C]))),
+    (
+        "cycle_first",
+        lambda: (
+            _with_metrics(_graph(NODES, [A_TO_B, B_TO_A, A_TO_C])),
+            DEFAULT_LINK_LEVEL,
+        ),
+    ),
 ]
 
 
@@ -375,16 +442,22 @@ def _with_metrics(graph: BlueprintGraph) -> BlueprintGraph:
 def test_diff_of_a_graph_with_itself_is_its_plain_diagram(
     fmt: str,
     name: str,
-    build: Callable[[], BlueprintGraph],
+    build: Callable[[], tuple[BlueprintGraph, str]],
 ) -> None:
     """Same declarations in the same order, so an album's frames lay out alike.
 
     The layout engine places things by declaration order: a diff that declared
     them otherwise would draw the same graph as a different picture.
     """
-    graph = build()
-    plain = _renderer(fmt, (), cycle_details=False, registry=default_registry())
-    diff = DIFF_RENDERERS[fmt](show_cycle_details=False)
+    graph, links = build()
+    plain = _renderer(
+        fmt,
+        (),
+        cycle_details=False,
+        registry=default_registry(),
+        links=links,
+    )
+    diff = _diff_renderer(fmt, cycle_details=False, links=links)
     drawn = diff.render(diff_graphs(graph, graph))
     assert _without_legend(drawn) == _without_legend(plain.render(graph))
 

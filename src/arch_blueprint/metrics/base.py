@@ -39,9 +39,9 @@ class NodeMetric(Protocol):
 
 @runtime_checkable
 class LinkMetric(Protocol):
-    """A metric computed per link, keyed by ``(source_ns, target_ns)``.
+    """A metric computed per link, keyed by ``(source_endpoint, target_endpoint)``.
 
-    There is no ``applies_to``: a link connects namespaces, not node kinds.
+    There is no ``applies_to``: a link connects endpoints, not node kinds.
     """
 
     name: str
@@ -51,7 +51,7 @@ class LinkMetric(Protocol):
         self,
         graph: BlueprintGraph,
     ) -> Mapping[tuple[str, str], MetricValue]:
-        """Return ``{(source_namespace, target_namespace): value}``."""
+        """Return ``{(source_endpoint, target_endpoint): value}``."""
         ...
 
 
@@ -93,7 +93,7 @@ class MetricRegistry:
         """Compute the named metrics (all of them by default) onto ``graph``.
 
         NODE results land in ``graph.node_metrics`` (keyed by node id), LINK
-        results in ``graph.link_metrics`` (keyed by namespace pair).
+        results in ``graph.link_metrics`` (keyed by endpoint pair).
         """
         wanted = self.names() if names is None else frozenset(names)
         for name, node_metric in self._node.items():

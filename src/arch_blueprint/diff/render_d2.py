@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Final
+from typing import Final, Optional
 
 from arch_blueprint.diff.model import (
     SHADOWED_SUFFIX,
     ChangeStatus,
     CycleChange,
     CycleDelta,
-    display_name,
+    OnCycle,
     is_shadowed,
 )
 from arch_blueprint.diff.render_base import (
@@ -20,12 +20,16 @@ from arch_blueprint.diff.render_base import (
     UNCHANGED_LABEL,
     DiffRenderer,
 )
-from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, CycleRender
 from arch_blueprint.renderer.d2 import (
     CYCLE_CONNECTION_TEMPLATE,
+    DIRECTION,
+    flat_key,
     format_cycle_note,
     format_cycle_notes_container,
+    format_tangle_note,
+    format_tangle_ties,
 )
 
 # D2 has no spot letter, so a changed node's marker goes into the label; D2
@@ -54,6 +58,17 @@ _NEW_CYCLE_STYLE: Final = (
 )
 _RESOLVED_CYCLE_STYLE: Final = f'style.stroke: "{RESOLVED_COLOR}"; {_DASHED}'
 
+# An unchanged link on a longer cycle: as a plain diagram draws it when the cycle
+# is unchanged, marked like a new or resolved pair when the cycle is not.
+_ON_CYCLE_STYLE: Final = {
+    OnCycle.UNCHANGED: (
+        "",
+        f' {{style.stroke: "{CYCLE_HIGHLIGHT_COLOR}"; style.stroke-width: 4}}',
+    ),
+    OnCycle.NEW: (f": {NEW_CYCLE_LABEL}", f" {{{_NEW_CYCLE_STYLE}}}"),
+    OnCycle.RESOLVED: (f": {RESOLVED_CYCLE_LABEL}", f" {{{_RESOLVED_CYCLE_STYLE}}}"),
+}
+
 _LEGEND_ITEMS: Final = (
     f'  unchanged: "{UNCHANGED_LABEL}"',
     f'  added: "+ added" {{style.fill: "{ADDED_COLOR}"; {_DASHED}}}',
@@ -68,53 +83,69 @@ class D2LangDiffRenderer(DiffRenderer):
 
     fmt = "d2"
 
+    def _key_of(self, node_id: str) -> str:
+        """A node's D2 key: quoted whole when flat, as a plain diagram's."""
+        return _nested_key(node_id) if self.options.nested else flat_key(node_id)
+
     def _format_node(self, node_id: str, status: ChangeStatus) -> str:
         prefix, fill = _CHANGED_NODE.get(status, ("", self._depth_color(node_id)))
-        lines = [f"{_key_of(node_id)}: {{", "  shape: class"]
+        lines = [f"{self._key_of(node_id)}: {{", "  shape: class"]
         if prefix or is_shadowed(node_id):
-            lines.append(f'  label: "{prefix}{display_name(node_id)}"')
+            lines.append(f'  label: "{prefix}{self._name_of(node_id)}"')
         lines += ["  style: {", f'    fill: "{fill}"']
         if prefix:
             lines.append("    stroke-dash: 5")
         lines += ["  }", "}"]
         return "\n".join(lines)
 
-    def _format_link(self, source: str, target: str, status: ChangeStatus) -> str:
-        label, style = _LINK_STYLE[status]
-        return f"{source} -> {target}{label}{style}"
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        status: ChangeStatus,
+        on_cycle: Optional[OnCycle],
+    ) -> str:
+        if status is ChangeStatus.CONTEXT and on_cycle is not None:
+            label, style = _ON_CYCLE_STYLE[on_cycle]
+        else:
+            label, style = _LINK_STYLE[status]
+        return f"{self._key_of(source)} -> {self._key_of(target)}{label}{style}"
+
+    def _format_tangle(self, tangle: Tangle) -> CycleRender:
+        return CycleRender(
+            inline=format_tangle_ties(tangle, self._key_of),
+            deferred=format_tangle_note(tangle),
+        )
 
     def _format_context_cycle(self, cycle: Cycle) -> str:
         return CYCLE_CONNECTION_TEMPLATE.substitute(
-            ns_a=cycle.namespace_from,
-            ns_b=cycle.namespace_to,
+            a=self._key_of(cycle.endpoint_from),
+            b=self._key_of(cycle.endpoint_to),
             label="CYCLE",
             color=CYCLE_HIGHLIGHT_COLOR,
         )
 
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
+    def _format_cycle(self, delta: CycleDelta, *, details: bool) -> CycleRender:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
             return CycleRender(inline=self._format_resolved(delta))
-        connection = (
-            f"{cycle.namespace_from} <-> {cycle.namespace_to}: "
-            f"{NEW_CYCLE_LABEL} {{{_NEW_CYCLE_STYLE}}}"
-        )
-        # Only a new cycle gets its imports listed: they are what to fix.
-        if delta.change is CycleChange.NEW and self.show_cycle_details:
+        ends = f"{self._key_of(cycle.endpoint_from)} <-> "
+        ends += self._key_of(cycle.endpoint_to)
+        connection = f"{ends}: {NEW_CYCLE_LABEL} {{{_NEW_CYCLE_STYLE}}}"
+        if details:
             return CycleRender(inline=connection, deferred=format_cycle_note(cycle))
         return CycleRender(inline=connection)
 
-    @staticmethod
-    def _format_resolved(delta: CycleDelta) -> str:
+    def _format_resolved(self, delta: CycleDelta) -> str:
         """The dependency the cycle left behind; a bare line if none is left."""
         if delta.remaining is None:
-            source, target = delta.cycle.namespace_from, delta.cycle.namespace_to
+            source, target = delta.cycle.endpoint_from, delta.cycle.endpoint_to
             connector = "--"
         else:
             source, target = delta.remaining
             connector = "->"
         return (
-            f"{source} {connector} {target}: "
+            f"{self._key_of(source)} {connector} {self._key_of(target)}: "
             f"{RESOLVED_CYCLE_LABEL} {{{_RESOLVED_CYCLE_STYLE}}}"
         )
 
@@ -125,7 +156,7 @@ class D2LangDiffRenderer(DiffRenderer):
         return "\n".join([*head, *_LEGEND_ITEMS, "}"])
 
     def _format_empty(self) -> str:
-        return f'direction: right\nno_changes: "{NO_CHANGES_LABEL}" {{shape: text}}'
+        return f'{DIRECTION}\nno_changes: "{NO_CHANGES_LABEL}" {{shape: text}}'
 
     def _combine_output(
         self,
@@ -134,7 +165,7 @@ class D2LangDiffRenderer(DiffRenderer):
         links: list[str],
         deferred: list[str],
     ) -> str:
-        sections = ["direction: right", legend, "\n\n".join(nodes)]
+        sections = [DIRECTION, legend, "\n\n".join(nodes)]
         if links:
             sections.append("\n".join(links))
         if deferred:
@@ -142,7 +173,7 @@ class D2LangDiffRenderer(DiffRenderer):
         return "\n".join(sections)
 
 
-def _key_of(node_id: str) -> str:
+def _nested_key(node_id: str) -> str:
     """A node's D2 key: a shadowed id's last part is quoted, it is not a name."""
     if is_shadowed(node_id):
         return f'{node_id.removesuffix(SHADOWED_SUFFIX)}"{SHADOWED_SUFFIX}"'

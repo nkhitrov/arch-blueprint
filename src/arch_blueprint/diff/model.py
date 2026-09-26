@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Final, Optional
 
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle
+from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Tangle
 
 #: Appended to a node id that another shown node lies under — a module ``pkg.py``
 #: replaced by a package ``pkg/`` puts both in one diff, and neither format can
@@ -49,7 +49,7 @@ class ChangeStatus(Enum):
 
 
 class CycleChange(Enum):
-    """How a namespace cycle differs between the two graphs."""
+    """How a cycle differs between the two graphs."""
 
     NEW = "new"
     RESOLVED = "resolved"
@@ -64,8 +64,8 @@ class CycleDelta:
     edges name the imports that close (or used to close) it.
 
     ``remaining`` is the one direction a resolved cycle left behind, as a
-    ``(source_ns, target_ns)`` pair, or ``None`` when both went (and always for
-    a new cycle). It is what a resolved cycle is drawn as: after breaking a
+    ``(source_endpoint, target_endpoint)`` pair, or ``None`` when both went (and
+    always for a new cycle). It is what a resolved cycle is drawn as: after breaking a
     cycle, who depends on whom is the thing a reviewer needs to see.
     """
 
@@ -75,18 +75,45 @@ class CycleDelta:
 
 
 @dataclass(frozen=True)
+class TangleDelta:
+    """A longer cycle (a :class:`Tangle`) that appeared or disappeared.
+
+    Tangles compare by their set of endpoints: one that grows or shrinks is a
+    different cycle — the old one resolved, a new one in its place. ``tangle``
+    comes from the side where it exists, as for :class:`CycleDelta`.
+    """
+
+    change: CycleChange
+    tangle: Tangle
+
+
+class OnCycle(Enum):
+    """How the longer cycle a drawn link lies on changed, if it lies on one."""
+
+    UNCHANGED = "unchanged"
+    NEW = "new"
+    RESOLVED = "resolved"
+
+
+@dataclass(frozen=True)
 class GraphDiff:
     """What changed between two graphs, with the context it is drawn against.
 
     ``graph`` holds the shown nodes and the edges of the shown links, so its
     ``groups`` are the containers those links need. Statuses sit in side maps
-    keyed by node id / namespace pair, as metrics do on a plain graph. Unchanged
+    keyed by node id / endpoint pair, as metrics do on a plain graph. Unchanged
     nodes and links are :attr:`ChangeStatus.CONTEXT` — all of them, or with
     ``changes_only`` just the nodes a change touches and no links.
 
-    A namespace pair whose cycle changed is in ``cycle_changes`` and **not** in
+    An endpoint pair whose cycle changed is in ``cycle_changes`` and **not** in
     ``link_status``: it is drawn as one cycle connection, not as two arrows. A
     cycle present on both sides is in ``context_cycles``, likewise.
+
+    Longer cycles are drawn on their links rather than as one connection, so
+    their links stay in ``link_status``; ``tangle_changes`` and
+    ``context_tangles`` say which cycle each lies on. The links of a changed
+    tangle are shown even with ``changes_only``: without them the cycle that
+    appeared or went could not be traced.
     """
 
     graph: BlueprintGraph
@@ -94,11 +121,21 @@ class GraphDiff:
     link_status: Mapping[tuple[str, str], ChangeStatus]
     cycle_changes: tuple[CycleDelta, ...]
     context_cycles: tuple[Cycle, ...] = ()
+    tangle_changes: tuple[TangleDelta, ...] = ()
+    context_tangles: tuple[Tangle, ...] = ()
 
     @property
     def is_empty(self) -> bool:
-        """True when nothing was added or removed: context alone is no change."""
-        return not self.cycle_changes and all(
-            status is ChangeStatus.CONTEXT
-            for status in (*self.node_status.values(), *self.link_status.values())
+        """True when nothing was added or removed: context alone is no change.
+
+        A tangle can change with no drawn link changing — through a package
+        facade's imports, which are not drawn — so it is checked on its own.
+        """
+        return (
+            not self.cycle_changes
+            and not self.tangle_changes
+            and all(
+                status is ChangeStatus.CONTEXT
+                for status in (*self.node_status.values(), *self.link_status.values())
+            )
         )

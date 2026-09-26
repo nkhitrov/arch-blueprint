@@ -12,8 +12,9 @@ pip install arch-blueprint
 
 ```shell
 arch-blueprint --help
-usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2,json}]
-                      [--metric NAME] [--no-cycle-details]
+usage: arch-blueprint [-h] --modules [MODULES ...] [--links LEVEL]
+                      [--format {puml,d2,json}] [--metric NAME]
+                      [--no-cycle-details]
                       project_dir
 
 Generate architecture diagrams for Python applications. Subcommands: 'render'
@@ -29,6 +30,11 @@ options:
                         Selected modules for rendering (examples:
                         'myapp.somemodule', 'myapp.somemodule.*',
                         'myapp.*.*.models.*', 'myapp.somemodule.**')
+  --links LEVEL         What an arrow connects: 'namespace' aggregates imports
+                        to the namespaces where two modules' paths diverge
+                        (a.b.c -> a.d.e is drawn a.b -> a.d), 'module' draws
+                        them node to node. Possible values: ['namespace',
+                        'module'] (default: namespace)
   --format, -f {puml,d2,json}
                         Output format. Possible values: ['puml', 'd2', 'json']
   --metric NAME         Display a metric (repeatable). A node metric renders
@@ -82,6 +88,24 @@ A **node** is a module. A **link** is aggregated to the namespace where two modu
 declaring it is about the source saying what it means, not about fixing the image.) A namespace that
 is itself a module (`writer` importing `storage.backend`) stays a plain class: wrapping a class in a
 package of its own name is a syntax error.
+
+`--links module` draws imports node to node instead: the same run gives
+`app2.service ---> app1.models` and `app2.service ---> plugins.auth.backend`. An import that lands
+inside a selected package ends on that package; an import of a package facade ends on that package.
+No arrow needs a container then, and frames only make the layout route arrows around them, so the
+nodes are drawn flat, each under its full name (`app2.service`), and a package an arrow ends on is a
+box of its own beside them. Cycles, `edge_weight` and `diff` then work between modules. The level is part of how the graph is
+built, so it is given to the command that builds it (`-f json`, `diff --base`, `history`), and a
+snapshot records it — `render` and a diff of two snapshot files draw what they are given, and two
+snapshots built at different levels are not diffed (exit 2).
+
+A cycle is not only a pair importing each other: a ring `a → b → c → a` of any length is found too,
+its links drawn red, with one note listing every import on it, tied to each module of the cycle by a
+dotted line. A pair importing each other inside such a cycle gets no note of its own: its imports
+are in the cycle's note, so they are listed once however long the cycle. A cycle can also run through a package
+facade — `api.handlers` imports `services`, whose `__init__.py` imports `services.engine`, which
+imports `api.handlers`. That `__init__.py` import closes the cycle but is not drawn (every facade's
+re-exports would bury the diagram); the note lists it as "package facade import, not drawn".
 
 `-m` is repeatable, which is how you graph sibling packages under a root that has no `__init__.py`
 of its own. A link is drawn when both endpoints belong to the selected set — including a dependency
@@ -169,6 +193,10 @@ color of its own:
 | new cycle | — | red dashed `<->`, `NEW CYCLE` (with `--cycle-details`, plus a note listing its imports) |
 | cycle resolved | — | grey dashed arrow, `cycle resolved`, in the direction that remains (a bare line if neither does) |
 
+A longer cycle is marked on its links the same way: red dashed `NEW CYCLE` on the unchanged links of a
+new one (the import that closed it is `added`), grey dashed `cycle resolved` on what remains of one
+that went.
+
 On a large project `--changes-only` draws just the changes and the unchanged modules their imports
 connect, without the unchanged dependencies.
 
@@ -186,7 +214,8 @@ arch-blueprint diff --base origin/master src -m 'myapp.*' > diff.puml || test $?
 ```
 
 A module replaced by a package of the same name (`api.py` → `api/`) is drawn inside that package,
-since no diagram can have one name be both a module and a container. A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
+since no diagram can have one name be both a module and a container (with `--links module`, beside
+it, as `api (module)`). A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
 treats a change to the imports inside a link present on both sides as no change. Graphing
 `arch_blueprint` itself always resolves to the running copy, so `diff --base` cannot compare two
 versions of this tool.

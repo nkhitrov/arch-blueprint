@@ -5,6 +5,7 @@ from arch_blueprint.domain.graph import (
     Group,
     Link,
     MetricValue,
+    Tangle,
     build_links,
 )
 from arch_blueprint.domain.node import Node, NodeKind
@@ -18,5 +19,6 @@ __all__ = [
     "MetricValue",
     "Node",
     "NodeKind",
+    "Tangle",
     "build_links",
 ]

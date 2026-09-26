@@ -1,0 +1,38 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+legend top left
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
+endlegend
+
+class knot.a <<(M, #2ECC71)>>
+class knot.b <<(M, #2ECC71)>>
+class knot.c <<(M, #2ECC71)>>
+
+knot.a <-[#C0392B,dashed,thickness=3]-> knot.b : NEW CYCLE
+knot.b -[#C0392B,dashed,thickness=3]-> knot.c : NEW CYCLE
+knot.c -[#00C853,dashed,thickness=3]-> knot.a : added
+note as tangle_knot__a
+  **Cycle: knot.a, knot.b, knot.c**
+  **knot.a -> knot.b:**
+  - a → b
+  **knot.b -> knot.a:**
+  - b → a
+  **knot.b -> knot.c:**
+  - b → c
+  **knot.c -> knot.a:**
+  - c → a
+end note
+tangle_knot__a .. knot.a
+tangle_knot__a .. knot.b
+tangle_knot__a .. knot.c
+@enduml
+
