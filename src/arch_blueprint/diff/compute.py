@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import replace
 
 from arch_blueprint.analyze.groups import GroupAnalyzer
@@ -70,17 +70,13 @@ def diff_graphs(
         edges |= cycle.forward_edges | cycle.backward_edges
 
     tangle_changes, context_tangles = _tangle_changes(old, new, changes_only)
-    for delta in tangle_changes:
-        for link in delta.tangle.links:
-            pair = (link.source, link.target)
-            unchanged = pair in old_links and pair in new_links
-            if (
-                unchanged
-                and pair not in link_status
-                and frozenset(pair) not in cycle_keys
-            ):
-                link_status[pair] = ChangeStatus.CONTEXT
-                edges |= new_links[pair].edges
+    for pair in _unchanged_tangle_links(
+        tangle_changes,
+        old_links.keys() & new_links.keys(),
+        shown={*link_status, *(pair for key in cycle_keys for pair in _pairs(key))},
+    ):
+        link_status[pair] = ChangeStatus.CONTEXT
+        edges |= new_links[pair].edges
 
     kinds = {node.id: node.kind for node in (*old.nodes, *new.nodes)}
     shown = _node_status(old, new, edges, everything=not changes_only)
@@ -134,6 +130,31 @@ def diff_graphs(
         ),
         context_tangles=tuple(on_new.tangle(tangle) for tangle in context_tangles),
     )
+
+
+def _unchanged_tangle_links(
+    tangle_changes: Iterable[TangleDelta],
+    on_both: Collection[tuple[str, str]],
+    *,
+    shown: Collection[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    """The unchanged links of changed tangles not already ``shown``.
+
+    Shown even when only changes are: the cycle that appeared or went is traced
+    along them.
+    """
+    pairs = (
+        (link.source, link.target)
+        for change in tangle_changes
+        for link in change.tangle.links
+    )
+    return [pair for pair in pairs if pair in on_both and pair not in shown]
+
+
+def _pairs(key: frozenset[str]) -> tuple[tuple[str, str], tuple[str, str]]:
+    """Both directions of a cycle's endpoint pair."""
+    first, second = sorted(key)
+    return (first, second), (second, first)
 
 
 def _tangle_changes(

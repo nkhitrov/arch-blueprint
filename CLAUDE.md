@@ -204,6 +204,10 @@ renderer and no parser. `-f json` computes every registered metric so `render` c
   a module `pkg.py` removed and a package `pkg/` added are both shown. Such a node is drawn as
   `shadowed_id(pkg)` = `pkg.(module)` (not a possible module name), labelled via `display_name`, so
   it sits inside the `pkg` container — both formats reject a class that is also a container.
+  A link endpoint that is such a node **on the side the link comes from** follows it
+  (`compute.py:_Redraw`: added/unchanged links from the new side, removed ones from the old), so at
+  the module level a removed arrow ends on `pkg.(module)`, not on the new container; renderers quote
+  a shadowed endpoint (`_ref` / `_key_of`).
 
 Diff renderers (`render_base.py` Template Method, `render_puml.py`, `render_d2.py`, registry
 `diff/__init__.py:DIFF_RENDERERS`) reuse `wrap_groups` (`renderer/base.py`), `format_package` /
