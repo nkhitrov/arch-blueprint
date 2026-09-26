@@ -6,18 +6,16 @@ from arch_blueprint.domain.graph import Cycle, Link
 
 
 class CycleAnalyzer:
-    """Detects bidirectional dependencies between namespaces.
+    """Detects bidirectional dependencies between link endpoints.
 
-    Operates purely on Link/Edge namespace strings, so it is agnostic to whether
-    the underlying nodes are modules or classes.
+    Operates purely on Link endpoint strings, so it is agnostic to whether the
+    underlying nodes are modules or classes, and to the link level.
     """
 
     @staticmethod
     def detect_cycles(links: Iterable[Link]) -> list[Cycle]:
-        # build_links already guarantees one Link per namespace pair.
-        links_by_pair = {
-            (link.source_namespace, link.target_namespace): link for link in links
-        }
+        # build_links already guarantees one Link per endpoint pair.
+        links_by_pair = {(link.source, link.target): link for link in links}
 
         cycles: list[Cycle] = []
         processed: set[tuple[str, str]] = set()
@@ -31,8 +29,8 @@ class CycleAnalyzer:
                 backward_link = links_by_pair[reverse_key]
                 cycles.append(
                     Cycle(
-                        namespace_from=src,
-                        namespace_to=tgt,
+                        endpoint_from=src,
+                        endpoint_to=tgt,
                         forward_edges=forward_link.edges,
                         backward_edges=backward_link.edges,
                     ),

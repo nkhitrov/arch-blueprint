@@ -19,11 +19,12 @@ from typing import Final, cast
 from arch_blueprint.analyze import analyze
 from arch_blueprint.domain.graph import BlueprintGraph, Edge, MetricValue
 from arch_blueprint.domain.node import Node, NodeKind
+from arch_blueprint.extract.levels import LINK_LEVELS
 
 SNAPSHOT_FORMAT: Final = "arch-blueprint-graph"
-SNAPSHOT_VERSION: Final = 1
+SNAPSHOT_VERSION: Final = 2
 
-_EDGE_FIELDS: Final = ("source", "target", "source_namespace", "target_namespace")
+_EDGE_FIELDS: Final = ("source", "target", "source_endpoint", "target_endpoint")
 
 
 class SnapshotError(ValueError):
@@ -32,18 +33,22 @@ class SnapshotError(ValueError):
 
 @dataclass(frozen=True)
 class Snapshot:
-    """A loaded graph and the names of the metrics computed into it.
+    """A loaded graph, the names of the metrics computed into it, its link level.
 
     The names are stored rather than inferred from the values: a graph with no
     links has no link-metric values, yet ``edge_weight`` was still computed and
-    a render asking for it is not an error.
+    a render asking for it is not an error. The link level (``--links``) is
+    stored for the same reason: edge endpoints alone cannot tell a module-level
+    graph from a namespace-level one whose namespaces happen to be modules, and
+    a diff of two graphs built at different levels compares nothing real.
     """
 
     graph: BlueprintGraph
     metrics: frozenset[str]
+    links: str
 
 
-def dump(graph: BlueprintGraph, metrics: Iterable[str]) -> str:
+def dump(graph: BlueprintGraph, metrics: Iterable[str], links: str) -> str:
     """Serialize ``graph`` deterministically: the same code gives the same bytes.
 
     Node order is kept as the extractor produced it — renderers draw nodes in
@@ -53,6 +58,7 @@ def dump(graph: BlueprintGraph, metrics: Iterable[str]) -> str:
     document = {
         "format": SNAPSHOT_FORMAT,
         "version": SNAPSHOT_VERSION,
+        "links": links,
         "metrics": sorted(metrics),
         "nodes": [{"id": node.id, "kind": node.kind.value} for node in graph.nodes],
         "edges": [
@@ -109,7 +115,11 @@ def load(text: str) -> Snapshot:
             f"link_metrics.{pair[0]}->{pair[1]}",
         )
     metrics = frozenset(_as_str(name, "metrics[]") for name in _list(root, "metrics"))
-    return Snapshot(graph=analyze(graph), metrics=metrics)
+    links = _str(root, "links")
+    if links not in LINK_LEVELS:
+        msg = f"unknown link level {links!r}"
+        raise SnapshotError(msg)
+    return Snapshot(graph=analyze(graph), metrics=metrics, links=links)
 
 
 def _node(item: object) -> Node:

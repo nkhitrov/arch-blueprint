@@ -441,7 +441,7 @@ def _snapshot(*edges: tuple[str, str]) -> Snapshot:
         ["a.x", "b.y"],
         [make_edge(f"{s}.m", f"{t}.m", s, t) for s, t in edges],
     )
-    return Snapshot(analyze(graph), frozenset())
+    return Snapshot(analyze(graph), frozenset(), "namespace")
 
 
 def _commits(count: int) -> list[Commit]:
@@ -449,7 +449,7 @@ def _commits(count: int) -> list[Commit]:
 
 
 def test_collect_keeps_changes_only() -> None:
-    empty = Snapshot(make_graph([], []), frozenset())
+    empty = Snapshot(make_graph([], []), frozenset(), "namespace")
     one_way = _snapshot(("a", "b"))
     snapshots = [
         empty,

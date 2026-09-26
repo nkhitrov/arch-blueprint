@@ -143,11 +143,15 @@ def _add_format_arg(parser: argparse.ArgumentParser, formats: Iterable[str]) -> 
 
 
 def _add_links_arg(parser: argparse.ArgumentParser) -> None:
-    """For every command that builds a graph: what an arrow connects."""
+    """For every command that builds a graph: what an arrow connects.
+
+    No default here: ``None`` means "not given", so a command that draws what a
+    snapshot already holds can reject even an explicit default level.
+    """
     choices = list(LINK_LEVELS)
     parser.add_argument(
         "--links",
-        default=DEFAULT_LINK_LEVEL,
+        default=None,
         choices=choices,
         metavar="LEVEL",
         help=(
@@ -157,6 +161,10 @@ def _add_links_arg(parser: argparse.ArgumentParser) -> None:
             f"Possible values: {choices} (default: {DEFAULT_LINK_LEVEL})"
         ),
     )
+
+
+def _link_level(given: Optional[str]) -> str:
+    return DEFAULT_LINK_LEVEL if given is None else given
 
 
 def _extractor(links: str) -> Callable[[GrimpSource], GraphExtractor]:
@@ -307,6 +315,7 @@ def _generate(argv: Sequence[str]) -> None:
     _add_metric_arg(parser)
     _add_cycle_details_arg(parser)
     args = parser.parse_args(argv)
+    links = _link_level(args.links)
 
     registry = default_registry()
     if args.format == _SNAPSHOT_FORMAT:
@@ -320,12 +329,12 @@ def _generate(argv: Sequence[str]) -> None:
             args.project_dir,
             args.modules,
             None,
-            links=args.links,
+            links=links,
             failure_code=_EXIT_FAILURE,
         )
         if not graph.nodes:
             _no_match(args.modules)
-        _write(dump(graph, registry.names()))
+        _write(dump(graph, registry.names(), links))
         return
 
     renderer = _renderer(
@@ -338,7 +347,7 @@ def _generate(argv: Sequence[str]) -> None:
         args.project_dir,
         args.modules,
         renderer.plan.required_metrics,
-        links=args.links,
+        links=links,
         failure_code=_EXIT_FAILURE,
     )
     if not graph.nodes:
@@ -407,19 +416,21 @@ def _diff(argv: Sequence[str]) -> None:
     args = parser.parse_args(argv)
 
     if args.base is None:
-        if (
-            len(args.inputs) != 2
-            or args.modules
-            or args.head
-            or args.links != DEFAULT_LINK_LEVEL
-        ):
+        if len(args.inputs) != 2 or args.modules or args.head or args.links is not None:
             _abort(
                 "diff takes two snapshots (OLD.json NEW.json), "
                 "or --base REV PROJECT_DIR -m ... [--links LEVEL]",
                 _EXIT_DIFF_TROUBLE,
             )
-        old = _read_snapshot(args.inputs[0]).graph
-        new = _read_snapshot(args.inputs[1]).graph
+        old_snapshot = _read_snapshot(args.inputs[0])
+        new_snapshot = _read_snapshot(args.inputs[1])
+        if old_snapshot.links != new_snapshot.links:
+            _abort(
+                f"cannot diff a {old_snapshot.links}-level snapshot against a "
+                f"{new_snapshot.links}-level one: every link would differ",
+                _EXIT_DIFF_TROUBLE,
+            )
+        old, new = old_snapshot.graph, new_snapshot.graph
     else:
         if len(args.inputs) != 1 or not args.modules:
             _abort(
@@ -431,7 +442,7 @@ def _diff(argv: Sequence[str]) -> None:
             args.modules,
             args.base,
             args.head,
-            links=args.links,
+            links=_link_level(args.links),
         )
 
     diff = diff_graphs(old, new, changes_only=args.changes_only)
@@ -581,7 +592,7 @@ def _history(argv: Sequence[str]) -> None:
             lambda commit: _history_snapshot(
                 args.project_dir,
                 patterns,
-                args.links,
+                _link_level(args.links),
                 commit,
                 cache,
                 registry,
@@ -697,9 +708,9 @@ def _history_snapshot(
             statuses[commit.sha] = f"skipped ({error})"
             return None
     names = registry.names()
-    cache.put(key, dump(graph, names))
+    cache.put(key, dump(graph, names, links))
     statuses[commit.sha] = _NO_SOURCE if not graph.nodes else "built"
-    return Snapshot(graph, frozenset(names))
+    return Snapshot(graph, frozenset(names), links)
 
 
 #: A commit where no root has code to analyze yet — the start of a project.

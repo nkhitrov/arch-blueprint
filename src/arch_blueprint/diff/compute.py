@@ -22,7 +22,7 @@ def diff_graphs(
 ) -> GraphDiff:
     """Compare two analyzed graphs at the level a diagram shows them.
 
-    Links compare by namespace pair, directed, so ``A→B`` becoming ``A↔B`` is a
+    Links compare by endpoint pair, directed, so ``A→B`` becoming ``A↔B`` is a
     new cycle rather than nothing. A change to the individual imports inside a
     link present on both sides is not a link change.
 
@@ -41,7 +41,7 @@ def diff_graphs(
         else tuple(
             sorted(
                 (new_cycles[key] for key in new_cycles.keys() & old_cycles.keys()),
-                key=lambda c: (c.namespace_from, c.namespace_to),
+                key=lambda c: (c.endpoint_from, c.endpoint_to),
             ),
         )
     )
@@ -105,9 +105,7 @@ def _drawn_id(node_id: str, shown: Iterable[str]) -> str:
 
 
 def _links_by_pair(graph: BlueprintGraph) -> dict[tuple[str, str], Link]:
-    return {
-        (link.source_namespace, link.target_namespace): link for link in graph.links
-    }
+    return {(link.source, link.target): link for link in graph.links}
 
 
 def _cycles_by_key(graph: BlueprintGraph) -> dict[frozenset[str], Cycle]:
@@ -115,7 +113,7 @@ def _cycles_by_key(graph: BlueprintGraph) -> dict[frozenset[str], Cycle]:
 
 
 def _key(cycle: Cycle) -> frozenset[str]:
-    return frozenset({cycle.namespace_from, cycle.namespace_to})
+    return frozenset({cycle.endpoint_from, cycle.endpoint_to})
 
 
 def _cycle_changes(
@@ -136,8 +134,8 @@ def _cycle_changes(
             (
                 pair
                 for pair in (
-                    (cycle.namespace_from, cycle.namespace_to),
-                    (cycle.namespace_to, cycle.namespace_from),
+                    (cycle.endpoint_from, cycle.endpoint_to),
+                    (cycle.endpoint_to, cycle.endpoint_from),
                 )
                 if pair in surviving
             ),
@@ -147,7 +145,7 @@ def _cycle_changes(
     return tuple(
         sorted(
             deltas,
-            key=lambda d: (d.cycle.namespace_from, d.cycle.namespace_to),
+            key=lambda d: (d.cycle.endpoint_from, d.cycle.endpoint_to),
         ),
     )
 

@@ -199,7 +199,7 @@ def test_module_level_links_node_to_node() -> None:
     """The level changes the aggregation key only: the edge keeps the real import."""
     source = GrimpSource(str(EXAMPLE_PROJECT), ["app1.*", "app2.*", "plugins.**"])
     graph = ModuleExtractor(source, module_level).extract()
-    assert {(link.source_namespace, link.target_namespace) for link in graph.links} == {
+    assert {(link.source, link.target) for link in graph.links} == {
         ("app2.service", "app1.models"),
         ("app2.service", "plugins.auth.backend"),
     }

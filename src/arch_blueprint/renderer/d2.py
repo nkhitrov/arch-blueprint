@@ -89,11 +89,11 @@ _CYCLE_CONTAINER_TEMPLATE: Final = Template(
 def format_cycle_note(cycle: Cycle) -> str:
     """Format cycle details as a separate note block (D2 needs them deferred)."""
     forward_details, backward_details = cycle_detail_sections(cycle)
-    ns_a_safe = cycle.namespace_from.replace(".", "_")
-    ns_b_safe = cycle.namespace_to.replace(".", "_")
+    ns_a_safe = cycle.endpoint_from.replace(".", "_")
+    ns_b_safe = cycle.endpoint_to.replace(".", "_")
     return _CYCLE_NOTE_TEMPLATE.substitute(
-        ns_a=cycle.namespace_from,
-        ns_b=cycle.namespace_to,
+        ns_a=cycle.endpoint_from,
+        ns_b=cycle.endpoint_to,
         note_id=f"cycle_{ns_a_safe}_{ns_b_safe}",
         forward_details=forward_details,
         backward_details=backward_details,
@@ -148,8 +148,8 @@ class D2LangRenderer(BlueprintRenderer):
         if decoration.labels:
             label = f"{label} {' '.join(decoration.labels)}"
         connection = CYCLE_CONNECTION_TEMPLATE.substitute(
-            ns_a=cycle.namespace_from,
-            ns_b=cycle.namespace_to,
+            ns_a=cycle.endpoint_from,
+            ns_b=cycle.endpoint_to,
             label=quote_label(label),
             color=CYCLE_HIGHLIGHT_COLOR,
         )

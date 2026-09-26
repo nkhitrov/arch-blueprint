@@ -1,6 +1,7 @@
 {
   "format": "arch-blueprint-graph",
-  "version": 1,
+  "version": 2,
+  "links": "module",
   "metrics": [
     "depth",
     "edge_weight",
@@ -26,14 +27,14 @@
     {
       "source": "app2.service",
       "target": "app1.models",
-      "source_namespace": "app2.service",
-      "target_namespace": "app1.models"
+      "source_endpoint": "app2.service",
+      "target_endpoint": "app1.models"
     },
     {
       "source": "app2.service",
       "target": "plugins.auth.backend",
-      "source_namespace": "app2.service",
-      "target_namespace": "plugins.auth.backend"
+      "source_endpoint": "app2.service",
+      "target_endpoint": "plugins.auth.backend"
     }
   ],
   "node_metrics": {

@@ -73,16 +73,14 @@ class PlantUmlDiffRenderer(DiffRenderer):
 
     def _format_context_cycle(self, cycle: Cycle) -> str:
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},bold]->"
-        return f"{cycle.namespace_from} {arrow} {cycle.namespace_to}"
+        return f"{cycle.endpoint_from} {arrow} {cycle.endpoint_to}"
 
     def _format_cycle(self, delta: CycleDelta) -> CycleRender:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
             return CycleRender(inline=self._format_resolved(delta))
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},dashed,thickness=3]->"
-        link = (
-            f"{cycle.namespace_from} {arrow} {cycle.namespace_to} : {NEW_CYCLE_LABEL}"
-        )
+        link = f"{cycle.endpoint_from} {arrow} {cycle.endpoint_to} : {NEW_CYCLE_LABEL}"
         # Only a new cycle gets its imports listed: they are what to fix.
         if delta.change is CycleChange.NEW and self.show_cycle_details:
             link = f"{link}\n{format_cycle_note(cycle)}"
@@ -92,7 +90,7 @@ class PlantUmlDiffRenderer(DiffRenderer):
     def _format_resolved(delta: CycleDelta) -> str:
         """The dependency the cycle left behind; a bare line if none is left."""
         if delta.remaining is None:
-            source, target = delta.cycle.namespace_from, delta.cycle.namespace_to
+            source, target = delta.cycle.endpoint_from, delta.cycle.endpoint_to
             connector = f"-[{RESOLVED_COLOR},dashed]-"
         else:
             source, target = delta.remaining

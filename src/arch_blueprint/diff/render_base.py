@@ -66,7 +66,7 @@ class DiffRenderer(ABC):
         ]
         nodes = wrap_groups(diff.graph.groups, rendered, self._format_group)
         # Every connection at the place a plain diagram declares it — by its
-        # first namespace pair — so the layout matches the plain diagram's: the
+        # first endpoint pair — so the layout matches the plain diagram's: the
         # layout engine places things by declaration order.
         connections: list[tuple[tuple[str, str], CycleRender]] = [
             (pair, CycleRender(inline=self._format_link(*pair, status)))
@@ -101,7 +101,7 @@ class DiffRenderer(ABC):
 
     @abstractmethod
     def _format_link(self, source: str, target: str, status: ChangeStatus) -> str:
-        """Format an added, removed or unchanged link between namespaces."""
+        """Format an added, removed or unchanged link between endpoints."""
         ...
 
     @abstractmethod
@@ -139,6 +139,6 @@ class DiffRenderer(ABC):
 def _first_pair(cycle: Cycle) -> tuple[str, str]:
     """The cycle's pair a plain diagram reaches first, iterating pairs sorted."""
     return min(
-        (cycle.namespace_from, cycle.namespace_to),
-        (cycle.namespace_to, cycle.namespace_from),
+        (cycle.endpoint_from, cycle.endpoint_to),
+        (cycle.endpoint_to, cycle.endpoint_from),
     )

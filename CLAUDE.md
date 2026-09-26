@@ -36,7 +36,9 @@ This project uses `uv` for environment and dependency management.
   - `--links namespace|module` (default `namespace`) chooses what an arrow connects: the
     namespaces where two modules' paths diverge, or the nodes themselves. Accepted by every command
     that *builds* a graph (the main one, `diff --base`, `history`), not by `render` or a
-    snapshot-file `diff` — a snapshot already holds the level in its edge namespaces.
+    snapshot-file `diff` — a snapshot records the level it was built at. Even an explicit
+    `--links namespace` is rejected there (the parser default is `None`, resolved by
+    `_link_level`), and a diff of two snapshots of different levels is exit 2.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
@@ -131,7 +133,7 @@ happens, for a fresh extraction and a loaded snapshot alike.
    dictated) turns the source into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected
    module, and an edge when a selected module imports another across a boundary of its link level.
    A level (`extract/levels.py`, registry `LINK_LEVELS`, CLI `--links`) maps `(importer, imported,
-   node ids)` to the edge's `(source_namespace, target_namespace)` — the aggregation key, nothing
+   node ids)` to the edge's `(source_endpoint, target_endpoint)` — the aggregation key, nothing
    else; `Edge.source`/`target` stay the real import. `namespace_level` cuts both names where they
    diverge; `module_level` keeps the node, resolving an import to the selected node it lies under
    (a facade stays itself and becomes a container). `None` drops the edge (an import of itself or
@@ -144,7 +146,10 @@ happens, for a fresh extraction and a loaded snapshot alike.
    fields** — which group a node belongs to depends on links that do not exist when it is built),
    `Edge`, `Link`, `Cycle`, `Group`, and `BlueprintGraph`. `edges` is a `frozenset` because `links`,
    `cycles` and `groups` are all derived from it and would silently go stale behind a mutation.
-   Metrics live in side maps keyed by node id / namespace pair.
+   Metrics live in side maps keyed by node id / endpoint pair. `Edge.source`/`target` are the real
+   import; `Edge.source_endpoint`/`target_endpoint`, `Link.source`/`target` and
+   `Cycle.endpoint_from`/`endpoint_to` are link endpoints — namespaces or nodes, by link level.
+   Only `Group.namespace` is always a namespace: a container is a dotted prefix no node carries.
 4. **Metrics** (`metrics/`) — compute-only plugins. `NodeMetric` and `LinkMetric` are **separate**
    protocols (`metrics/base.py`); the registry holds them in separate collections, so the collection
    a metric sits in *is* its target and results route without a cast. Register with
@@ -157,18 +162,19 @@ happens, for a fresh extraction and a loaded snapshot alike.
 
 ### Snapshot and diff
 
-`snapshot.py` is the one intermediate format: `dump(graph, metrics)` / `load(text) -> Snapshot`
-(graph + names of the metrics computed into it — stored, not inferred, since a graph with no links
-has no `edge_weight` values yet computed it). It holds **primary data only** — nodes (extractor
+`snapshot.py` is the one intermediate format: `dump(graph, metrics, links)` / `load(text) ->
+Snapshot` (graph + names of the metrics computed into it — stored, not inferred, since a graph with
+no links has no `edge_weight` values yet computed it — + the link level it was built at, stored for
+the same reason: endpoints alone cannot tell the levels apart). It holds **primary data only** — nodes (extractor
 order, which renderers draw in), edges, node/link metrics — and `load` re-derives links, cycles and
-groups via `analyze()`. `format` + `version` are checked; anything unexpected is `SnapshotError`.
+groups via `analyze()`. `format` + `version` (2) and the link level are checked; anything unexpected is `SnapshotError`.
 Rendering and diffing read snapshots, never rendered diagrams, so a new output format needs a
 renderer and no parser. `-f json` computes every registered metric so `render` can show any of them;
 `render` rejects a `--metric` the snapshot does not hold.
 
 `diff/` compares two analyzed graphs. `diff_graphs(old, new) -> GraphDiff` (`compute.py`):
 
-- nodes and links by set difference; links by **directed** namespace pair, so `A→B` becoming `A↔B`
+- nodes and links by set difference; links by **directed** endpoint pair, so `A→B` becoming `A↔B`
   is a new cycle. A pair whose cycle appeared/disappeared is a `CycleDelta` (`NEW` carries the new
   side's `Cycle`, `RESOLVED` the old side's) and is **not** in `link_status` — drawn as one
   connection. A resolved one carries `remaining`, the direction that survived, and is drawn as that
@@ -195,7 +201,7 @@ shadowed node at its module's depth), plain arrows, cycles — and every change 
 change colors in `render_base.py` must stay out of `depth_colors` and `CYCLE_HIGHLIGHT_COLOR`
 (`test_diff.py` checks); every marker also carries text. An empty diff is still a valid diagram: the
 graph with "No architectural changes" in the legend, or just that note when nothing is shown.
-Connections are declared in the plain renderer's order (by first namespace pair, a cycle at its
+Connections are declared in the plain renderer's order (by first endpoint pair, a cycle at its
 smaller pair), since the layout engine places things by declaration order: a diff of a graph with
 itself equals its plain diagram less the legend (`test_diff.py` checks), so album frames lay out
 alike.
@@ -213,8 +219,8 @@ side goes to both, so a typo still fails.
 
 - `git.first_parent_commits` lists the commits on `--head`'s first-parent line that touched the
   project (plus `--base` itself, as the start). `git.tree_id` is the cache key: a snapshot is a
-  function of the project's tree and the patterns.
-- `history/cache.py` — `SnapshotCache`: entries keyed by `sha256(tree, patterns, snapshot version,
+  function of the project's tree, the patterns and the link level.
+- `history/cache.py` — `SnapshotCache`: entries keyed by `sha256(tree, patterns, link level, snapshot version,
   tool version)`. Every metric is computed into a cached snapshot, so any `--metric` can be drawn
   from it. `ImageCache`: images keyed by `sha256(format, tool settings, diagram source)` — the
   settings being d2's scale or PlantUML's size limit — drawn once for every run and album showing
@@ -255,7 +261,7 @@ of truth, so a custom one cannot go uncomputed and paint every node `depth_color
 
 Add one file under `src/arch_blueprint/metrics/` implementing `NodeMetric` (`name`, `applies_to`,
 `render`, `compute` keyed by node id) or `LinkMetric` (`name`, `render`, `compute` keyed by
-`(src_ns, tgt_ns)` — no `applies_to`, a link connects namespaces, not node kinds). Register it in
+`(source_endpoint, target_endpoint)` — no `applies_to`, a link connects endpoints, not node kinds). Register it in
 `metrics/__init__.py:default_registry` with the matching `register_*` call. The extractor and
 renderer cores do not change. Demo metrics: `fan_in`/`fan_out`/`instability` (node blocks, sharing
 `_degrees.degree_counts`) and `edge_weight` (link label). A cycle is one connection standing for two

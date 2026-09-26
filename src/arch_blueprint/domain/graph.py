@@ -11,24 +11,26 @@ MetricValue = Union[int, float, str]
 
 @dataclass(frozen=True)
 class Edge:
-    """A single directed dependency between two nodes, with namespace context.
+    """A single directed import, with the endpoints it is drawn between.
 
-    ``source``/``target`` are node ids; ``source_namespace``/``target_namespace``
-    are the grouping namespaces the link layer aggregates on.
+    ``source`` is the importing node and ``target`` the imported module, as they
+    are. ``source_endpoint``/``target_endpoint`` are what the link layer
+    aggregates on, chosen by the link level (``extract/levels.py``): the
+    namespaces where the two paths diverge, or the nodes themselves.
     """
 
     source: str
     target: str
-    source_namespace: str
-    target_namespace: str
+    source_endpoint: str
+    target_endpoint: str
 
 
 @dataclass(frozen=True)
 class Link:
-    """A namespace-level link aggregating all contributing node edges."""
+    """A link between two endpoints aggregating all contributing node edges."""
 
-    source_namespace: str
-    target_namespace: str
+    source: str
+    target: str
     edges: frozenset[Edge]
 
 
@@ -47,21 +49,21 @@ class Group:
 
 @dataclass(frozen=True)
 class Cycle:
-    """A bidirectional dependency between two namespaces with both directions."""
+    """A bidirectional dependency between two link endpoints, with both directions."""
 
-    namespace_from: str
-    namespace_to: str
+    endpoint_from: str
+    endpoint_to: str
     forward_edges: frozenset[Edge]
     backward_edges: frozenset[Edge]
 
 
 def build_links(edges: frozenset[Edge]) -> set[Link]:
-    """Aggregate edges into one Link per (source_namespace, target_namespace)."""
+    """Aggregate edges into one Link per ``(source_endpoint, target_endpoint)``."""
     edges_by_pair: dict[tuple[str, str], set[Edge]] = defaultdict(set)
     for edge in edges:
-        edges_by_pair[(edge.source_namespace, edge.target_namespace)].add(edge)
+        edges_by_pair[(edge.source_endpoint, edge.target_endpoint)].add(edge)
     return {
-        Link(source_namespace=src, target_namespace=tgt, edges=frozenset(group))
+        Link(source=src, target=tgt, edges=frozenset(group))
         for (src, tgt), group in edges_by_pair.items()
     }
 
@@ -70,7 +72,7 @@ def build_links(edges: frozenset[Edge]) -> set[Link]:
 class BlueprintGraph:
     """The renderable graph: nodes, their edges, derived links, and metrics.
 
-    Metrics are stored beside identity (keyed by node id / namespace pair) so new
+    Metrics are stored beside identity (keyed by node id / endpoint pair) so new
     metrics never change node/edge hashing or the extractor.
 
     ``links``, ``cycles`` and ``groups`` are derived: ``links`` is aggregated

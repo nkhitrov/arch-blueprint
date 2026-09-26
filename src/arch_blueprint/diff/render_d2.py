@@ -86,8 +86,8 @@ class D2LangDiffRenderer(DiffRenderer):
 
     def _format_context_cycle(self, cycle: Cycle) -> str:
         return CYCLE_CONNECTION_TEMPLATE.substitute(
-            ns_a=cycle.namespace_from,
-            ns_b=cycle.namespace_to,
+            ns_a=cycle.endpoint_from,
+            ns_b=cycle.endpoint_to,
             label="CYCLE",
             color=CYCLE_HIGHLIGHT_COLOR,
         )
@@ -97,7 +97,7 @@ class D2LangDiffRenderer(DiffRenderer):
         if delta.change is CycleChange.RESOLVED:
             return CycleRender(inline=self._format_resolved(delta))
         connection = (
-            f"{cycle.namespace_from} <-> {cycle.namespace_to}: "
+            f"{cycle.endpoint_from} <-> {cycle.endpoint_to}: "
             f"{NEW_CYCLE_LABEL} {{{_NEW_CYCLE_STYLE}}}"
         )
         # Only a new cycle gets its imports listed: they are what to fix.
@@ -109,7 +109,7 @@ class D2LangDiffRenderer(DiffRenderer):
     def _format_resolved(delta: CycleDelta) -> str:
         """The dependency the cycle left behind; a bare line if none is left."""
         if delta.remaining is None:
-            source, target = delta.cycle.namespace_from, delta.cycle.namespace_to
+            source, target = delta.cycle.endpoint_from, delta.cycle.endpoint_to
             connector = "--"
         else:
             source, target = delta.remaining

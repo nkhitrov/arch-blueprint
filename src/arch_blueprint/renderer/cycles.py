@@ -6,11 +6,11 @@ from arch_blueprint.domain.graph import Cycle, Edge
 
 
 def format_edges(edges: frozenset[Edge]) -> list[str]:
-    """Format edges as ``- src_short → tgt_short`` lines (namespace stripped)."""
+    """Format edges as ``- src_short → tgt_short`` lines (endpoint prefix stripped)."""
     lines: list[str] = []
     for edge in sorted(edges, key=lambda e: (e.source, e.target)):
-        src_short = edge.source.removeprefix(edge.source_namespace + ".")
-        tgt_short = edge.target.removeprefix(edge.target_namespace + ".")
+        src_short = edge.source.removeprefix(edge.source_endpoint + ".")
+        tgt_short = edge.target.removeprefix(edge.target_endpoint + ".")
         lines.append(f"- {src_short} → {tgt_short}")
     return lines
 

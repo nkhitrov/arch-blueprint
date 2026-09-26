@@ -35,8 +35,8 @@ class ModuleExtractor:
                         Edge(
                             source=name,
                             target=dep,
-                            source_namespace=pair[0],
-                            target_namespace=pair[1],
+                            source_endpoint=pair[0],
+                            target_endpoint=pair[1],
                         ),
                     )
 

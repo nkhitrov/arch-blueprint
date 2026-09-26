@@ -49,7 +49,7 @@ class ChangeStatus(Enum):
 
 
 class CycleChange(Enum):
-    """How a namespace cycle differs between the two graphs."""
+    """How a cycle differs between the two graphs."""
 
     NEW = "new"
     RESOLVED = "resolved"
@@ -64,8 +64,8 @@ class CycleDelta:
     edges name the imports that close (or used to close) it.
 
     ``remaining`` is the one direction a resolved cycle left behind, as a
-    ``(source_ns, target_ns)`` pair, or ``None`` when both went (and always for
-    a new cycle). It is what a resolved cycle is drawn as: after breaking a
+    ``(source_endpoint, target_endpoint)`` pair, or ``None`` when both went (and
+    always for a new cycle). It is what a resolved cycle is drawn as: after breaking a
     cycle, who depends on whom is the thing a reviewer needs to see.
     """
 
@@ -80,11 +80,11 @@ class GraphDiff:
 
     ``graph`` holds the shown nodes and the edges of the shown links, so its
     ``groups`` are the containers those links need. Statuses sit in side maps
-    keyed by node id / namespace pair, as metrics do on a plain graph. Unchanged
+    keyed by node id / endpoint pair, as metrics do on a plain graph. Unchanged
     nodes and links are :attr:`ChangeStatus.CONTEXT` — all of them, or with
     ``changes_only`` just the nodes a change touches and no links.
 
-    A namespace pair whose cycle changed is in ``cycle_changes`` and **not** in
+    An endpoint pair whose cycle changed is in ``cycle_changes`` and **not** in
     ``link_status``: it is drawn as one cycle connection, not as two arrows. A
     cycle present on both sides is in ``context_cycles``, likewise.
     """

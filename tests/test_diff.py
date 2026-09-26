@@ -57,7 +57,7 @@ def test_identical_graphs_in_full_are_all_context_and_still_empty() -> None:
     assert set(diff.node_status.values()) == {ChangeStatus.CONTEXT}
     assert diff.link_status == {("a", "c"): ChangeStatus.CONTEXT}
     [cycle] = diff.context_cycles
-    assert {cycle.namespace_from, cycle.namespace_to} == {"a", "b"}
+    assert {cycle.endpoint_from, cycle.endpoint_to} == {"a", "b"}
 
 
 def test_full_diff_draws_the_changes_against_the_whole_graph() -> None:

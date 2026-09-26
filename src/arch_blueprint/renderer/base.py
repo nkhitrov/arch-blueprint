@@ -171,7 +171,7 @@ class BlueprintRenderer(ABC):
     def _render_links(self, graph: BlueprintGraph) -> tuple[list[str], list[str]]:
         all_links = graph.links
         cycle_map = {
-            frozenset({c.namespace_from, c.namespace_to}): c for c in graph.cycles
+            frozenset({c.endpoint_from, c.endpoint_to}): c for c in graph.cycles
         }
 
         links: list[str] = []
@@ -180,9 +180,9 @@ class BlueprintRenderer(ABC):
 
         for link in sorted(
             all_links,
-            key=lambda x: (x.source_namespace, x.target_namespace),
+            key=lambda x: (x.source, x.target),
         ):
-            pair = (link.source_namespace, link.target_namespace)
+            pair = (link.source, link.target)
             if pair in processed:
                 continue
 
@@ -224,9 +224,9 @@ class BlueprintRenderer(ABC):
         arbitrary choice; they are combined as ``forward/backward``, matching the
         order the cycle's own detail block lists them in.
         """
-        forward = graph.link_metrics.get((cycle.namespace_from, cycle.namespace_to), {})
+        forward = graph.link_metrics.get((cycle.endpoint_from, cycle.endpoint_to), {})
         backward = graph.link_metrics.get(
-            (cycle.namespace_to, cycle.namespace_from),
+            (cycle.endpoint_to, cycle.endpoint_from),
             {},
         )
         combined: dict[str, MetricValue] = {}
@@ -277,12 +277,12 @@ class BlueprintRenderer(ABC):
         target: str,
         decoration: LinkDecoration,
     ) -> str:
-        """Format a unidirectional link between namespaces, with any decoration."""
+        """Format a unidirectional link between endpoints, with any decoration."""
         ...
 
     @abstractmethod
     def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
-        """Format a bidirectional cycle between namespaces, with any decoration."""
+        """Format a bidirectional cycle between endpoints, with any decoration."""
         ...
 
     @abstractmethod

@@ -15,7 +15,7 @@ def test_build_links_groups_by_namespace_pair() -> None:
         },
     )
     links = build_links(edges)
-    by_pair = {(link.source_namespace, link.target_namespace): link for link in links}
+    by_pair = {(link.source, link.target): link for link in links}
     assert set(by_pair) == {("a", "b"), ("a", "c")}
     assert len(by_pair[("a", "b")].edges) == 2
     assert len(by_pair[("a", "c")].edges) == 1
@@ -27,7 +27,7 @@ def test_detect_cycles_finds_bidirectional_pair() -> None:
     )
     cycles = CycleAnalyzer.detect_cycles(build_links(edges))
     assert len(cycles) == 1
-    assert {cycles[0].namespace_from, cycles[0].namespace_to} == {"a", "b"}
+    assert {cycles[0].endpoint_from, cycles[0].endpoint_to} == {"a", "b"}
 
 
 def test_detect_cycles_ignores_unidirectional() -> None:
@@ -54,7 +54,7 @@ def test_graph_derives_links_on_construction() -> None:
         ["a.core", "b.util"],
         [make_edge("a.core", "b.util", "a", "b")],
     )
-    assert {(link.source_namespace, link.target_namespace) for link in graph.links} == {
+    assert {(link.source, link.target) for link in graph.links} == {
         ("a", "b"),
     }
     # cycles are filled by the analyze step, not by construction

@@ -53,8 +53,8 @@ def format_cycle_note(cycle: Cycle) -> str:
     """The ``note on link`` listing both directions' imports of a cycle."""
     forward_details, backward_details = cycle_detail_sections(cycle)
     return _CYCLE_NOTE_TEMPLATE.substitute(
-        ns_a=cycle.namespace_from,
-        ns_b=cycle.namespace_to,
+        ns_a=cycle.endpoint_from,
+        ns_b=cycle.endpoint_to,
         forward_details=forward_details,
         backward_details=backward_details,
     )
@@ -100,7 +100,7 @@ class PlantUmlRenderer(BlueprintRenderer):
 
     def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
         color = CYCLE_HIGHLIGHT_COLOR
-        link = f"{cycle.namespace_from} <-[{color},bold]-> {cycle.namespace_to}"
+        link = f"{cycle.endpoint_from} <-[{color},bold]-> {cycle.endpoint_to}"
         if decoration.labels:
             link = f"{link} : {' '.join(decoration.labels)}"
 

@@ -94,7 +94,8 @@ package of its own name is a syntax error.
 inside a selected package ends on that package; an import of a package facade ends on its container.
 Cycles, `edge_weight` and `diff` then work between modules. The level is part of how the graph is
 built, so it is given to the command that builds it (`-f json`, `diff --base`, `history`), and a
-snapshot keeps it — `render` and a diff of two snapshot files draw what they are given.
+snapshot records it — `render` and a diff of two snapshot files draw what they are given, and two
+snapshots built at different levels are not diffed (exit 2).
 
 `-m` is repeatable, which is how you graph sibling packages under a root that has no `__init__.py`
 of its own. A link is drawn when both endpoints belong to the selected set — including a dependency

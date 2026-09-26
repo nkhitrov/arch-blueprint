@@ -112,6 +112,7 @@ def test_link_metrics_reach_cyclic_connections() -> None:
 
 _CYCLIC_SNAPSHOT = str(snapshot_path("cyclic"))
 _EXAMPLE_SNAPSHOT = str(snapshot_path("example"))
+_CYCLIC_MODULE_SNAPSHOT = str(snapshot_path("cyclic_module_links"))
 
 
 def test_snapshot_rejects_drawing_options() -> None:
@@ -168,6 +169,17 @@ def test_render_rejects_a_metric_the_snapshot_lacks(tmp_path: Path) -> None:
             ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT, "--links", "module"],
             "two snapshots",
             id="diff_files_with_links",
+        ),
+        # Even the default: it would read as a request to re-aggregate.
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT, "--links", "namespace"],
+            "two snapshots",
+            id="diff_files_with_default_links",
+        ),
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_MODULE_SNAPSHOT],
+            "cannot diff a namespace-level snapshot against a module-level one",
+            id="diff_across_link_levels",
         ),
         pytest.param(
             ["diff", "--base", "HEAD", "src"],

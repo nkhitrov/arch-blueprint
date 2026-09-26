@@ -1,6 +1,7 @@
 {
   "format": "arch-blueprint-graph",
-  "version": 1,
+  "version": 2,
+  "links": "module",
   "metrics": [
     "depth",
     "edge_weight",
@@ -26,20 +27,20 @@
     {
       "source": "pkg_a.core",
       "target": "pkg_b.util",
-      "source_namespace": "pkg_a.core",
-      "target_namespace": "pkg_b.util"
+      "source_endpoint": "pkg_a.core",
+      "target_endpoint": "pkg_b.util"
     },
     {
       "source": "pkg_a.services",
       "target": "pkg_b.util",
-      "source_namespace": "pkg_a.services",
-      "target_namespace": "pkg_b.util"
+      "source_endpoint": "pkg_a.services",
+      "target_endpoint": "pkg_b.util"
     },
     {
       "source": "pkg_b.util",
       "target": "pkg_a.core",
-      "source_namespace": "pkg_b.util",
-      "target_namespace": "pkg_a.core"
+      "source_endpoint": "pkg_b.util",
+      "target_endpoint": "pkg_a.core"
     }
   ],
   "node_metrics": {

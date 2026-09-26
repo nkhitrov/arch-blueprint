@@ -306,13 +306,13 @@ def assert_scenario_matches_golden(scenario: Scenario, fmt: str) -> None:
     assert actual.stdout == expected
 
 
-def make_edge(source: str, target: str, src_ns: str, tgt_ns: str) -> Edge:
+def make_edge(source: str, target: str, src: str, tgt: str) -> Edge:
     """Build an Edge without repeating four keyword arguments in every test."""
     return Edge(
         source=source,
         target=target,
-        source_namespace=src_ns,
-        target_namespace=tgt_ns,
+        source_endpoint=src,
+        target_endpoint=tgt,
     )
 
 
