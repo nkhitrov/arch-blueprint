@@ -76,7 +76,7 @@ _FORMAT_HELP: Final = MappingProxyType(
     {
         "puml": "PlantUML source",
         "d2": "D2 source",
-        _SNAPSHOT_FORMAT: "a graph snapshot for 'render' and 'diff'",
+        _SNAPSHOT_FORMAT: "a graph snapshot, to draw or diff later",
         f"puml-{IMAGE_EXTENSION}": "an image drawn by 'plantuml' (must be on PATH)",
         f"d2-{IMAGE_EXTENSION}": "an image drawn by 'd2' (must be on PATH)",
     },
@@ -101,7 +101,7 @@ def _formats(diagrams: Iterable[str]) -> MappingProxyType[str, tuple[str, bool]]
     )
 
 
-#: ``-f`` of ``render`` and ``history``; ``draw`` adds the snapshot.
+#: ``-f`` of ``history``; ``draw`` adds the snapshot.
 _DIAGRAM_FORMATS: Final = _formats(_RENDERERS)
 _DRAW_FORMATS: Final = MappingProxyType(
     {**_DIAGRAM_FORMATS, _SNAPSHOT_FORMAT: (_SNAPSHOT_FORMAT, False)},
@@ -243,20 +243,10 @@ def _add_metric_arg(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_cycle_details_arg(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--no-cycle-details",
-        action="store_false",
-        dest="cycle_details",
-        default=True,
-        help="Leave out the note listing the imports on each cycle",
-    )
+    """Opt-in everywhere: a note lists every import on both sides of a cycle.
 
-
-def _add_quick_look_cycle_details_arg(parser: argparse.ArgumentParser) -> None:
-    """For ``diff`` and ``history``: a quick look, so the import notes are opt-in.
-
-    A note lists every import on both sides of a cycle — detail for digging
-    into one, noise when the question is what changed.
+    Detail for digging into one cycle; on a whole diagram it is most of the
+    picture, so the red double arrow alone is the default.
     """
     parser.add_argument(
         "--cycle-details",
@@ -536,9 +526,10 @@ def _add_draw(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
     parser = _subparser(
         commands,
         "draw",
-        summary="draw a project's import graph",
+        summary="draw a project's import graph, or a saved snapshot",
         description=(
-            "Draw the import graph of the packages in PROJECT_DIR.\n\n"
+            "Draw the import graph of the packages in PROJECT_DIR, or of a snapshot\n"
+            "saved earlier with '-o graph.json'.\n\n"
             "Each box is a module. An arrow means some module on one side imports\n"
             "one on the other; arrows are drawn between the packages where the two\n"
             "modules' paths part. A red double arrow is a dependency cycle."
@@ -549,19 +540,21 @@ def _add_draw(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
             "in myapp\n"
             "  arch-blueprint draw src -o arch.png          an image (needs plantuml)\n"
             "  arch-blueprint draw src -o arch.d2           D2 source\n"
-            "  arch-blueprint draw src -o graph.json        a snapshot for render "
-            "and diff\n"
+            "  arch-blueprint draw src -o graph.json        a snapshot, to draw "
+            "or diff later\n"
+            "  arch-blueprint draw graph.json -o arch.png   draw the snapshot\n"
             "  arch-blueprint draw . -m 'app1.*' -m 'app2.*' --metric fan_in"
         ),
         handler=_draw,
     )
     parser.add_argument(
-        "project_dir",
+        "source",
         nargs="?",
-        metavar="PROJECT_DIR",
+        metavar="PROJECT_DIR|SNAPSHOT",
         help=(
             "The directory the packages sit in (e.g. 'src', or the repository "
-            "root) — not the package directory itself"
+            "root) — not the package directory itself. Or a snapshot saved "
+            "earlier with '-o graph.json', to draw it without the project."
         ),
     )
     _add_modules_arg(parser, "Default: every package in PROJECT_DIR, whole.")
@@ -577,8 +570,8 @@ def _add_draw(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
 
 
 def _draw(args: argparse.Namespace) -> None:
-    """``arch-blueprint draw <project_dir> [-m ...]``: graph a project."""
-    if args.project_dir is None:
+    """``arch-blueprint draw PROJECT_DIR|SNAPSHOT``: draw a project or a snapshot."""
+    if args.source is None:
         swallowed = [pattern for pattern in args.modules if Path(pattern).is_dir()]
         if swallowed:
             _abort(
@@ -587,22 +580,28 @@ def _draw(args: argparse.Namespace) -> None:
                 _EXIT_USAGE,
             )
         _abort("draw needs a PROJECT_DIR (see 'arch-blueprint draw -h')", _EXIT_USAGE)
-    _check_project_dir(args.project_dir, _EXIT_USAGE)
     output = _output(args.format, args.output, _DRAW_FORMATS, code=_EXIT_USAGE)
-    modules = args.modules or _default_patterns(args.project_dir, _EXIT_USAGE)
+    if output.fmt == _SNAPSHOT_FORMAT and (args.metrics or args.cycle_details):
+        _abort(
+            "--metric and --cycle-details apply to drawing; a snapshot holds every "
+            "metric — pass them when you draw the snapshot",
+            _EXIT_USAGE,
+        )
+    if Path(args.source).is_file() or args.source.endswith(f".{_SNAPSHOT_FORMAT}"):
+        _draw_snapshot(args, output)
+    else:
+        _draw_project(args, output)
 
+
+def _draw_project(args: argparse.Namespace, output: _Output) -> None:
+    _check_project_dir(args.source, _EXIT_USAGE)
+    modules = args.modules or _default_patterns(args.source, _EXIT_USAGE)
     registry = default_registry()
     if output.fmt == _SNAPSHOT_FORMAT:
-        if args.metrics or not args.cycle_details:
-            _abort(
-                "--metric and --no-cycle-details apply to drawing; a snapshot "
-                "holds every metric — pass them to 'render' instead",
-                _EXIT_USAGE,
-            )
-        graph = _build(args.project_dir, modules, None, failure_code=_EXIT_FAILURE)
+        graph = _build(args.source, modules, None, failure_code=_EXIT_FAILURE)
         if not graph.nodes:
             _no_match(modules)
-        _warn_single_boxes(args.project_dir, args.modules, graph)
+        _warn_single_boxes(args.source, args.modules, graph)
         output.write(dump(graph, registry.names()), failure_code=_EXIT_FAILURE)
         return
 
@@ -613,55 +612,28 @@ def _draw(args: argparse.Namespace) -> None:
         registry=registry,
     )
     graph = _build(
-        args.project_dir,
+        args.source,
         modules,
         renderer.plan.required_metrics,
         failure_code=_EXIT_FAILURE,
     )
     if not graph.nodes:
         _no_match(modules)
-    _warn_single_boxes(args.project_dir, args.modules, graph)
+    _warn_single_boxes(args.source, args.modules, graph)
     output.write(renderer.render(graph), failure_code=_EXIT_FAILURE)
 
 
-def _add_render(
-    commands: "argparse._SubParsersAction[argparse.ArgumentParser]",
-) -> None:
-    parser = _subparser(
-        commands,
-        "render",
-        summary="draw a saved snapshot",
-        description=(
-            "Draw a diagram from a snapshot saved with 'draw -f json'. The result\n"
-            "is byte for byte what 'draw' would have drawn from the project."
-        ),
-        examples=(
-            "  arch-blueprint draw src -o graph.json\n"
-            "  arch-blueprint render graph.json -f d2\n"
-            "  arch-blueprint render graph.json --metric instability -o graph.png"
-        ),
-        handler=_render,
-    )
-    parser.add_argument(
-        "snapshot",
-        metavar="SNAPSHOT",
-        help=f"A file written by '{_PROG} draw ... -f json'",
-    )
-    _add_format_arg(
-        parser,
-        _DIAGRAM_FORMATS,
-        default=None,
-        extra=" Default: puml, or what -o's extension says.",
-    )
-    _add_output_file_arg(parser, _DIAGRAM_FORMATS)
-    _add_metric_arg(parser)
-    _add_cycle_details_arg(parser)
-
-
-def _render(args: argparse.Namespace) -> None:
-    """``arch-blueprint render SNAPSHOT``: draw a snapshot."""
-    output = _output(args.format, args.output, _DIAGRAM_FORMATS, code=_EXIT_USAGE)
-    snapshot = _read_snapshot(args.snapshot)
+def _draw_snapshot(args: argparse.Namespace, output: _Output) -> None:
+    """A snapshot is drawn byte for byte as its project would have been."""
+    if args.modules:
+        _abort(
+            f"-m chooses modules in a project; {args.source} is a snapshot, "
+            "already chosen",
+            _EXIT_USAGE,
+        )
+    if output.fmt == _SNAPSHOT_FORMAT:
+        _abort(f"{args.source} is a snapshot already", _EXIT_USAGE)
+    snapshot = _read_snapshot(args.source)
     renderer = _renderer(
         output.fmt,
         args.metrics,
@@ -671,7 +643,7 @@ def _render(args: argparse.Namespace) -> None:
     missing = sorted(renderer.plan.required_metrics - snapshot.metrics)
     if missing:
         _abort(
-            f"{args.snapshot} holds no metric {', '.join(map(repr, missing))} "
+            f"{args.source} holds no metric {', '.join(map(repr, missing))} "
             f"(it has: {', '.join(sorted(snapshot.metrics)) or 'none'})",
             _EXIT_USAGE,
         )
@@ -725,7 +697,7 @@ def _add_diff(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
         extra=" Default: puml, or what -o's extension says.",
     )
     _add_output_file_arg(parser, _DIFF_FORMATS)
-    _add_quick_look_cycle_details_arg(parser)
+    _add_cycle_details_arg(parser)
     _add_changes_only_arg(parser)
 
 
@@ -879,7 +851,7 @@ def _add_history(
         ),
     )
     _add_metric_arg(parser)
-    _add_quick_look_cycle_details_arg(parser)
+    _add_cycle_details_arg(parser)
     _add_changes_only_arg(parser)
 
 
@@ -1106,7 +1078,6 @@ def _progress_reporter(
 _COMMANDS: Final = MappingProxyType(
     {
         "draw": _add_draw,
-        "render": _add_render,
         "diff": _add_diff,
         "history": _add_history,
     },
@@ -1166,6 +1137,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if not args:
         parser.print_help(sys.stderr)
         raise SystemExit(_EXIT_USAGE)
+    if args[0] == "render":
+        _abort(
+            f"'render' is part of 'draw' now — run: "
+            f"{_PROG} draw {shlex.join(args[1:])}",
+            _EXIT_USAGE,
+        )
     if args[0] not in _COMMANDS and Path(args[0]).is_dir():
         # The command used to be implicit: ``arch-blueprint DIR -m ...``.
         _abort(

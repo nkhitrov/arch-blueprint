@@ -47,7 +47,7 @@ class DiffRenderer(ABC):
     def __init__(
         self,
         *,
-        show_cycle_details: bool = True,
+        show_cycle_details: bool = False,
         options: RendererOptions = DEFAULT_OPTIONS,
     ) -> None:
         if not self.fmt:

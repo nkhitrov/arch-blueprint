@@ -13,7 +13,7 @@ import each other.
 
 - [Quick start](#quick-start)
 - [Choosing what to draw](#choosing-what-to-draw)
-- [Commands](#commands): [`draw`](#draw), [`render`](#render), [`diff`](#diff), [`history`](#history)
+- [Commands](#commands): [`draw`](#draw), [`diff`](#diff), [`history`](#history)
 - [Metrics](#metrics)
 - [Troubleshooting](#troubleshooting)
 - [Examples](#examples)
@@ -78,9 +78,9 @@ still counts.
 | Command | What it does |
 | --- | --- |
 | `draw PROJECT_DIR` | draws the project's import graph |
-| `render SNAPSHOT` | draws a snapshot saved by `draw -o graph.json` |
+| `draw SNAPSHOT` | draws a snapshot saved earlier by `draw -o graph.json` |
 | `diff` | draws what changed between two snapshots or two git revisions |
-| `history PROJECT_DIR` | writes one diagram and one diff per commit that changed the graph |
+| `history PROJECT_DIR` | writes one picture per commit that changed the graph |
 
 Output goes to stdout unless `-o FILE` is given. Without `-f`, the extension of `-o` picks the
 format:
@@ -91,7 +91,7 @@ format:
 | `d2` | `.d2` | D2 source |
 | `puml-png` | `.png` | image drawn by `plantuml` from `PATH` |
 | `d2-png` | — | image drawn by `d2` from `PATH` |
-| `json` (`draw` only) | `.json` | a snapshot, for `render` and `diff` |
+| `json` (`draw` only) | `.json` | a snapshot, to draw or diff later |
 
 A missing `plantuml` / `d2` is reported before any work starts.
 
@@ -101,13 +101,15 @@ A missing `plantuml` / `d2` is reported before any work starts.
 arch-blueprint draw src                                   # every package in src/
 arch-blueprint draw src -m 'myapp.*' -o arch.png          # one package, as an image
 arch-blueprint draw src --metric fan_in --metric fan_out  # with metrics on the boxes
-arch-blueprint draw src --no-cycle-details                # without the notes on cycles
+arch-blueprint draw src --cycle-details                   # with the imports behind each cycle
 ```
 
-Every cycle gets a note listing the imports that make it up, so you can see which ones to break:
+A cycle is drawn as a red double arrow. `--cycle-details` adds a note listing the imports that
+make it up, so you can see which ones to break. It is off by default in every command, because on a
+whole diagram the notes take up most of the picture:
 
 ```shell
-arch-blueprint draw tests/fixtures/cyclic -m 'pkg_a.*' -m 'pkg_b.*'
+arch-blueprint draw tests/fixtures/cyclic -m 'pkg_a.*' -m 'pkg_b.*' --cycle-details
 ```
 
 ```puml
@@ -124,15 +126,16 @@ end note
 A namespace that is itself a module (`writer` importing `storage.backend`) stays a plain box.
 Packages without an `__init__.py` (PEP 420 namespace packages) work as well.
 
-### render
+#### Snapshots
 
 `draw -o graph.json` (or `-f json`) saves a **snapshot** instead of a picture: the modules, the
-imports between them and every metric. `render` draws a snapshot later, in any format and with any
-metrics, and the result is byte for byte what `draw` would have produced:
+imports between them and every metric. Give `draw` the snapshot instead of a directory and it draws
+it, in any format and with any metrics, byte for byte as it would have drawn the project. The
+project isn't needed any more, and `diff` compares two snapshots:
 
 ```shell
 arch-blueprint draw src -m 'myapp.*' -o graph.json
-arch-blueprint render graph.json -o graph.png --metric instability
+arch-blueprint draw graph.json -o graph.png --metric instability
 ```
 
 ### diff
@@ -165,8 +168,7 @@ label of its own:
 
 - `--changes-only` draws just the changes and the modules they touch. That helps on a large
   project.
-- `--cycle-details` adds the notes that list a cycle's imports. A diff is a quick look, so they
-  are off by default.
+- `--cycle-details` adds the notes that list the imports of each new cycle.
 - A package that exists on one side only is shown as added or removed; it doesn't fail the run.
 - When nothing changed, you still get a valid diagram, with "No architectural changes" in the
   legend.
@@ -233,7 +235,7 @@ The metrics appear in the order you ask for them. A cycle is one arrow standing 
 `edge_weight` shows both values there, as `forward/backward`.
 
 ```shell
-arch-blueprint draw tests/fixtures/cyclic -m 'pkg_a.*' -m 'pkg_b.*' \
+arch-blueprint draw tests/fixtures/cyclic -m 'pkg_a.*' -m 'pkg_b.*' --cycle-details \
   --metric fan_in --metric fan_out --metric instability --metric edge_weight
 ```
 
@@ -254,6 +256,7 @@ error, not an empty diagram. Common mistakes:
 | Message | What to do |
 | --- | --- |
 | `a command comes first now — run: arch-blueprint draw …` | Earlier versions had no command word (`arch-blueprint DIR -m …`). Put `draw` first. |
+| `'render' is part of 'draw' now` | `arch-blueprint draw graph.json …` draws a snapshot. |
 | `src is itself a package — pass the directory that contains it` | `PROJECT_DIR` is the directory the packages sit in, not a package. |
 | `. keeps its packages in src` | A src layout: run `arch-blueprint draw src`. |
 | `no package 'myap' in src (found: myapp, tests)` | A typo in `-m`; the message lists the packages that exist. |

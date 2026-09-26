@@ -77,7 +77,8 @@ class Scenario:
 
     The golden file for a scenario lives at ``golden/<fmt>/<name>.<fmt>`` and is
     produced by appending ``-f <fmt>`` to ``args``. ``render_args`` are the
-    options that apply to drawing only, so they apply unchanged to ``render``.
+    options that apply to drawing only, so they apply unchanged to drawing the
+    selection's snapshot.
     """
 
     name: str
@@ -96,13 +97,19 @@ class Scenario:
 SCENARIOS = [
     Scenario("example", EXAMPLE),
     Scenario("cyclic", CYCLIC),
-    Scenario("cyclic_nodetails", CYCLIC, ["--no-cycle-details"]),
-    Scenario("metrics", CYCLIC, SHOW_METRICS),
+    # The notes listing a cycle's imports are opt-in; the metric scenarios on the
+    # cyclic fixture keep them, pinning how the two share a connection.
+    Scenario("cyclic_details", CYCLIC, ["--cycle-details"]),
+    Scenario("metrics", CYCLIC, [*SHOW_METRICS, "--cycle-details"]),
     Scenario("link_metrics", EXAMPLE, SHOW_LINK_METRIC),
-    Scenario("metrics_reordered", CYCLIC, SHOW_METRICS_REORDERED),
+    Scenario(
+        "metrics_reordered",
+        CYCLIC,
+        [*SHOW_METRICS_REORDERED, "--cycle-details"],
+    ),
     Scenario("deep", DEEP),
     # A link metric on a connection that is a cycle: two directions, two values.
-    Scenario("cyclic_link_metrics", CYCLIC, SHOW_LINK_METRIC),
+    Scenario("cyclic_link_metrics", CYCLIC, [*SHOW_LINK_METRIC, "--cycle-details"]),
     Scenario("init_imports", INIT_IMPORTS),
     Scenario("ancestor_dep", ANCESTOR_DEP),
 ]

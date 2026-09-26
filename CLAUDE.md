@@ -20,8 +20,10 @@ This project uses `uv` for environment and dependency management.
 - Type-check (strict mypy): `uv run mypy ./src ./tests`
 - Run the CLI against a project: `uv run arch-blueprint draw <project_dir> [-m '<pattern>'] [-f FMT] [-o FILE]`
   - Example: `uv run arch-blueprint draw src -m 'arch_blueprint.*'`
-  - Every command is explicit (`draw`, `render`, `diff`, `history`). The old implicit form
-    `arch-blueprint <dir> -m ...` is gone; it gets an exit-2 hint naming the `draw` command.
+  - Every command is explicit (`draw`, `diff`, `history`). The old implicit form
+    `arch-blueprint <dir> -m ...` and the old `render SNAPSHOT` are gone; each gets an exit-2 hint
+    naming the `draw` command to run instead. `draw` takes a project directory or a snapshot file
+    (an existing file, or any `*.json`).
   - Without `-m`, `draw` and `diff --base` draw every package in `<project_dir>` whole
     (`extract/layout.py:detect_roots` → `pkg.**`, noted on stderr); `history` without ROOTs does
     the same at `--head`. A src-layout root (`src/` a namespace dir holding packages) is refused
@@ -38,17 +40,16 @@ This project uses `uv` for environment and dependency management.
     packages (e.g. `-m 'app1.*' -m 'app2.*'`). A cross-package link is drawn only when both
     endpoints belong to the selected set — which includes a dependency *on* a package whose
     children were selected, since `pkg.*` never selects `pkg` itself.
-  - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
-    `diff` and `history` are quick looks and invert the default: the notes are off unless
-    `--cycle-details` is given. Both draw the diff over the whole graph; `--changes-only` draws
-    just the changes and the modules they touch.
+  - `--format`/`-f` defaults to `puml`. The notes listing a cycle's imports are opt-in in every
+    command (`--cycle-details`). `diff` and `history` draw the diff over the whole graph;
+    `--changes-only` draws just the changes and the modules they touch.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
     not a silent no-op.
-- Snapshot / render / diff (see **Snapshot and diff** below):
+- Snapshot / draw a snapshot / diff (see **Snapshot and diff** below):
   - `uv run arch-blueprint draw <project_dir> -m '<pattern>' -o graph.json` — graph snapshot.
-  - `uv run arch-blueprint render graph.json [-f FMT] [-o FILE] [--metric NAME]` — draw a snapshot.
+  - `uv run arch-blueprint draw graph.json [-f FMT] [-o FILE] [--metric NAME]` — draw a snapshot.
   - `uv run arch-blueprint diff OLD.json NEW.json [-f FMT] [-o FILE]` — draw what changed.
   - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> [-m '<pattern>']` — both sides
     built from git (`--head` defaults to the working tree).
@@ -79,7 +80,7 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
 - `test_golden_structure.py` — invariants the goldens must satisfy, not just their bytes: every link
   endpoint is declared, and no package wraps a class of its own name. Covers diff goldens too.
 - `test_snapshot.py` — golden snapshots (`tests/golden/json/<selection>.json`, one per
-  `conftest.py:SELECTIONS`), and the key invariant: `render` of a snapshot equals every
+  `conftest.py:SELECTIONS`), and the key invariant: `draw` of a snapshot equals every
   `tests/golden/<fmt>/` diagram byte for byte. Plus validation errors.
 - `test_diff.py` — `diff_graphs` logic and the diff renderers in-process.
 - `test_golden_diff.py` — `diff` over `conftest.py:DIFF_CASES` against `tests/golden/diff/<fmt>/`,
@@ -91,7 +92,7 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   in-process.
 
 A scenario is a `Selection` (project + `-m` patterns — what the snapshot golden is keyed by) plus
-`render_args` (drawing-only options, passed unchanged to `render`).
+`render_args` (drawing-only options, passed unchanged when drawing the snapshot).
 
 A hand-built `BlueprintGraph` has **empty `cycles` and `groups`** until the analyze step fills them.
 A renderer test that needs either must populate them explicitly, or it will silently assert against
@@ -161,8 +162,8 @@ has no `edge_weight` values yet computed it). It holds **primary data only** —
 order, which renderers draw in), edges, node/link metrics — and `load` re-derives links, cycles and
 groups via `analyze()`. `format` + `version` are checked; anything unexpected is `SnapshotError`.
 Rendering and diffing read snapshots, never rendered diagrams, so a new output format needs a
-renderer and no parser. `-f json` computes every registered metric so `render` can show any of them;
-`render` rejects a `--metric` the snapshot does not hold.
+renderer and no parser. `-f json` computes every registered metric so a snapshot can be drawn with any of them;
+`draw SNAPSHOT` rejects a `--metric` the snapshot does not hold.
 
 `diff/` compares two analyzed graphs. `diff_graphs(old, new) -> GraphDiff` (`compute.py`):
 
@@ -231,7 +232,7 @@ side goes to both, so a typo still fails.
   failed. A failed source never gets an image. d2 refuses to rasterize past a fixed amount of work
   (a large project's full diagram): `D2Images` retries at half the scale up to `HALVINGS` times,
   starting from `--scale` if given (`scalable` renderers only; `--scale` elsewhere is exit 2).
-- CLI (`_history`): `_DIAGRAM_FORMATS` (from `_formats()`, shared with `draw` / `render`; `diff`
+- CLI (`_history`): `_DIAGRAM_FORMATS` (from `_formats()`, shared with `draw`; `diff`
   has `_DIFF_FORMATS`) maps `-f` to (diagram format, images?), built from the renderers and
   `IMAGE_RENDERERS` — a format with an image renderer gets `<fmt>-png`. Roots are positional and
   optional (default: `detect_roots` of the `--head` tree); `-m` defaults to `ROOT.**` and must lie
@@ -316,8 +317,7 @@ Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer
 
 ### CLI behaviour
 
-One `argparse` parser with required subcommands (`_COMMANDS`: `draw`, `render`, `diff`,
-`history`; each an `_add_*` builder that sets its handler). No arguments prints the help to stderr
+One `argparse` parser with required subcommands (`_COMMANDS`: `draw`, `diff`, `history`; each an `_add_*` builder that sets its handler). No arguments prints the help to stderr
 (exit 2); a first argument that is an existing directory is the retired implicit form and gets a
 hint naming `draw`. Top-level `--version` and `--list-metrics` (from each metric's `description`,
 displayable ones only). Every subcommand's help ends with examples — keep them runnable.
@@ -331,8 +331,7 @@ package name, not the wording.
 Failures are one line on stderr with no
 traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
 matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
-for an analysis that could not finish (`history`: images that could not be drawn; `draw` /
-`render`: an image the tool refused). `diff` exits
+for an analysis that could not finish (`history`: images that could not be drawn; `draw`: an image the tool refused). `diff` exits
 like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
 diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
 details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all

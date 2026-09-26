@@ -86,6 +86,7 @@ def test_output_is_utf8_whatever_the_console_encoding() -> None:
     result = run_cli(
         CYCLIC_PROJECT,
         *CYCLIC_MODULES,
+        "--cycle-details",
         extra_env={"PYTHONIOENCODING": "cp1252"},
     )
     assert result.returncode == 0
@@ -128,15 +129,37 @@ def test_snapshot_rejects_drawing_options() -> None:
         check=False,
     )
     assert result.returncode == _USAGE_ERROR
-    assert "'render'" in result.stderr
+    assert "when you draw the snapshot" in result.stderr
     assert result.stdout == ""
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        pytest.param(["-m", "pkg_a.*"], "is a snapshot, already chosen", id="modules"),
+        pytest.param(["-f", "json"], "is a snapshot already", id="to_snapshot"),
+    ],
+)
+def test_drawing_a_snapshot_rejects_project_options(
+    args: list[str],
+    expected: str,
+) -> None:
+    result = run_command("draw", _CYCLIC_SNAPSHOT, *args, check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert expected in result.stderr
+
+
+def test_the_retired_render_command_says_what_to_run() -> None:
+    result = run_command("render", "graph.json", "-f", "d2", check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "run: arch-blueprint draw graph.json -f d2" in result.stderr
 
 
 def test_render_rejects_a_metric_the_snapshot_lacks(tmp_path: Path) -> None:
     text = Path(_CYCLIC_SNAPSHOT).read_text(encoding="utf-8")
     lean = tmp_path / "lean.json"
     lean.write_text(text.replace('"fan_in",', ""), encoding="utf-8")
-    result = run_command("render", str(lean), "--metric", "fan_in", check=False)
+    result = run_command("draw", str(lean), "--metric", "fan_in", check=False)
     assert result.returncode == _USAGE_ERROR
     assert "holds no metric 'fan_in'" in result.stderr
 
@@ -145,11 +168,15 @@ def test_render_rejects_a_metric_the_snapshot_lacks(tmp_path: Path) -> None:
     ("args", "expected"),
     [
         pytest.param(
-            ["render", "nope.json"],
+            ["draw", "nope.json"],
             "cannot read snapshot",
             id="render_missing",
         ),
-        pytest.param(["render", __file__], "not a JSON document", id="render_not_json"),
+        pytest.param(
+            ["draw", __file__],
+            "not a JSON document",
+            id="render_not_json",
+        ),
         pytest.param(
             ["diff", _CYCLIC_SNAPSHOT, "nope.json"],
             "cannot read",
@@ -217,7 +244,7 @@ def test_diff_shows_new_cycle_details_on_request_only() -> None:
 def test_no_arguments_prints_the_commands() -> None:
     result = run_command(check=False)
     assert result.returncode == _USAGE_ERROR
-    for command in ("draw", "render", "diff", "history"):
+    for command in ("draw", "diff", "history"):
         assert command in result.stderr
     assert result.stdout == ""
 
@@ -287,7 +314,7 @@ def test_without_patterns_every_package_is_drawn_whole() -> None:
             id="image_needs_a_file",
         ),
         pytest.param(
-            ["render", "x.json", "-o", "x.png", "-f", "d2"],
+            ["draw", "x.json", "-o", "x.png", "-f", "d2"],
             "does not fit",
             id="render_format_contradicts_extension",
         ),
