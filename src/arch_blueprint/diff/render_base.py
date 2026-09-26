@@ -68,12 +68,12 @@ class DiffRenderer(ABC):
         # Every connection at the place a plain diagram declares it — by its
         # first namespace pair — so the layout matches the plain diagram's: the
         # layout engine places things by declaration order.
-        connections: list[tuple[tuple[str, str], CycleRender]] = [
-            (pair, CycleRender(inline=self._format_link(*pair, status)))
+        connections: list[tuple[tuple[str, str], RenderedLink]] = [
+            (pair, RenderedLink(inline=self._format_link(*pair, status)))
             for pair, status in diff.link_status.items()
         ]
         connections += [
-            (_first_pair(cycle), CycleRender(inline=self._format_context_cycle(cycle)))
+            (_first_pair(cycle), RenderedLink(inline=self._format_context_cycle(cycle)))
             for cycle in diff.context_cycles
         ]
         connections += [
