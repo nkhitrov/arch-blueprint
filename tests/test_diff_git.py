@@ -68,6 +68,16 @@ def test_cycle_introduced_in_the_working_tree(repo: Path) -> None:
     assert "- util → core" in _diff(repo, "--cycle-details").stdout
 
 
+def test_metrics_are_computed_for_both_sides(repo: Path) -> None:
+    """One more import inside ``pkg_a -> pkg_b``: a change only a metric shows."""
+    core = repo / "src" / "pkg_a" / "core.py"
+    core.write_text(f"import pkg_b\n{core.read_text()}")
+    assert _diff(repo).returncode == 0  # structure alone: nothing changed
+    result = _diff(repo, "--metric", "edge_weight")
+    assert result.returncode == _DIFFERENT, result.stderr
+    assert "pkg_a ---> pkg_b : edge_weight=2 → 3 (+1)" in result.stdout
+
+
 def test_module_links_on_both_sides(repo: Path) -> None:
     _restore_backward_import(repo)
     result = _diff(repo, "--links", "module")
@@ -141,3 +151,13 @@ def test_not_a_repository_is_trouble(tmp_path: Path) -> None:
     )
     assert result.returncode == _TROUBLE
     assert "git" in result.stderr
+
+
+def test_without_patterns_every_package_on_either_side_is_compared(
+    repo: Path,
+) -> None:
+    _restore_backward_import(repo)
+    result = run_command("diff", "--base", "HEAD", "src", check=False, cwd=repo)
+    assert result.returncode == _DIFFERENT, result.stderr
+    assert "comparing pkg_a, pkg_b" in result.stderr
+    assert result.stdout == _diff(repo).stdout

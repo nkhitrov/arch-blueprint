@@ -37,7 +37,7 @@ def test_render_from_snapshot_equals_direct_render(
     """
     expected = golden_path(fmt, scenario.name).read_text(encoding="utf-8")
     snapshot = snapshot_path(scenario.selection.name)
-    actual = run_command("render", str(snapshot), *scenario.render_args, "-f", fmt)
+    actual = run_command("draw", str(snapshot), *scenario.render_args, "-f", fmt)
     assert actual.stdout == expected
 
 

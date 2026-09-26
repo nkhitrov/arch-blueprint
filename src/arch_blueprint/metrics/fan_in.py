@@ -12,6 +12,7 @@ class FanInMetric:
     """Number of distinct nodes that depend on a given node (incoming edges)."""
 
     name = "fan_in"
+    description = "how many modules depend on this one"
     applies_to = ALL_KINDS
     render: Optional[str] = "text_row"
 

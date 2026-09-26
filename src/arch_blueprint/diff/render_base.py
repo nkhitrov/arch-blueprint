@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import ClassVar, Final, Optional
 
 from arch_blueprint.diff.model import (
@@ -9,17 +10,24 @@ from arch_blueprint.diff.model import (
     CycleChange,
     CycleDelta,
     GraphDiff,
+    MetricChange,
+    MetricChanges,
     OnCycle,
     depth_of,
     display_name,
     is_shadowed,
 )
-from arch_blueprint.domain.graph import Cycle, Tangle
+from arch_blueprint.domain.graph import Cycle, MetricValue, Tangle
+from arch_blueprint.domain.node import Node
+from arch_blueprint.metrics import RenderPlan
 from arch_blueprint.renderer.base import (
     DEFAULT_OPTIONS,
     CycleRender,
+    LinkDecoration,
     RendererOptions,
+    decorate_link,
     flat_nodes,
+    metric_rows,
     wrap_groups,
 )
 
@@ -35,6 +43,36 @@ NEW_CYCLE_LABEL: Final = "NEW CYCLE"
 RESOLVED_CYCLE_LABEL: Final = "cycle resolved"
 NO_CHANGES_LABEL: Final = "No architectural changes"
 UNCHANGED_LABEL: Final = "unchanged: drawn as on a plain diagram"
+#: Between a metric's old and new value; the same arrow the cycle notes use.
+CHANGE_ARROW: Final = "→"
+METRIC_CHANGE_LABEL: Final = f"metric: old {CHANGE_ARROW} new (difference)"
+
+
+def format_change(change: MetricChange) -> MetricValue:
+    """A metric's value as a diff shows it: ``old → new (±difference)``.
+
+    An unchanged value is passed through as is, so it is drawn exactly as a
+    plain diagram draws it; an added node or link has only its new value, a
+    removed one only its old. The difference is given for numbers only — a
+    cycle's ``forward/backward`` pair has none.
+    """
+    old, new = change.old, change.new
+    if new is None:
+        return "" if old is None else old
+    if old is None or old == new:
+        return new
+    text = f"{old} {CHANGE_ARROW} {new}"
+    difference = _difference(old, new)
+    return text if difference is None else f"{text} ({difference})"
+
+
+def _difference(old: MetricValue, new: MetricValue) -> Optional[str]:
+    if isinstance(old, str) or isinstance(new, str):
+        return None
+    if isinstance(old, int) and isinstance(new, int):
+        return f"{new - old:+d}"
+    # Rounded: 0.67 - 0.5 is 0.17000000000000004 in binary floating point.
+    return f"{round(new - old, 6):+g}"
 
 
 class DiffRenderer(ABC):
@@ -45,6 +83,10 @@ class DiffRenderer(ABC):
     as on a plain diagram — node fill by depth from ``options`` — so the changes
     read against the picture the reader knows. An empty diff is still a valid
     diagram, so a CI job always has a picture to post.
+
+    ``plan`` says which metrics to draw, through the same render plugins as a
+    plain diagram; each value is written as its change (:func:`format_change`).
+    Without a plan no metric is drawn.
     """
 
     #: Output format id; concrete renderers must set it.
@@ -53,21 +95,33 @@ class DiffRenderer(ABC):
     def __init__(
         self,
         *,
-        show_cycle_details: bool = True,
+        show_cycle_details: bool = False,
         options: RendererOptions = DEFAULT_OPTIONS,
+        plan: Optional[RenderPlan] = None,
     ) -> None:
         if not self.fmt:
             msg = f"{type(self).__name__} must set a non-empty 'fmt'"
             raise TypeError(msg)
+        if plan is not None and plan.fmt != self.fmt:
+            msg = f"plan was built for '{plan.fmt}', but this renderer is '{self.fmt}'"
+            raise ValueError(msg)
         self.show_cycle_details = show_cycle_details
         self.options = options
+        self.plan = plan
 
     def render(self, diff: GraphDiff) -> str:
         """Template method: orchestrates the diff rendering algorithm."""
         if diff.is_empty and not diff.graph.nodes:
             return self._format_empty()
         rendered = [
-            (node.id, self._format_node(node.id, diff.node_status[node.id]))
+            (
+                node.id,
+                self._format_node(
+                    node.id,
+                    diff.node_status[node.id],
+                    self._metric_rows(node, diff.node_metrics.get(node.id, {})),
+                ),
+            )
             for node in diff.graph.nodes
         ]
         if self.options.nested:
@@ -82,13 +136,26 @@ class DiffRenderer(ABC):
             (
                 pair,
                 CycleRender(
-                    inline=self._format_link(*pair, status, on_cycle.get(pair)),
+                    inline=self._format_link(
+                        *pair,
+                        status,
+                        on_cycle.get(pair),
+                        self._decoration(diff.link_metrics.get(pair, {})),
+                    ),
                 ),
             )
             for pair, status in diff.link_status.items()
         ]
         connections += [
-            (_first_pair(cycle), CycleRender(inline=self._format_context_cycle(cycle)))
+            (
+                _first_pair(cycle),
+                CycleRender(
+                    inline=self._format_context_cycle(
+                        cycle,
+                        self._cycle_decoration(diff, cycle),
+                    ),
+                ),
+            )
             for cycle in diff.context_cycles
         ]
         # A new pair on a new longer cycle is listed in that cycle's note, once.
@@ -107,6 +174,7 @@ class DiffRenderer(ABC):
                 delta.remaining or _first_pair(delta.cycle),
                 self._format_cycle(
                     delta,
+                    self._cycle_decoration(diff, delta.cycle),
                     details=self.show_cycle_details
                     and delta.change is CycleChange.NEW
                     and _ends(delta.cycle) not in noted,
@@ -124,8 +192,26 @@ class DiffRenderer(ABC):
             ]
         links = [cycle.inline for _, cycle in connections if cycle.inline]
         deferred = [c.deferred for _, c in connections if c.deferred is not None]
-        legend = self._format_legend(unchanged=diff.is_empty)
+        legend = self._format_legend(
+            unchanged=diff.is_empty,
+            metrics=self.plan is not None
+            and bool(self.plan.node_items or self.plan.link_items),
+        )
         return self._combine_output(legend, nodes, links, deferred)
+
+    def _metric_rows(self, node: Node, changes: MetricChanges) -> list[str]:
+        if self.plan is None:
+            return []
+        return metric_rows(self.plan, node.kind, _written(changes))
+
+    def _decoration(self, changes: MetricChanges) -> LinkDecoration:
+        if self.plan is None:
+            return LinkDecoration()
+        return decorate_link(self.plan, _written(changes))
+
+    def _cycle_decoration(self, diff: GraphDiff, cycle: Cycle) -> LinkDecoration:
+        key = _ends(cycle)
+        return self._decoration(diff.cycle_metrics.get(key, {}))
 
     def _depth_color(self, node_id: str) -> str:
         """The fill a plain diagram gives this node."""
@@ -149,11 +235,11 @@ class DiffRenderer(ABC):
 
     def _format_facade(self, namespace: str) -> str:
         """A package an arrow ends on, drawn flat: as an unchanged node."""
-        return self._format_node(namespace, ChangeStatus.CONTEXT)
+        return self._format_node(namespace, ChangeStatus.CONTEXT, [])
 
     @abstractmethod
-    def _format_node(self, node_id: str, status: ChangeStatus) -> str:
-        """Format a node marked as added, removed or context."""
+    def _format_node(self, node_id: str, status: ChangeStatus, rows: list[str]) -> str:
+        """Format a node marked as added, removed or context, with metric rows."""
         ...
 
     @abstractmethod
@@ -163,13 +249,15 @@ class DiffRenderer(ABC):
         target: str,
         status: ChangeStatus,
         on_cycle: Optional[OnCycle],
+        decoration: LinkDecoration,
     ) -> str:
         """Format an added, removed or unchanged link between endpoints.
 
         ``on_cycle`` says which longer cycle an unchanged link lies on: one on
         an unchanged cycle is drawn as a plain diagram draws it, one on a new or
         resolved cycle is marked like a new or resolved pair. An added or
-        removed link is marked as that whatever cycle it is on.
+        removed link is marked as that whatever cycle it is on. ``decoration``
+        carries any metric labels.
         """
         ...
 
@@ -179,12 +267,18 @@ class DiffRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_context_cycle(self, cycle: Cycle) -> str:
+    def _format_context_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> str:
         """Format a cycle present on both sides, as a plain diagram draws it."""
         ...
 
     @abstractmethod
-    def _format_cycle(self, delta: CycleDelta, *, details: bool) -> CycleRender:
+    def _format_cycle(
+        self,
+        delta: CycleDelta,
+        decoration: LinkDecoration,
+        *,
+        details: bool,
+    ) -> CycleRender:
         """Format a new or resolved cycle, listing its imports if ``details``.
 
         Only a new cycle gets them — they are what to fix — and not one on a new
@@ -193,8 +287,11 @@ class DiffRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_legend(self, *, unchanged: bool) -> str:
-        """Explain every marker; ``unchanged`` says first that nothing changed."""
+    def _format_legend(self, *, unchanged: bool, metrics: bool) -> str:
+        """Explain every marker; ``unchanged`` says first that nothing changed.
+
+        ``metrics``: metrics are drawn, so say how a changed value reads.
+        """
         ...
 
     @abstractmethod
@@ -212,6 +309,10 @@ class DiffRenderer(ABC):
     ) -> str:
         """Combine all parts into final output with header/footer."""
         ...
+
+
+def _written(changes: MetricChanges) -> Mapping[str, MetricValue]:
+    return {name: format_change(change) for name, change in changes.items()}
 
 
 def _on_cycle(diff: GraphDiff) -> dict[tuple[str, str], OnCycle]:

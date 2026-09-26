@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import re
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -12,10 +10,19 @@ import pytest
 
 from arch_blueprint.__main__ import _RENDERERS
 from arch_blueprint.analyze import analyze
-from arch_blueprint.git import Commit, has_source
+from arch_blueprint.extract.layout import has_source
+from arch_blueprint.git import Commit
 from arch_blueprint.history import IMAGE_RENDERERS, ImageCache, SnapshotCache, collect
 from arch_blueprint.snapshot import Snapshot
-from tests.conftest import CliResult, git, make_edge, make_graph, run_command
+from tests.conftest import (
+    CliResult,
+    git,
+    make_edge,
+    make_graph,
+    posix_only,
+    run_command,
+    stand_in_tool,
+)
 
 _USAGE = 2
 _FAILURE = 1
@@ -114,6 +121,25 @@ def test_album_has_a_frame_per_graph_change(repo: Path) -> None:
     assert "unchanged" in result.stderr
 
 
+def test_roots_default_to_every_package_at_head(repo: Path) -> None:
+    assert _history(repo).returncode == 0
+    result = run_command(
+        "history",
+        "src",
+        "-o",
+        "detected",
+        "--cache-dir",
+        "cache",
+        check=False,
+        cwd=repo,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "drawing pkg_a, pkg_b (as of HEAD" in result.stderr
+    named = {path.name: path.read_bytes() for path in (repo / "album").iterdir()}
+    detected = {path.name: path.read_bytes() for path in (repo / "detected").iterdir()}
+    assert detected == named
+
+
 def test_rerun_builds_nothing_and_rewrites_nothing(repo: Path) -> None:
     assert _history(repo).returncode == 0
     album = repo / "album"
@@ -168,6 +194,39 @@ def test_diff_frame_shows_the_whole_graph(
     text = diff.read_text(encoding="utf-8")
     assert "pkg_b.util <<(+" in text
     assert ("class pkg_a.idle " in text) is shown
+
+
+def test_every_frame_shows_the_metrics(repo: Path) -> None:
+    result = _history(repo, "--metric", "fan_out", "--metric", "edge_weight")
+    assert result.returncode == 0, result.stderr
+    frames = sorted((repo / "album").glob("*.puml"))
+    assert len(frames) == 3
+    assert all("fan_out: " in frame.read_text(encoding="utf-8") for frame in frames)
+    # The diff frames: a link's value on the connection, as old → new if moved.
+    *_, cycle = (frame.read_text(encoding="utf-8") for frame in frames)
+    assert "NEW CYCLE edge_weight=1 → 1/1" in cycle
+
+
+def test_a_metric_only_commit_is_a_frame_with_metric_only(repo: Path) -> None:
+    """One more import inside a link that exists: only ``edge_weight`` moves."""
+    util = repo / "src" / "pkg_b" / "util.py"
+    _commit(
+        repo,
+        "import more",
+        {"src/pkg_b/util.py": f"import pkg_a\n{util.read_text()}"},
+    )
+    assert len(list(_album_after(repo))) == 3
+    frames = _album_after(repo, "--metric", "edge_weight")
+    assert len(frames) == 4
+    last = frames[-1].read_text(encoding="utf-8")
+    assert "No architectural changes" in last
+    assert "edge_weight=1/1 → 1/2" in last
+
+
+def _album_after(repo: Path, *args: str) -> list[Path]:
+    result = _history(repo, *args)
+    assert result.returncode == 0, result.stderr
+    return sorted((repo / "album").glob("*.puml"))
 
 
 def test_modules_narrow_the_roots(repo: Path) -> None:
@@ -274,22 +333,8 @@ def test_has_source(tmp_path: Path, layout: dict[str, str], expected: bool) -> N
 
 # --- images through a stand-in tool on PATH --------------------------------
 
-_posix_only = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="the stand-in tool is a shell script",
-)
-
-#: Every stand-in logs its arguments, one call per line.
-_LOG_CALL = 'echo "$@" >> "$(dirname "$0")/calls"'
-
-
-def _tool(tmp_path: Path, body: str, name: str = "plantuml") -> dict[str, str]:
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir(exist_ok=True)
-    tool = bin_dir / name
-    tool.write_text(f"#!/bin/sh\n{_LOG_CALL}\n{body}\n")
-    tool.chmod(0o755)
-    return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+_posix_only = posix_only
+_tool = stand_in_tool
 
 
 def _calls(tmp_path: Path) -> list[str]:
@@ -467,6 +512,26 @@ def test_collect_keeps_changes_only() -> None:
     assert [frame.index for frame in frames] == [1, 2, 3]
     assert frames[0].previous is None
     assert frames[1].previous is one_way
+
+
+def test_collect_counts_a_shown_metric_change_only() -> None:
+    def weighted(weight: int, other: int) -> Snapshot:
+        snapshot = _snapshot(("a", "b"))
+        snapshot.graph.link_metrics[("a", "b")] = {"edge_weight": weight}
+        snapshot.graph.node_metrics["a.x"] = {"fan_in": other}
+        return snapshot
+
+    snapshots = [weighted(1, 0), weighted(2, 0), weighted(2, 5)]
+    commits = _commits(len(snapshots))
+    by_sha = dict(zip([c.sha for c in commits], snapshots))
+
+    def subjects(metrics: tuple[str, ...]) -> list[str]:
+        frames = collect(commits, lambda c: by_sha[c.sha], metrics=metrics)
+        return [frame.commit.subject for frame in frames]
+
+    assert subjects(()) == ["c0"]
+    assert subjects(("edge_weight",)) == ["c0", "c1"]
+    assert subjects(("edge_weight", "fan_in")) == ["c0", "c1", "c2"]
 
 
 def test_cache_round_trip_and_key(tmp_path: Path) -> None:

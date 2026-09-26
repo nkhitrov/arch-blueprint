@@ -88,7 +88,8 @@ def build_render_plan(
                 PlannedMetric(name=name, plugin=plugin, applies_to=frozenset()),
             )
         else:
-            known = ", ".join(sorted(registry.names()))
+            shown = [m.name for m in registry.metrics() if m.render is not None]
+            known = ", ".join(sorted(shown))
             raise MetricConfigError(f"unknown metric '{name}'. Available: {known}")
 
     return RenderPlan(
