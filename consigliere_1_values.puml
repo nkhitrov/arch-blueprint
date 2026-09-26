@@ -1,0 +1,51 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class app.__main__ <<(M, #2ECC71)>>
+class app.api <<(M, #2ECC71)>>
+class app.di <<(M, #2ECC71)>>
+class app.features <<(M, #2ECC71)>>
+class app.main <<(M, #2ECC71)>>
+class app.settings <<(M, #2ECC71)>>
+class app.shared <<(M, #2ECC71)>>
+class app.workers <<(M, #2ECC71)>>
+
+app.__main__ ---> app.main : imports=1\ndistance=2
+app.api ---> app.features : imports=49\ndistance=6
+app.api ---> app.settings : imports=1\ndistance=3
+app.api ---> app.shared : imports=7\ndistance=3
+app.di ---> app.features : imports=17\ndistance=7
+app.di ---> app.settings : imports=2\ndistance=3
+app.di ---> app.shared : imports=6\ndistance=4
+app.features ---> app.settings : imports=1\ndistance=3
+app.features ---> app.shared : imports=17\ndistance=4
+app.features <-[#C0392B,bold]-> app.workers : imports=2/30\ndistance=3/7
+app.main ---> app.api : imports=1\ndistance=4
+app.main ---> app.di : imports=1\ndistance=2
+app.main ---> app.settings : imports=2\ndistance=3
+app.main ---> app.shared : imports=4\ndistance=4
+app.main ---> app.workers : imports=3\ndistance=3
+app.shared ---> app.settings : imports=2\ndistance=3
+app.workers ---> app.di : imports=1\ndistance=2
+app.workers ---> app.settings : imports=1\ndistance=3
+app.workers ---> app.shared : imports=11\ndistance=4
+legend right
+  balance — a thick arrow marks a link clearing every threshold below; on a cycle the verdict is named in text instead
+  imports — how many imports cross this boundary
+  distance — steps through the package tree between the two ends
+  a/b on a cycle — a is the forward direction, b the backward one
+
+  options
+  balance.strength = not set (imports a link must carry to count as strong)
+  balance.distance = not set (tree steps a link must span to count as distant)
+
+  values on this diagram
+  imports: 1×7, 2×4, 3, 4, 6, 7, 11, 17×2, 30, 49
+  distance: 2×3, 3×9, 4×5, 6, 7×2
+endlegend
+
+@enduml
+

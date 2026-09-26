@@ -1,0 +1,144 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class app.__main__ <<(M, #2ECC71)>>
+class app.api <<(M, #2ECC71)>>
+class app.di <<(M, #2ECC71)>>
+class app.features <<(M, #2ECC71)>>
+class app.main <<(M, #2ECC71)>>
+class app.settings <<(M, #2ECC71)>>
+class app.shared <<(M, #2ECC71)>>
+class app.workers <<(M, #2ECC71)>>
+
+app.__main__ ---> app.main : imports=1\ndistance=2
+app.api -[#D35400,thickness=4]-> app.features : imports=49\ndistance=6
+note on link
+  **app.api -> app.features:**
+  - core.activities.admin_views
+  - core.activities.http_api
+  - core.activities.internal_api
+  - core.activities.jrpc_api
+  - core.assignees.admin_views
+  - core.assignees.jrpc_api
+  - core.credit_dossiers.http_api
+  - core.credit_dossiers.jrpc_api
+  - core.debts.admin_views
+  - core.debts.http_api
+  - core.debts.internal_api
+  - core.debts.jrpc_api
+  - core.executory_inscriptions.api
+  - core.investment_debt_reports.jrpc_api
+  - core.legal_cases.admin_views
+  - core.legal_cases.api
+  - core.legal_cases.http_api
+  - core.legal_cases.internal_api
+  - core.partners.admin_views
+  - core.partners.jrpc_api
+  - core.restructures.admin_views
+  - core.restructures.http_api
+  - core.restructures.internal_api
+  - core.restructures.jrpc_api
+  - generic.audit.usecases
+  - generic.auth.admin_views
+  - generic.auth.exceptions
+  - generic.auth.http_api
+  - generic.auth.jrpc_api
+  - generic.auth.usecases
+  - generic.comments.admin_views
+  - generic.files.http_api
+  - generic.organizations.admin_views
+  - generic.users.admin_views
+  - generic.users.models
+  - generic.users.repositories
+  - support.calls.jrpc_api
+  - support.cci.admin
+  - support.customer_notifications.admin_views
+  - support.customer_notifications.internal_api
+  - support.customers.admin_views
+  - support.customers.api
+  - support.customers.gateways.apibank
+  - support.customers.internal_api
+  - support.reports.admin_views
+  - support.reports.internal_api
+  - support.reports.jrpc_api
+  - support.search.jrpc_api
+  - system.api
+end note
+app.api ---> app.settings : imports=1\ndistance=3
+app.api ---> app.shared : imports=7\ndistance=3
+app.di -[#D35400,thickness=4]-> app.features : imports=17\ndistance=7
+note on link
+  **app.di -> app.features:**
+  - app.features
+  - core.accounting.readers.accounting_record
+  - core.accounting.readers.database.accounting_record
+  - core.accounting.readers.smaug.accounting_record
+  - core.accounting.table_export
+  - core.credit_dossiers.gateways.cdn
+  - core.debts.gateways
+  - core.investment_debt_reports.gateways
+  - generic.auth.usecases
+  - generic.casebook.gateways
+  - generic.esb.gateways
+  - generic.events.handlers
+  - generic.events.models
+  - support.assignee_notifications.gateways.matter_most
+  - support.calls.gateways
+  - support.customers.gateways.apibank
+  - support.docs_generation.builders.abc
+end note
+app.di ---> app.settings : imports=2\ndistance=3
+app.di ---> app.shared : imports=6\ndistance=4
+app.features ---> app.settings : imports=1\ndistance=3
+app.features -[#D35400,thickness=4]-> app.shared : imports=17\ndistance=4
+note on link
+  **app.features -> app.shared:**
+  - api_schema
+  - constants
+  - contextvars
+  - database
+  - esb.monitoring
+  - esb.xml
+  - event_broker
+  - guards
+  - http_clients
+  - jrpc_errors
+  - pagination
+  - permissions
+  - repository
+  - rodi
+  - s3_client
+  - starlette_admin
+  - usecases
+end note
+app.features <-[#C0392B,bold]-> app.workers : balanced/too-far\nimports=2/30\ndistance=3/7
+app.main ---> app.api : imports=1\ndistance=4
+app.main ---> app.di : imports=1\ndistance=2
+app.main ---> app.settings : imports=2\ndistance=3
+app.main ---> app.shared : imports=4\ndistance=4
+app.main ---> app.workers : imports=3\ndistance=3
+app.shared ---> app.settings : imports=2\ndistance=3
+app.workers ---> app.di : imports=1\ndistance=2
+app.workers ---> app.settings : imports=1\ndistance=3
+app.workers ---> app.shared : imports=11\ndistance=4
+legend right
+  balance — a thick arrow marks a link clearing every threshold below; on a cycle the verdict is named in text instead
+  imports — how many imports cross this boundary
+  distance — steps through the package tree between the two ends
+  a/b on a cycle — a is the forward direction, b the backward one
+
+  options
+  balance.strength = 17
+  balance.distance = 4
+
+  values on this diagram
+  balance: balanced×16, too-far×4
+  imports: 1×7, 2×4, 3, 4, 6, 7, 11, 17×2, 30, 49
+  distance: 2×3, 3×9, 4×5, 6, 7×2
+endlegend
+
+@enduml
+

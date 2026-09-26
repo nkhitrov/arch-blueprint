@@ -1,0 +1,104 @@
+direction: right
+app.__main__: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app.api: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app.di: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app.features: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app.main: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app.settings: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app.shared: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+app.workers: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+app.__main__ -> app.main: "imports=1\ndistance=2"
+app.api -> app.features: "imports=49\ndistance=6" {style.stroke: "#D35400"; style.stroke-width: 4}
+app.api -> app.settings: "imports=1\ndistance=3"
+app.api -> app.shared: "imports=7\ndistance=3"
+app.di -> app.features: "imports=17\ndistance=7" {style.stroke: "#D35400"; style.stroke-width: 4}
+app.di -> app.settings: "imports=2\ndistance=3"
+app.di -> app.shared: "imports=6\ndistance=4"
+app.features -> app.settings: "imports=1\ndistance=3"
+app.features -> app.shared: "imports=17\ndistance=4" {style.stroke: "#D35400"; style.stroke-width: 4}
+app.features <-> app.workers: "CYCLE\nbalanced/too-far\nimports=2/30\ndistance=3/7" {style.stroke: "#C0392B"; style.stroke-width: 4}
+app.main -> app.api: "imports=1\ndistance=4"
+app.main -> app.di: "imports=1\ndistance=2"
+app.main -> app.settings: "imports=2\ndistance=3"
+app.main -> app.shared: "imports=4\ndistance=4"
+app.main -> app.workers: "imports=3\ndistance=3"
+app.shared -> app.settings: "imports=2\ndistance=3"
+app.workers -> app.di: "imports=1\ndistance=2"
+app.workers -> app.settings: "imports=1\ndistance=3"
+app.workers -> app.shared: "imports=11\ndistance=4"
+"Legend": |md
+  ### Legend
+
+  ---
+
+  - balance — a thick arrow marks a link clearing every threshold below; on a cycle the verdict is named in text instead
+  - imports — how many imports cross this boundary
+  - distance — steps through the package tree between the two ends
+  - a/b on a cycle — a is the forward direction, b the backward one
+
+  ---
+
+  **options**
+
+  - balance.strength = 17
+  - balance.distance = 4
+
+  ---
+
+  **values on this diagram**
+
+  - balance: balanced×16, too-far×4
+  - imports: 1×7, 2×4, 3, 4, 6, 7, 11, 17×2, 30, 49
+  - distance: 2×3, 3×9, 4×5, 6, 7×2
+| {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.border-radius: 8
+}

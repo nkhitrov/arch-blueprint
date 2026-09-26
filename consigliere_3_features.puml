@@ -1,0 +1,74 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+package app.features.core {
+  class app.features.core.accounting <<(M, #F39C12)>>
+  class app.features.core.activities <<(M, #F39C12)>>
+  class app.features.core.assignees <<(M, #F39C12)>>
+  class app.features.core.credit_dossiers <<(M, #F39C12)>>
+  class app.features.core.debts <<(M, #F39C12)>>
+  class app.features.core.executory_inscriptions <<(M, #F39C12)>>
+  class app.features.core.executory_processes <<(M, #F39C12)>>
+  class app.features.core.investment_debt_reports <<(M, #F39C12)>>
+  class app.features.core.legal_cases <<(M, #F39C12)>>
+  class app.features.core.partners <<(M, #F39C12)>>
+  class app.features.core.products <<(M, #F39C12)>>
+  class app.features.core.restructures <<(M, #F39C12)>>
+}
+class app.features.generic <<(M, #1ABC9C)>>
+class app.features.support <<(M, #1ABC9C)>>
+class app.features.system <<(M, #1ABC9C)>>
+
+app.features.core -[#D35400,thickness=4]-> app.features.generic : imports=104\ndistance=5
+app.features.core -[#D35400,thickness=4]-> app.features.support : imports=80\ndistance=6
+app.features.core.activities ---> app.features.core.accounting : imports=4\ndistance=4
+app.features.core.activities ---> app.features.core.assignees : imports=3\ndistance=3
+app.features.core.activities ---> app.features.core.debts : imports=8\ndistance=4
+app.features.core.activities ---> app.features.core.partners : imports=1\ndistance=3
+app.features.core.assignees ---> app.features.core.accounting : imports=1\ndistance=3
+app.features.core.assignees ---> app.features.core.debts : imports=9\ndistance=4
+app.features.core.credit_dossiers ---> app.features.core.debts : imports=4\ndistance=4
+app.features.core.debts -[#D35400,thickness=4]-> app.features.core.accounting : imports=25\ndistance=4
+app.features.core.debts <-[#C0392B,bold]-> app.features.core.partners : imports=1/4\ndistance=3/4
+app.features.core.executory_inscriptions ---> app.features.core.debts : imports=5\ndistance=4
+app.features.core.executory_inscriptions <-[#C0392B,bold]-> app.features.core.executory_processes : imports=4/4\ndistance=4/3
+app.features.core.executory_inscriptions ---> app.features.core.legal_cases : imports=2\ndistance=3
+app.features.core.executory_processes ---> app.features.core.accounting : imports=1\ndistance=3
+app.features.core.executory_processes ---> app.features.core.debts : imports=2\ndistance=4
+app.features.core.executory_processes <-[#C0392B,bold]-> app.features.core.legal_cases : imports=4/6\ndistance=3/4
+app.features.core.investment_debt_reports ---> app.features.core.accounting : imports=1\ndistance=3
+app.features.core.investment_debt_reports ---> app.features.core.activities : imports=2\ndistance=3
+app.features.core.investment_debt_reports ---> app.features.core.debts : imports=6\ndistance=4
+app.features.core.investment_debt_reports ---> app.features.core.legal_cases : imports=1\ndistance=3
+app.features.core.investment_debt_reports ---> app.features.core.restructures : imports=1\ndistance=3
+app.features.core.legal_cases ---> app.features.core.debts : imports=7\ndistance=4
+app.features.core.partners ---> app.features.core.assignees : imports=1\ndistance=3
+app.features.core.products ---> app.features.core.accounting : imports=14\ndistance=4
+app.features.core.restructures ---> app.features.core.accounting : imports=3\ndistance=4
+app.features.core.restructures ---> app.features.core.debts : imports=8\ndistance=4
+app.features.core.restructures ---> app.features.core.legal_cases : imports=2\ndistance=3
+app.features.core.restructures ---> app.features.core.partners : imports=1\ndistance=3
+app.features.support -[#D35400,thickness=4]-> app.features.generic : imports=22\ndistance=4
+app.features.system ---> app.features.core : imports=5\ndistance=5
+app.features.system ---> app.features.support : imports=5\ndistance=4
+legend right
+  balance — a thick arrow marks a link clearing every threshold below; on a cycle the verdict is named in text instead
+  imports — how many imports cross this boundary
+  distance — steps through the package tree between the two ends
+  a/b on a cycle — a is the forward direction, b the backward one
+
+  options
+  balance.strength = 22
+  balance.distance = 4
+
+  values on this diagram
+  balance: balanced×31, too-far×4
+  imports: 1×9, 2×4, 3×2, … 5 more …, 9, 14, 22, 25, 80, 104
+  distance: 3×15, 4×17, 5×2, 6
+endlegend
+
+@enduml
+

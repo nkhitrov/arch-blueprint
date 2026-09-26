@@ -117,7 +117,7 @@ arch-blueprint: unknown metric 'fanin'. Available: balance, depth, edge_weight, 
 | `fan_out` | node | a row in the node's block |
 | `instability` | node | a row in the node's block — `fan_out / (fan_in + fan_out)` |
 | `edge_weight` | link | a label on the connection: how many imports it stands for |
-| `namespace_distance` | link | a label: how far apart in the package tree the two ends sit |
+| `namespace_distance` | link | a label: how far apart in the package tree the farthest two **modules** it joins sit — not the two names on the arrow, which are siblings by construction |
 | `balance` | link | a thick colored arrow, drawn only on a link the model calls unbalanced |
 
 Blocks appear in the order you asked for them, one per line. A cycle is one connection standing for
