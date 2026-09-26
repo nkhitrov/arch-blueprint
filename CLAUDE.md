@@ -101,7 +101,8 @@ ungrouped nodes and plain arrows.
 Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
-`tests/fixtures/ancestor_dep` (an import of a package facade), `tests/fixtures/diff` (snapshot
+`tests/fixtures/ancestor_dep` (an import of a package facade),
+`tests/fixtures/package_nodes` (nodes that are packages, so every edge targets a submodule), `tests/fixtures/diff` (snapshot
 edits used as diff inputs — regenerate them if the snapshot format changes). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 

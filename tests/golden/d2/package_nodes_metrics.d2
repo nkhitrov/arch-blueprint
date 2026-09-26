@@ -1,0 +1,33 @@
+direction: down
+shop.billing: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+
+shop.catalog: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 2
+  fan_out: 0
+  instability: 0.0
+}
+
+shop.orders: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 0
+  fan_out: 2
+  instability: 1.0
+}
+shop.billing -> shop.catalog
+shop.orders -> shop.billing
+shop.orders -> shop.catalog

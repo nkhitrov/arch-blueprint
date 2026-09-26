@@ -1,0 +1,27 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class shop.billing <<(M, #2ECC71)>> {
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+class shop.catalog <<(M, #2ECC71)>> {
+  fan_in: 2
+  fan_out: 0
+  instability: 0.0
+}
+class shop.orders <<(M, #2ECC71)>> {
+  fan_in: 0
+  fan_out: 2
+  instability: 1.0
+}
+
+shop.billing ---> shop.catalog
+shop.orders ---> shop.billing
+shop.orders ---> shop.catalog
+@enduml
+

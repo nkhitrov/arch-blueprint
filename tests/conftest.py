@@ -19,10 +19,12 @@ CYCLIC_PROJECT = _FIXTURES / "cyclic"
 DEEP_PROJECT = _FIXTURES / "deep_ns"
 INIT_IMPORTS_PROJECT = _FIXTURES / "init_imports"
 ANCESTOR_DEP_PROJECT = _FIXTURES / "ancestor_dep"
+PACKAGE_NODES_PROJECT = _FIXTURES / "package_nodes"
 TANGLE_PROJECT = _FIXTURES / "tangle"
 
 INIT_IMPORTS_MODULES = ["-m", "writer", "-m", "storage.*"]
 ANCESTOR_DEP_MODULES = ["-m", "api.*", "-m", "services.*"]
+PACKAGE_NODES_MODULES = ["-m", "shop.*"]
 TANGLE_MODULES = ["-m", "api.*", "-m", "services.*", "-m", "ring.*", "-m", "nest.*"]
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
@@ -124,6 +126,10 @@ DEEP_PACKAGES_MODULE_LINKS = Selection(
     MODULE_LINKS,
 )
 
+# Nodes that are packages: every edge targets a submodule of a node, never a
+# node id itself -- degree metrics are right only if they count owning nodes.
+PACKAGE_NODES = Selection("package_nodes", PACKAGE_NODES_PROJECT, PACKAGE_NODES_MODULES)
+
 SELECTIONS = [
     EXAMPLE,
     CYCLIC,
@@ -138,6 +144,7 @@ SELECTIONS = [
     TANGLE_MODULE_LINKS,
     KNOT,
     DEEP_PACKAGES_MODULE_LINKS,
+    PACKAGE_NODES,
 ]
 
 
@@ -185,6 +192,7 @@ SCENARIOS = [
     Scenario("tangle_nodetails", TANGLE_MODULE_LINKS, ["--no-cycle-details"]),
     Scenario("knot", KNOT),
     Scenario("deep_packages_module_links", DEEP_PACKAGES_MODULE_LINKS),
+    Scenario("package_nodes_metrics", PACKAGE_NODES, SHOW_METRICS),
 ]
 
 
