@@ -266,6 +266,21 @@ DIFF_CASES = [
         GOLDEN_DIR / "json" / "tangle_module_links.json",
         ("--changes-only",),
     ),
+    # A module ``app/pkg.py`` replaced by a package ``app/pkg/``: the removed
+    # module is drawn shadowed inside the new container. At the module level
+    # the removed link must follow it there, not end on the container.
+    DiffCase(
+        "module_became_package_module_links",
+        _DIFF_FIXTURES / "pkg_module_links_module.json",
+        _DIFF_FIXTURES / "pkg_package_links_module.json",
+    ),
+    # At the namespace level both sides link to ``app.pkg``: one link, drawn
+    # as the new side has it — to the container.
+    DiffCase(
+        "module_became_package",
+        _DIFF_FIXTURES / "pkg_module.json",
+        _DIFF_FIXTURES / "pkg_package.json",
+    ),
     DiffCase(
         "no_changes",
         GOLDEN_DIR / "json" / "example.json",

@@ -91,21 +91,22 @@ class PlantUmlDiffRenderer(DiffRenderer):
             arrow, label = _ON_CYCLE_ARROW[on_cycle]
         else:
             arrow, label = _LINK_ARROW[status]
-        return f"{source} {arrow} {target}{label}"
+        return f"{_ref(source)} {arrow} {_ref(target)}{label}"
 
     def _format_tangle(self, tangle: Tangle) -> CycleRender:
         return CycleRender(inline=format_tangle_note(tangle))
 
     def _format_context_cycle(self, cycle: Cycle) -> str:
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},bold]->"
-        return f"{cycle.endpoint_from} {arrow} {cycle.endpoint_to}"
+        return f"{_ref(cycle.endpoint_from)} {arrow} {_ref(cycle.endpoint_to)}"
 
     def _format_cycle(self, delta: CycleDelta) -> CycleRender:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
             return CycleRender(inline=self._format_resolved(delta))
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},dashed,thickness=3]->"
-        link = f"{cycle.endpoint_from} {arrow} {cycle.endpoint_to} : {NEW_CYCLE_LABEL}"
+        ends = f"{_ref(cycle.endpoint_from)} {arrow} {_ref(cycle.endpoint_to)}"
+        link = f"{ends} : {NEW_CYCLE_LABEL}"
         # Only a new cycle gets its imports listed: they are what to fix.
         if delta.change is CycleChange.NEW and self.show_cycle_details:
             link = f"{link}\n{format_cycle_note(cycle)}"
@@ -120,7 +121,7 @@ class PlantUmlDiffRenderer(DiffRenderer):
         else:
             source, target = delta.remaining
             connector = f"-[{RESOLVED_COLOR},dashed]->"
-        return f"{source} {connector} {target} : {RESOLVED_CYCLE_LABEL}"
+        return f"{_ref(source)} {connector} {_ref(target)} : {RESOLVED_CYCLE_LABEL}"
 
     def _format_legend(self, *, unchanged: bool) -> str:
         lines = ([f"**{NO_CHANGES_LABEL}**"] if unchanged else []) + [*_LEGEND_LINES]
@@ -140,3 +141,8 @@ class PlantUmlDiffRenderer(DiffRenderer):
         nodes_section = "\n".join(nodes)
         links_section = "\n".join(links) + "\n" if links else ""
         return f"{PUML_HEADER}{legend}\n\n{nodes_section}\n\n{links_section}@enduml\n"
+
+
+def _ref(endpoint: str) -> str:
+    """An arrow endpoint: a shadowed id is quoted, PlantUML rejects it bare."""
+    return f'"{endpoint}"' if is_shadowed(endpoint) else endpoint

@@ -276,6 +276,65 @@ def test_module_replaced_by_a_package_is_drawn_inside_it() -> None:
     assert 'label: "- x"' in d2
 
 
+def test_link_to_a_shadowed_module_follows_it_into_the_container() -> None:
+    """At the module link level every endpoint is a node id, the shadowed one too.
+
+    The removed link ended on ``a.x`` — the container the new side's package
+    is drawn as — instead of the removed module it stood for.
+    """
+    diff = _changes(
+        _graph(["a.x", "b.y"], [make_edge("b.y", "a.x", "b.y", "a.x")]),
+        _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x.y", "b.y", "a.x.y")]),
+    )
+    assert diff.link_status == {
+        ("b.y", "a.x.(module)"): ChangeStatus.REMOVED,
+        ("b.y", "a.x.y"): ChangeStatus.ADDED,
+    }
+    endpoints = {e for link in diff.graph.links for e in (link.source, link.target)}
+    assert endpoints <= {node.id for node in diff.graph.nodes}
+    puml = DIFF_RENDERERS["puml"]().render(diff)
+    assert 'b.y -[#FF1744,dashed,thickness=2]-> "a.x.(module)" : removed' in puml
+    d2 = DIFF_RENDERERS["d2"]().render(diff)
+    assert 'b.y -> a.x."(module)": removed' in d2
+
+
+def test_link_to_the_package_that_shadows_a_module_stays_on_the_container() -> None:
+    """Only the side holding the module node follows it; ``a.x`` there is the package.
+
+    At the namespace level the new side links to ``a.x``, the package: the same
+    pair as the old side's link to the module, so it is context, drawn as the
+    new side has it.
+    """
+    diff = diff_graphs(
+        _graph(["a.x", "b.y"], [make_edge("b.y", "a.x", "b", "a.x")]),
+        _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x.y", "b", "a.x")]),
+    )
+    assert diff.link_status == {("b", "a.x"): ChangeStatus.CONTEXT}
+    assert "a.x" in {group.namespace for group in diff.graph.groups}
+
+
+def test_resolved_cycle_with_a_shadowed_module_remains_on_the_container() -> None:
+    """The cycle is the old side's, with the module; what remains is the new side's."""
+    diff = _changes(
+        _graph(
+            ["a.x", "b.y"],
+            [
+                make_edge("b.y", "a.x", "b.y", "a.x"),
+                make_edge("a.x", "b.y", "a.x", "b.y"),
+            ],
+        ),
+        _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x", "b.y", "a.x")]),
+    )
+    (delta,) = diff.cycle_changes
+    assert delta.change is CycleChange.RESOLVED
+    assert {delta.cycle.endpoint_from, delta.cycle.endpoint_to} == {
+        "a.x.(module)",
+        "b.y",
+    }
+    assert delta.remaining == ("b.y", "a.x")
+    assert "a.x" in {group.namespace for group in diff.graph.groups}
+
+
 def test_change_colors_stand_apart_from_a_plain_diagram() -> None:
     """Unchanged nodes keep their depth color, so no change may share one."""
     plain = {*DEFAULT_OPTIONS.depth_colors, CYCLE_HIGHLIGHT_COLOR}

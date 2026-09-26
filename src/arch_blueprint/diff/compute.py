@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import replace
 
 from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.diff.model import (
@@ -83,13 +84,34 @@ def diff_graphs(
 
     kinds = {node.id: node.kind for node in (*old.nodes, *new.nodes)}
     shown = _node_status(old, new, edges, everything=not changes_only)
-    node_status = {_drawn_id(node_id, shown): st for node_id, st in shown.items()}
+    drawn = {node_id: _drawn_id(node_id, shown) for node_id in shown}
+    on_old = _Redraw(old, drawn)
+    on_new = _Redraw(new, drawn)
+    side = {
+        ChangeStatus.ADDED: (on_new, new_links),
+        ChangeStatus.CONTEXT: (on_new, new_links),
+        ChangeStatus.REMOVED: (on_old, old_links),
+    }
+
+    drawn_links: dict[tuple[str, str], ChangeStatus] = {}
+    drawn_edges: set[Edge] = set()
+    for pair, status in link_status.items():
+        redraw, links = side[status]
+        drawn_links[redraw.pair(pair)] = status
+        drawn_edges |= redraw.edges(links[pair].edges)
+    drawn_deltas = []
+    for delta in cycle_changes:
+        drawn_delta, delta_edges = _draw_delta(delta, on_old, on_new, new_links)
+        drawn_deltas.append(drawn_delta)
+        drawn_edges |= delta_edges
+    for cycle in context_cycles:
+        drawn_edges |= on_new.cycle_edges(cycle)
+
     graph = BlueprintGraph(
         nodes=[
-            Node(id=_drawn_id(node_id, shown), kind=kinds[node_id])
-            for node_id in sorted(shown)
+            Node(id=drawn[node_id], kind=kinds[node_id]) for node_id in sorted(shown)
         ],
-        edges=frozenset(edges),
+        edges=frozenset(drawn_edges),
     )
     # Groups only: cycle detection over this partial edge set would report a
     # resolved cycle as present. Cycles live in ``cycle_changes`` and
@@ -97,12 +119,20 @@ def diff_graphs(
     graph.groups = GroupAnalyzer.build(graph)
     return GraphDiff(
         graph=graph,
-        node_status=node_status,
-        link_status=dict(sorted(link_status.items())),
-        cycle_changes=cycle_changes,
-        context_cycles=context_cycles,
-        tangle_changes=tangle_changes,
-        context_tangles=context_tangles,
+        node_status={drawn[node_id]: st for node_id, st in shown.items()},
+        link_status=dict(sorted(drawn_links.items())),
+        cycle_changes=tuple(drawn_deltas),
+        context_cycles=tuple(on_new.cycle(cycle) for cycle in context_cycles),
+        tangle_changes=tuple(
+            TangleDelta(
+                delta.change,
+                (on_new if delta.change is CycleChange.NEW else on_old).tangle(
+                    delta.tangle,
+                ),
+            )
+            for delta in tangle_changes
+        ),
+        context_tangles=tuple(on_new.tangle(tangle) for tangle in context_tangles),
     )
 
 
@@ -131,6 +161,93 @@ def _tangle_changes(
         )
     ordered = sorted(deltas, key=lambda d: (d.tangle.members, d.change.value))
     return tuple(ordered), context
+
+
+def _draw_delta(
+    delta: CycleDelta,
+    on_old: _Redraw,
+    on_new: _Redraw,
+    new_links: Mapping[tuple[str, str], Link],
+) -> tuple[CycleDelta, set[Edge]]:
+    """A changed cycle at its drawn endpoints, with the edges its groups need."""
+    if delta.change is CycleChange.NEW:
+        return (
+            CycleDelta(delta.change, on_new.cycle(delta.cycle)),
+            on_new.cycle_edges(delta.cycle),
+        )
+    # A resolved cycle comes from the old side, but the direction that remains
+    # is drawn as the new side has it.
+    edges = on_old.cycle_edges(delta.cycle)
+    remaining = None
+    if delta.remaining is not None:
+        remaining = on_new.pair(delta.remaining)
+        edges |= on_new.edges(new_links[delta.remaining].edges)
+    return CycleDelta(delta.change, on_old.cycle(delta.cycle), remaining), edges
+
+
+class _Redraw:
+    """Draws one side's link endpoints at the ids their nodes are drawn under.
+
+    At the module link level every endpoint is a node id, and at the namespace
+    level many are, so an arrow to a shadowed node must follow it into its
+    container. Only an endpoint that is a node *of this side* follows: the same
+    name on the other side is the package that shadows it, the container.
+    """
+
+    def __init__(self, graph: BlueprintGraph, drawn: Mapping[str, str]) -> None:
+        node_ids = {node.id for node in graph.nodes}
+        self._renamed = {
+            node_id: drawn_id
+            for node_id, drawn_id in drawn.items()
+            if node_id in node_ids and drawn_id != node_id
+        }
+
+    def endpoint(self, endpoint: str) -> str:
+        return self._renamed.get(endpoint, endpoint)
+
+    def pair(self, pair: tuple[str, str]) -> tuple[str, str]:
+        return self.endpoint(pair[0]), self.endpoint(pair[1])
+
+    def edges(self, edges: Iterable[Edge]) -> set[Edge]:
+        if not self._renamed:
+            return set(edges)
+        return {
+            replace(
+                edge,
+                source_endpoint=self.endpoint(edge.source_endpoint),
+                target_endpoint=self.endpoint(edge.target_endpoint),
+            )
+            for edge in edges
+        }
+
+    def cycle_edges(self, cycle: Cycle) -> set[Edge]:
+        return self.edges(cycle.forward_edges | cycle.backward_edges)
+
+    def tangle(self, tangle: Tangle) -> Tangle:
+        if not self._renamed:
+            return tangle
+        return Tangle(
+            members=tuple(sorted(self.endpoint(m) for m in tangle.members)),
+            links=tuple(
+                Link(
+                    source=self.endpoint(link.source),
+                    target=self.endpoint(link.target),
+                    edges=frozenset(self.edges(link.edges)),
+                )
+                for link in tangle.links
+            ),
+            hidden_edges=frozenset(self.edges(tangle.hidden_edges)),
+        )
+
+    def cycle(self, cycle: Cycle) -> Cycle:
+        if not self._renamed:
+            return cycle
+        return Cycle(
+            endpoint_from=self.endpoint(cycle.endpoint_from),
+            endpoint_to=self.endpoint(cycle.endpoint_to),
+            forward_edges=frozenset(self.edges(cycle.forward_edges)),
+            backward_edges=frozenset(self.edges(cycle.backward_edges)),
+        )
 
 
 def _drawn_id(node_id: str, shown: Iterable[str]) -> str:

@@ -104,15 +104,15 @@ class D2LangDiffRenderer(DiffRenderer):
             label, style = _ON_CYCLE_STYLE[on_cycle]
         else:
             label, style = _LINK_STYLE[status]
-        return f"{source} -> {target}{label}{style}"
+        return f"{_key_of(source)} -> {_key_of(target)}{label}{style}"
 
     def _format_tangle(self, tangle: Tangle) -> CycleRender:
         return CycleRender(inline="", deferred=format_tangle_note(tangle))
 
     def _format_context_cycle(self, cycle: Cycle) -> str:
         return CYCLE_CONNECTION_TEMPLATE.substitute(
-            a=cycle.endpoint_from,
-            b=cycle.endpoint_to,
+            a=_key_of(cycle.endpoint_from),
+            b=_key_of(cycle.endpoint_to),
             label="CYCLE",
             color=CYCLE_HIGHLIGHT_COLOR,
         )
@@ -122,7 +122,7 @@ class D2LangDiffRenderer(DiffRenderer):
         if delta.change is CycleChange.RESOLVED:
             return CycleRender(inline=self._format_resolved(delta))
         connection = (
-            f"{cycle.endpoint_from} <-> {cycle.endpoint_to}: "
+            f"{_key_of(cycle.endpoint_from)} <-> {_key_of(cycle.endpoint_to)}: "
             f"{NEW_CYCLE_LABEL} {{{_NEW_CYCLE_STYLE}}}"
         )
         # Only a new cycle gets its imports listed: they are what to fix.
@@ -140,7 +140,7 @@ class D2LangDiffRenderer(DiffRenderer):
             source, target = delta.remaining
             connector = "->"
         return (
-            f"{source} {connector} {target}: "
+            f"{_key_of(source)} {connector} {_key_of(target)}: "
             f"{RESOLVED_CYCLE_LABEL} {{{_RESOLVED_CYCLE_STYLE}}}"
         )
 
