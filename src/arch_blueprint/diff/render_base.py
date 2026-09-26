@@ -65,17 +65,24 @@ class DiffRenderer(ABC):
             for node in diff.graph.nodes
         ]
         nodes = wrap_groups(diff.graph.groups, rendered, self._format_group)
-        links = [
-            self._format_link(source, target, status)
-            for (source, target), status in diff.link_status.items()
+        # Every connection at the place a plain diagram declares it — by its
+        # first namespace pair — so the layout matches the plain diagram's: the
+        # layout engine places things by declaration order.
+        connections: list[tuple[tuple[str, str], CycleRender]] = [
+            (pair, CycleRender(inline=self._format_link(*pair, status)))
+            for pair, status in diff.link_status.items()
         ]
-        links += [self._format_context_cycle(cycle) for cycle in diff.context_cycles]
-        deferred: list[str] = []
-        for delta in diff.cycle_changes:
-            cycle = self._format_cycle(delta)
-            links.append(cycle.inline)
-            if cycle.deferred is not None:
-                deferred.append(cycle.deferred)
+        connections += [
+            (_first_pair(cycle), CycleRender(inline=self._format_context_cycle(cycle)))
+            for cycle in diff.context_cycles
+        ]
+        connections += [
+            (delta.remaining or _first_pair(delta.cycle), self._format_cycle(delta))
+            for delta in diff.cycle_changes
+        ]
+        connections.sort(key=lambda item: item[0])
+        links = [cycle.inline for _, cycle in connections]
+        deferred = [c.deferred for _, c in connections if c.deferred is not None]
         legend = self._format_legend(unchanged=diff.is_empty)
         return self._combine_output(legend, nodes, links, deferred)
 
@@ -127,3 +134,11 @@ class DiffRenderer(ABC):
     ) -> str:
         """Combine all parts into final output with header/footer."""
         ...
+
+
+def _first_pair(cycle: Cycle) -> tuple[str, str]:
+    """The cycle's pair a plain diagram reaches first, iterating pairs sorted."""
+    return min(
+        (cycle.namespace_from, cycle.namespace_to),
+        (cycle.namespace_to, cycle.namespace_from),
+    )
