@@ -68,6 +68,13 @@ def test_cycle_introduced_in_the_working_tree(repo: Path) -> None:
     assert "- util → core" in _diff(repo, "--cycle-details").stdout
 
 
+def test_module_links_on_both_sides(repo: Path) -> None:
+    _restore_backward_import(repo)
+    result = _diff(repo, "--links", "module")
+    assert result.returncode == _DIFFERENT, result.stderr
+    assert "pkg_a.core <-[#C0392B,dashed,thickness=3]-> pkg_b.util" in result.stdout
+
+
 def test_head_revision_instead_of_the_working_tree(repo: Path) -> None:
     _restore_backward_import(repo)
     git(repo, "commit", "-q", "-am", "cycle")

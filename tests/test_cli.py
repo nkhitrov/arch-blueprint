@@ -163,6 +163,12 @@ def test_render_rejects_a_metric_the_snapshot_lacks(tmp_path: Path) -> None:
             "two snapshots",
             id="diff_files_with_modules",
         ),
+        # A snapshot is already built at a level; drawing cannot change it.
+        pytest.param(
+            ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT, "--links", "module"],
+            "two snapshots",
+            id="diff_files_with_links",
+        ),
         pytest.param(
             ["diff", "--base", "HEAD", "src"],
             "-m pattern",
@@ -211,3 +217,10 @@ def test_diff_shows_new_cycle_details_on_request_only() -> None:
     assert "note on link" in shown
     assert "note on link" not in hidden
     assert "NEW CYCLE" in hidden
+
+
+def test_unknown_link_level_is_a_usage_error() -> None:
+    result = run_cli(EXAMPLE_PROJECT, "-m", "app1.*", "--links", "class", check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "invalid choice: 'class'" in result.stderr
+    assert "Traceback" not in result.stderr

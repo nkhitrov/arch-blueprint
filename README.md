@@ -12,8 +12,9 @@ pip install arch-blueprint
 
 ```shell
 arch-blueprint --help
-usage: arch-blueprint [-h] --modules [MODULES ...] [--format {puml,d2,json}]
-                      [--metric NAME] [--no-cycle-details]
+usage: arch-blueprint [-h] --modules [MODULES ...] [--links LEVEL]
+                      [--format {puml,d2,json}] [--metric NAME]
+                      [--no-cycle-details]
                       project_dir
 
 Generate architecture diagrams for Python applications. Subcommands: 'render'
@@ -29,6 +30,11 @@ options:
                         Selected modules for rendering (examples:
                         'myapp.somemodule', 'myapp.somemodule.*',
                         'myapp.*.*.models.*', 'myapp.somemodule.**')
+  --links LEVEL         What an arrow connects: 'namespace' aggregates imports
+                        to the namespaces where two modules' paths diverge
+                        (a.b.c -> a.d.e is drawn a.b -> a.d), 'module' draws
+                        them node to node. Possible values: ['namespace',
+                        'module'] (default: namespace)
   --format, -f {puml,d2,json}
                         Output format. Possible values: ['puml', 'd2', 'json']
   --metric NAME         Display a metric (repeatable). A node metric renders
@@ -82,6 +88,13 @@ A **node** is a module. A **link** is aggregated to the namespace where two modu
 declaring it is about the source saying what it means, not about fixing the image.) A namespace that
 is itself a module (`writer` importing `storage.backend`) stays a plain class: wrapping a class in a
 package of its own name is a syntax error.
+
+`--links module` draws imports node to node instead: the same run gives
+`app2.service ---> app1.models` and `app2.service ---> plugins.auth.backend`. An import that lands
+inside a selected package ends on that package; an import of a package facade ends on its container.
+Cycles, `edge_weight` and `diff` then work between modules. The level is part of how the graph is
+built, so it is given to the command that builds it (`-f json`, `diff --base`, `history`), and a
+snapshot keeps it — `render` and a diff of two snapshot files draw what they are given.
 
 `-m` is repeatable, which is how you graph sibling packages under a root that has no `__init__.py`
 of its own. A link is drawn when both endpoints belong to the selected set — including a dependency

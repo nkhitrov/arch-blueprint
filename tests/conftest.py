@@ -43,7 +43,10 @@ SHOW_METRICS_REORDERED = [
 
 @dataclass(frozen=True)
 class Selection:
-    """What to graph: a project and its ``-m`` patterns — one snapshot golden each.
+    """What to graph: a project, its ``-m`` patterns and ``--links`` level.
+
+    One snapshot golden each; ``build_args`` are the options that shape the
+    graph itself, so ``render`` never takes them.
 
     Its snapshot lives at ``golden/json/<name>.json``; every scenario drawn from
     the same selection renders from that one snapshot.
@@ -52,6 +55,11 @@ class Selection:
     name: str
     project: Path
     modules: list[str]
+    build_args: list[str] = field(default_factory=list)
+
+    @property
+    def args(self) -> list[str]:
+        return [*self.modules, *self.build_args]
 
 
 EXAMPLE = Selection("example", EXAMPLE_PROJECT, EXAMPLE_MODULES)
@@ -66,7 +74,45 @@ INIT_IMPORTS = Selection("init_imports", INIT_IMPORTS_PROJECT, INIT_IMPORTS_MODU
 # only if selection matches upward as well as down.
 ANCESTOR_DEP = Selection("ancestor_dep", ANCESTOR_DEP_PROJECT, ANCESTOR_DEP_MODULES)
 
-SELECTIONS = [EXAMPLE, CYCLIC, DEEP, INIT_IMPORTS, ANCESTOR_DEP]
+# The same projects linked node to node: every arrow ends on a declared node, a
+# cycle is between two modules, and a package facade stays a container.
+MODULE_LINKS = ["--links", "module"]
+EXAMPLE_MODULE_LINKS = Selection(
+    "example_module_links",
+    EXAMPLE_PROJECT,
+    EXAMPLE_MODULES,
+    MODULE_LINKS,
+)
+CYCLIC_MODULE_LINKS = Selection(
+    "cyclic_module_links",
+    CYCLIC_PROJECT,
+    CYCLIC_MODULES,
+    MODULE_LINKS,
+)
+DEEP_MODULE_LINKS = Selection(
+    "deep_module_links",
+    DEEP_PROJECT,
+    DEEP_MODULES,
+    MODULE_LINKS,
+)
+ANCESTOR_DEP_MODULE_LINKS = Selection(
+    "ancestor_dep_module_links",
+    ANCESTOR_DEP_PROJECT,
+    ANCESTOR_DEP_MODULES,
+    MODULE_LINKS,
+)
+
+SELECTIONS = [
+    EXAMPLE,
+    CYCLIC,
+    DEEP,
+    INIT_IMPORTS,
+    ANCESTOR_DEP,
+    EXAMPLE_MODULE_LINKS,
+    CYCLIC_MODULE_LINKS,
+    DEEP_MODULE_LINKS,
+    ANCESTOR_DEP_MODULE_LINKS,
+]
 
 
 @dataclass(frozen=True)
@@ -88,7 +134,7 @@ class Scenario:
 
     @property
     def args(self) -> list[str]:
-        return [*self.selection.modules, *self.render_args]
+        return [*self.selection.args, *self.render_args]
 
 
 SCENARIOS = [
@@ -103,6 +149,11 @@ SCENARIOS = [
     Scenario("cyclic_link_metrics", CYCLIC, SHOW_LINK_METRIC),
     Scenario("init_imports", INIT_IMPORTS),
     Scenario("ancestor_dep", ANCESTOR_DEP),
+    Scenario("example_module_links", EXAMPLE_MODULE_LINKS),
+    Scenario("cyclic_module_links", CYCLIC_MODULE_LINKS),
+    Scenario("cyclic_module_links_metrics", CYCLIC_MODULE_LINKS, SHOW_LINK_METRIC),
+    Scenario("deep_module_links", DEEP_MODULE_LINKS),
+    Scenario("ancestor_dep_module_links", ANCESTOR_DEP_MODULE_LINKS),
 ]
 
 

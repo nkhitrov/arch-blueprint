@@ -126,6 +126,17 @@ def test_rerun_builds_nothing_and_rewrites_nothing(repo: Path) -> None:
     assert (repo / "cache" / ".gitignore").read_text().splitlines()[-1] == "*"
 
 
+def test_module_links_are_not_served_from_the_namespace_cache(repo: Path) -> None:
+    assert _history(repo).returncode == 0
+    result = _history(repo, "--links", "module")
+    assert result.returncode == 0, result.stderr
+    assert "cached" not in result.stderr
+    [cycle] = (repo / "album").glob("0003_*.puml")
+    assert "pkg_a.core <-[#C0392B,dashed,thickness=3]-> pkg_b.util" in cycle.read_text(
+        encoding="utf-8",
+    )
+
+
 def test_cycle_details_on_request(repo: Path) -> None:
     assert _history(repo, "--cycle-details").returncode == 0
     [cycle] = (repo / "album").glob("0003_*.puml")
@@ -460,13 +471,14 @@ def test_collect_keeps_changes_only() -> None:
 
 def test_cache_round_trip_and_key(tmp_path: Path) -> None:
     cache = SnapshotCache(tmp_path / "cache")
-    key = cache.key("tree", ["a.**"])
+    key = cache.key("tree", ["a.**"], "namespace")
     assert cache.get(key) is None
     cache.put(key, "text")
     assert cache.get(key) == "text"
-    assert cache.key("tree", ["a.**"]) == key
-    assert cache.key("tree", ["a.*"]) != key
-    assert cache.key("other", ["a.**"]) != key
+    assert cache.key("tree", ["a.**"], "namespace") == key
+    assert cache.key("tree", ["a.*"], "namespace") != key
+    assert cache.key("other", ["a.**"], "namespace") != key
+    assert cache.key("tree", ["a.**"], "module") != key
     assert not list((tmp_path / "cache").rglob("*.tmp"))
 
 

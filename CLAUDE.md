@@ -33,6 +33,10 @@ This project uses `uv` for environment and dependency management.
     `diff` and `history` are quick looks and invert the default: the notes are off unless
     `--cycle-details` is given. Both draw the diff over the whole graph; `--changes-only` draws
     just the changes and the modules they touch.
+  - `--links namespace|module` (default `namespace`) chooses what an arrow connects: the
+    namespaces where two modules' paths diverge, or the nodes themselves. Accepted by every command
+    that *builds* a graph (the main one, `diff --base`, `history`), not by `render` or a
+    snapshot-file `diff` — a snapshot already holds the level in its edge namespaces.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
@@ -80,7 +84,8 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   stale frames, `*-png` through a stand-in `plantuml` / `d2` on `PATH`), plus `collect` and the caches
   in-process.
 
-A scenario is a `Selection` (project + `-m` patterns — what the snapshot golden is keyed by) plus
+A scenario is a `Selection` (project + `-m` patterns + `build_args` such as `--links module` — what
+the snapshot golden is keyed by) plus
 `render_args` (drawing-only options, passed unchanged to `render`).
 
 A hand-built `BlueprintGraph` has **empty `cycles` and `groups`** until the analyze step fills them.
@@ -124,7 +129,14 @@ happens, for a fresh extraction and a loaded snapshot alike.
    revisions committed within a second would otherwise share one graph. Diff sides always opt out.
 2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`, no constructor
    dictated) turns the source into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected
-   module, and an edge when a selected module imports another across a namespace boundary. Selection
+   module, and an edge when a selected module imports another across a boundary of its link level.
+   A level (`extract/levels.py`, registry `LINK_LEVELS`, CLI `--links`) maps `(importer, imported,
+   node ids)` to the edge's `(source_namespace, target_namespace)` — the aggregation key, nothing
+   else; `Edge.source`/`target` stay the real import. `namespace_level` cuts both names where they
+   diverge; `module_level` keeps the node, resolving an import to the selected node it lies under
+   (a facade stays itself and becomes a container). `None` drops the edge (an import of itself or
+   of its own package). Links, cycles, groups, metrics, snapshot and diff are untouched by the
+   choice; `SnapshotCache.key` includes the level. Selection
    matches **both directions**: a dependency under a selected module, and a dependency *on* a package
    whose children are selected (`pkg.*` never selects `pkg`, so a re-exporting facade is otherwise
    unmatchable).

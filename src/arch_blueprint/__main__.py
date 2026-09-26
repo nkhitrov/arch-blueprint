@@ -1,4 +1,5 @@
 import argparse
+import functools
 import shutil
 import sys
 from collections.abc import Callable, Iterable, Sequence
@@ -12,7 +13,9 @@ from grimp.exceptions import GrimpException
 from arch_blueprint.blueprint import build_graph
 from arch_blueprint.diff import DIFF_RENDERERS, diff_graphs
 from arch_blueprint.domain.graph import BlueprintGraph
-from arch_blueprint.extract.module_extractor import ModuleExtractor
+from arch_blueprint.extract import DEFAULT_LINK_LEVEL, LINK_LEVELS, ModuleExtractor
+from arch_blueprint.extract.base import GraphExtractor
+from arch_blueprint.extract.source import GrimpSource
 from arch_blueprint.git import (
     Commit,
     GitError,
@@ -139,6 +142,27 @@ def _add_format_arg(parser: argparse.ArgumentParser, formats: Iterable[str]) -> 
     )
 
 
+def _add_links_arg(parser: argparse.ArgumentParser) -> None:
+    """For every command that builds a graph: what an arrow connects."""
+    choices = list(LINK_LEVELS)
+    parser.add_argument(
+        "--links",
+        default=DEFAULT_LINK_LEVEL,
+        choices=choices,
+        metavar="LEVEL",
+        help=(
+            "What an arrow connects: 'namespace' aggregates imports to the "
+            "namespaces where two modules' paths diverge (a.b.c -> a.d.e is "
+            "drawn a.b -> a.d), 'module' draws them node to node. "
+            f"Possible values: {choices} (default: {DEFAULT_LINK_LEVEL})"
+        ),
+    )
+
+
+def _extractor(links: str) -> Callable[[GrimpSource], GraphExtractor]:
+    return functools.partial(ModuleExtractor, level=LINK_LEVELS[links])
+
+
 def _add_metric_arg(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--metric",
@@ -222,6 +246,7 @@ def _build(
     modules: Sequence[str],
     metric_names: Optional[Iterable[str]],
     *,
+    links: str,
     failure_code: int,
     use_cache: bool = True,
 ) -> BlueprintGraph:
@@ -232,7 +257,7 @@ def _build(
         return build_graph(
             project_dir,
             modules,
-            ModuleExtractor,
+            _extractor(links),
             default_registry(),
             metric_names,
             use_cache=use_cache,
@@ -277,6 +302,7 @@ def _generate(argv: Sequence[str]) -> None:
         help="Path to root directory of target project",
     )
     _add_modules_arg(parser, required=True)
+    _add_links_arg(parser)
     _add_format_arg(parser, [*_RENDERERS, _SNAPSHOT_FORMAT])
     _add_metric_arg(parser)
     _add_cycle_details_arg(parser)
@@ -290,7 +316,13 @@ def _generate(argv: Sequence[str]) -> None:
                 "holds every metric — pass them to 'render' instead",
                 _EXIT_USAGE,
             )
-        graph = _build(args.project_dir, args.modules, None, failure_code=_EXIT_FAILURE)
+        graph = _build(
+            args.project_dir,
+            args.modules,
+            None,
+            links=args.links,
+            failure_code=_EXIT_FAILURE,
+        )
         if not graph.nodes:
             _no_match(args.modules)
         _write(dump(graph, registry.names()))
@@ -306,6 +338,7 @@ def _generate(argv: Sequence[str]) -> None:
         args.project_dir,
         args.modules,
         renderer.plan.required_metrics,
+        links=args.links,
         failure_code=_EXIT_FAILURE,
     )
     if not graph.nodes:
@@ -367,16 +400,22 @@ def _diff(argv: Sequence[str]) -> None:
         help="Revision to compare (default: the working tree)",
     )
     _add_modules_arg(parser, required=False)
+    _add_links_arg(parser)
     _add_format_arg(parser, DIFF_RENDERERS)
     _add_quick_look_cycle_details_arg(parser)
     _add_changes_only_arg(parser)
     args = parser.parse_args(argv)
 
     if args.base is None:
-        if len(args.inputs) != 2 or args.modules or args.head:
+        if (
+            len(args.inputs) != 2
+            or args.modules
+            or args.head
+            or args.links != DEFAULT_LINK_LEVEL
+        ):
             _abort(
                 "diff takes two snapshots (OLD.json NEW.json), "
-                "or --base REV PROJECT_DIR -m ...",
+                "or --base REV PROJECT_DIR -m ... [--links LEVEL]",
                 _EXIT_DIFF_TROUBLE,
             )
         old = _read_snapshot(args.inputs[0]).graph
@@ -387,7 +426,13 @@ def _diff(argv: Sequence[str]) -> None:
                 "diff --base takes one PROJECT_DIR and at least one -m pattern",
                 _EXIT_DIFF_TROUBLE,
             )
-        old, new = _git_sides(args.inputs[0], args.modules, args.base, args.head)
+        old, new = _git_sides(
+            args.inputs[0],
+            args.modules,
+            args.base,
+            args.head,
+            links=args.links,
+        )
 
     diff = diff_graphs(old, new, changes_only=args.changes_only)
     renderer = DIFF_RENDERERS[args.format](show_cycle_details=args.cycle_details)
@@ -400,6 +445,8 @@ def _git_sides(
     modules: Sequence[str],
     base: str,
     head: Optional[str],
+    *,
+    links: str,
 ) -> tuple[BlueprintGraph, BlueprintGraph]:
     """Build the graph at ``base`` and at ``head`` (default: the working tree)."""
     if not Path(project_dir).is_dir():
@@ -415,14 +462,14 @@ def _git_sides(
         except GitError as error:
             _abort(str(error), _EXIT_DIFF_TROUBLE)
         old_modules, new_modules = split_patterns(modules, old_dir, new_dir)
-        old = _side(old_dir, old_modules)
-        new = _side(new_dir, new_modules)
+        old = _side(old_dir, old_modules, links)
+        new = _side(new_dir, new_modules, links)
     if not old.nodes and not new.nodes:
         _no_match(modules)
     return old, new
 
 
-def _side(project_dir: str, modules: Sequence[str]) -> BlueprintGraph:
+def _side(project_dir: str, modules: Sequence[str], links: str) -> BlueprintGraph:
     if not modules:  # this side has none of the selected packages
         return BlueprintGraph(nodes=[], edges=frozenset())
     # No metrics: a diff compares structure only. No cache: grimp would take two
@@ -432,13 +479,13 @@ def _side(project_dir: str, modules: Sequence[str]) -> BlueprintGraph:
         project_dir,
         modules,
         (),
+        links=links,
         failure_code=_EXIT_DIFF_TROUBLE,
         use_cache=False,
     )
 
 
-def _history(argv: Sequence[str]) -> None:
-    """``arch-blueprint history``: a diagram per commit that changed the graph."""
+def _history_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="arch-blueprint history",
         description=(
@@ -457,6 +504,7 @@ def _history(argv: Sequence[str]) -> None:
         help="Top-level package(s) to graph; without -m, everything under each",
     )
     _add_modules_arg(parser, required=False)
+    _add_links_arg(parser)
     parser.add_argument(
         "--base",
         metavar="REV",
@@ -494,7 +542,12 @@ def _history(argv: Sequence[str]) -> None:
     _add_metric_arg(parser)
     _add_quick_look_cycle_details_arg(parser)
     _add_changes_only_arg(parser)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def _history(argv: Sequence[str]) -> None:
+    """``arch-blueprint history``: a diagram per commit that changed the graph."""
+    args = _history_parser().parse_args(argv)
 
     patterns = _history_patterns(args.roots, args.modules)
     diagram_fmt, as_images = _HISTORY_FORMATS[args.format]
@@ -528,6 +581,7 @@ def _history(argv: Sequence[str]) -> None:
             lambda commit: _history_snapshot(
                 args.project_dir,
                 patterns,
+                args.links,
                 commit,
                 cache,
                 registry,
@@ -612,6 +666,7 @@ def _positive_float(text: str) -> float:
 def _history_snapshot(
     project_dir: str,
     patterns: Sequence[str],
+    links: str,
     commit: Commit,
     cache: SnapshotCache,
     registry: MetricRegistry,
@@ -623,7 +678,7 @@ def _history_snapshot(
     drawn from a cached snapshot. A commit that cannot be analyzed (broken code
     somewhere in the history) is reported and skipped, not fatal.
     """
-    key = cache.key(tree_id(project_dir, commit.sha), patterns)
+    key = cache.key(tree_id(project_dir, commit.sha), patterns, links)
     text = cache.get(key)
     if text is not None:
         try:
@@ -637,7 +692,7 @@ def _history_snapshot(
         # A root the commit does not have yet is not an error: it appears later.
         present = [p for p in patterns if has_source(root, _root_of(p))]
         try:
-            graph = _history_graph(root, present, registry)
+            graph = _history_graph(root, present, links, registry)
         except (ImportError, OSError, GrimpException) as error:
             statuses[commit.sha] = f"skipped ({error})"
             return None
@@ -654,6 +709,7 @@ _NO_SOURCE: Final = "no source yet"
 def _history_graph(
     project_dir: str,
     patterns: Sequence[str],
+    links: str,
     registry: MetricRegistry,
 ) -> BlueprintGraph:
     if not patterns:
@@ -662,7 +718,7 @@ def _history_graph(
     return build_graph(
         project_dir,
         patterns,
-        ModuleExtractor,
+        _extractor(links),
         registry,
         None,
         use_cache=False,

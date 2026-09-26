@@ -1,0 +1,88 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 1,
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "pkg_a.core",
+      "kind": "module"
+    },
+    {
+      "id": "pkg_a.services",
+      "kind": "module"
+    },
+    {
+      "id": "pkg_b.util",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "pkg_a.core",
+      "target": "pkg_b.util",
+      "source_namespace": "pkg_a.core",
+      "target_namespace": "pkg_b.util"
+    },
+    {
+      "source": "pkg_a.services",
+      "target": "pkg_b.util",
+      "source_namespace": "pkg_a.services",
+      "target_namespace": "pkg_b.util"
+    },
+    {
+      "source": "pkg_b.util",
+      "target": "pkg_a.core",
+      "source_namespace": "pkg_b.util",
+      "target_namespace": "pkg_a.core"
+    }
+  ],
+  "node_metrics": {
+    "pkg_a.core": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "pkg_a.services": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "pkg_b.util": {
+      "depth": 2,
+      "fan_in": 2,
+      "fan_out": 1,
+      "instability": 0.33
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "pkg_a.core",
+      "target": "pkg_b.util",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "pkg_a.services",
+      "target": "pkg_b.util",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "pkg_b.util",
+      "target": "pkg_a.core",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class pkg_a.core <<(M, #2ECC71)>>
+class pkg_a.services <<(M, #2ECC71)>>
+class pkg_b.util <<(M, #2ECC71)>>
+
+pkg_a.core <-[#C0392B,bold]-> pkg_b.util : edge_weight=1/1
+note on link
+  **pkg_a.core -> pkg_b.util:**
+  - pkg_a.core → pkg_b.util
+  **pkg_b.util -> pkg_a.core:**
+  - pkg_b.util → pkg_a.core
+end note
+pkg_a.services ---> pkg_b.util : edge_weight=1
+@enduml
+

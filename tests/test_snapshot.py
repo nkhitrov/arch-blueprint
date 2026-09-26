@@ -20,7 +20,7 @@ from tests.conftest import (
 @pytest.mark.parametrize("selection", SELECTIONS, ids=lambda s: s.name)
 def test_snapshot_matches_golden(selection: Selection) -> None:
     expected = snapshot_path(selection.name).read_text(encoding="utf-8")
-    actual = run_cli(selection.project, *selection.modules, "-f", "json")
+    actual = run_cli(selection.project, *selection.args, "-f", "json")
     assert actual.stdout == expected
 
 
