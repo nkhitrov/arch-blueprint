@@ -180,9 +180,11 @@ arch-blueprint diff --base origin/main src -o diff.png || test $? -eq 1
 
 ### history
 
-`history` walks the branch's first-parent history (one commit per merged pull request). For every
-commit that changed the graph, it writes the full diagram and the diff against the previous one.
-Commits that leave the graph alone are skipped.
+`history` walks the branch's first-parent history (one commit per merged pull request) and draws
+one picture per commit that changed the graph. The first frame is the plain diagram. Every later
+frame is the same diagram with what changed since the previous frame marked on it, like `diff`
+(`--changes-only` for just the changes). Everything is declared in the plain diagram's order, so
+consecutive frames lay out alike. Commits that leave the graph alone are skipped.
 
 ```shell
 arch-blueprint history src                                         # every package in src/
@@ -192,11 +194,10 @@ arch-blueprint history src myapp --base v1.0 --head main -o album
 ```
 
 ```
-blueprint-history/                    (or -o DIR)
-  0001_2026-05-02_ab12cd3.png         the first frame: the diagram only
-  0002_2026-05-12_ef45ab6.diff.png    what changed
-  0002_2026-05-12_ef45ab6.png         what it became
-  index.md                            the frames in order, with dates and commit subjects
+blueprint-history/               (or -o DIR)
+  0001_2026-05-02_ab12cd3.png    the first frame: the plain diagram
+  0002_2026-05-12_ef45ab6.png    the diagram at that commit, its changes marked
+  index.md                       the frames in order, with dates and commit subjects
 ```
 
 - **ROOTs.** The packages named after `PROJECT_DIR` are the ones drawn, each whole unless `-m`

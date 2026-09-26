@@ -103,18 +103,17 @@ def test_album_has_a_frame_per_graph_change(repo: Path) -> None:
     names = _names(repo / "album")
     assert names[-1] == "index.md"
     frames = names[:-1]
-    assert all(re.match(rf"^{_FRAME}(\.diff)?\.puml$", name) for name in frames)
-    # The first frame has nothing to diff against; the other two have a diff.
-    assert [name[:4] for name in frames] == ["0001", "0002", "0002", "0003", "0003"]
-    assert not any(name.startswith("0001") and ".diff" in name for name in frames)
-    [cycle_diff] = (repo / "album").glob("0003_*.diff.puml")
-    [cycle_full] = [
-        path for path in (repo / "album").glob("0003_*.puml") if path != cycle_diff
-    ]
-    assert "NEW CYCLE" in cycle_diff.read_text(encoding="utf-8")
-    # A quick look: neither the diff nor the diagram lists the cycle's imports.
-    assert "note " not in cycle_diff.read_text(encoding="utf-8")
-    assert "note " not in cycle_full.read_text(encoding="utf-8")
+    # One picture per frame.
+    assert all(re.match(rf"^{_FRAME}\.puml$", name) for name in frames)
+    assert [name[:4] for name in frames] == ["0001", "0002", "0003"]
+    first, _, cycle = (repo / "album" / name for name in frames)
+    # The first frame has nothing to diff against: a plain diagram.
+    assert "legend" not in first.read_text(encoding="utf-8")
+    # The others: the whole graph, with the change marked on it.
+    assert "NEW CYCLE" in cycle.read_text(encoding="utf-8")
+    assert "class pkg_a.core " in cycle.read_text(encoding="utf-8")
+    # A quick look: the cycle's imports are not listed.
+    assert "note " not in cycle.read_text(encoding="utf-8")
     index = (repo / "album" / "index.md").read_text(encoding="utf-8")
     assert len([line for line in index.splitlines() if line.startswith("## ")]) == 3
     assert "close a cycle" in index
@@ -155,8 +154,8 @@ def test_rerun_builds_nothing_and_rewrites_nothing(repo: Path) -> None:
 
 def test_cycle_details_on_request(repo: Path) -> None:
     assert _history(repo, "--cycle-details").returncode == 0
-    for path in (repo / "album").glob("0003_*.puml"):
-        assert "note " in path.read_text(encoding="utf-8"), path.name
+    [cycle] = (repo / "album").glob("0003_*.puml")
+    assert "note " in cycle.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(("args", "shown"), [((), True), (("--changes-only",), False)])
@@ -180,7 +179,7 @@ def test_diff_frame_shows_the_whole_graph(
         {"src/pkg_b/__init__.py": "", "src/pkg_b/util.py": "from pkg_a import core\n"},
     )
     assert _history(repo, *args).returncode == 0
-    [diff] = (repo / "album").glob("0002_*.diff.puml")
+    [diff] = (repo / "album").glob("0002_*.puml")
     text = diff.read_text(encoding="utf-8")
     assert "pkg_b.util <<(+" in text
     assert ("class pkg_a.idle " in text) is shown
@@ -226,11 +225,13 @@ def test_frames_of_an_earlier_run_are_removed(repo: Path) -> None:
     album = repo / "album"
     album.mkdir()
     (album / "0009_2020-01-01_abcdef0.puml").write_text("stale")
+    (album / "0001_2020-01-01_abcdef0.diff.puml").write_text("an older album's")
     (album / "0009_2020-01-01_abcdef0.png").write_text("another kind of album")
     (album / "notes.txt").write_text("mine")
     assert _history(repo).returncode == 0
     names = _names(album)
     assert "0009_2020-01-01_abcdef0.puml" not in names
+    assert "0001_2020-01-01_abcdef0.diff.puml" not in names
     assert "0009_2020-01-01_abcdef0.png" in names
     assert "notes.txt" in names
 
@@ -309,8 +310,8 @@ def test_png_album_holds_images_only(repo: Path, tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     names = _names(repo / "album")
     assert names[-1] == "index.md"
-    assert len(names) == 6, names
-    assert all(re.match(rf"^{_FRAME}(\.diff)?\.png$", name) for name in names[:-1])
+    assert len(names) == 4, names
+    assert all(re.match(rf"^{_FRAME}\.png$", name) for name in names[:-1])
     index = (repo / "album" / "index.md").read_text(encoding="utf-8")
     assert "![Diagram](0001_" in index
     assert ".puml" not in index
@@ -347,7 +348,7 @@ def test_failed_images_keep_the_work_for_a_rerun(repo: Path, tmp_path: Path) -> 
     retried = _history(repo, "-f", "puml-png", env=_tool(tmp_path, _DRAWS))
     assert retried.returncode == 0, retried.stderr
     assert "built" not in retried.stderr
-    assert len(list((repo / "album").glob("*.png"))) == 5
+    assert len(list((repo / "album").glob("*.png"))) == 3
 
 
 @_posix_only
@@ -386,7 +387,7 @@ def test_d2_too_large_is_drawn_at_a_smaller_scale(repo: Path, tmp_path: Path) ->
     env = _tool(tmp_path, _D2_TOO_LARGE, "d2")
     result = _history(repo, "-f", "d2-png", env=env)
     assert result.returncode == 0, result.stderr
-    assert len(list((repo / "album").glob("*.png"))) == 5
+    assert len(list((repo / "album").glob("*.png"))) == 3
     assert "too large for d2, drawn at scale 0.25" in result.stderr
     first = [call.split()[0] for call in _calls(tmp_path)[:3]]
     # The default size first, then halved twice.
@@ -410,8 +411,8 @@ def test_d2_too_large_at_every_scale_fails(repo: Path, tmp_path: Path) -> None:
     assert result.returncode == _FAILURE
     assert "exceeds limit" in result.stderr
     assert not list((repo / "album").glob("*.png"))
-    # Each source: the default size, then three halvings.
-    assert len(_calls(tmp_path)) == 5 * (1 + 3)
+    # Each of the 3 sources: the default size, then three halvings.
+    assert len(_calls(tmp_path)) == 3 * (1 + 3)
 
 
 @pytest.mark.parametrize(

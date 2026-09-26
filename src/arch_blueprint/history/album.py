@@ -1,8 +1,9 @@
 """An album of a project's history: one frame per commit that changed its graph.
 
-Each frame is the full diagram at that commit plus, from the second frame on,
-the diff against the frame before it. Files are numbered so that sorting by name
-is chronological; the date and short sha in the name are for the reader.
+One picture per frame: the first is the plain diagram, every later one the
+diagram at that commit with what changed since the frame before marked on it.
+Files are numbered so that sorting by name is chronological; the date and short
+sha in the name are for the reader.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ INDEX_NAME: Final = "index.md"
 IMAGE_EXTENSION: Final = "png"
 
 #: A frame's file name, less the extension; anything else in the directory is not ours.
+#: ``.diff`` is what an earlier version called a frame's second picture.
 _FRAME_STEM: Final = r"\d{4,}_\d{4}-\d{2}-\d{2}_[0-9a-f]+(\.diff)?"
 
 SnapshotSource = Callable[[Commit], Optional[Snapshot]]
@@ -34,7 +36,7 @@ class Frame:
     index: int
     commit: Commit
     snapshot: Snapshot
-    #: The frame before this one; ``None`` for the first frame, which has no diff.
+    #: The frame before this one; ``None`` for the first frame, drawn plain.
     previous: Optional[Snapshot]
 
     @property
@@ -75,7 +77,7 @@ def _is_change(previous: Optional[Snapshot], snapshot: Snapshot) -> bool:
 
 @dataclass(frozen=True)
 class Page:
-    """One diagram of the album: a frame's full diagram, or its diff."""
+    """One picture of the album: a frame's diagram, plain or with its changes."""
 
     #: The file name without its extension.
     name: str
@@ -88,14 +90,20 @@ def pages(
     draw: Callable[[Snapshot], str],
     draw_diff: Callable[[Snapshot, Snapshot], str],
 ) -> list[Page]:
-    """Every frame's diagrams in album order: the diff first, then the result."""
-    result = []
-    for frame in frames:
-        if frame.previous is not None:
-            text = draw_diff(frame.previous, frame.snapshot)
-            result.append(Page(f"{frame.stem}.diff", text))
-        result.append(Page(frame.stem, draw(frame.snapshot)))
-    return result
+    """One page per frame: the first drawn plain, the rest with their changes.
+
+    A diff draws the whole graph, so a second, plain picture of the same frame
+    would only repeat it.
+    """
+    return [
+        Page(
+            frame.stem,
+            draw(frame.snapshot)
+            if frame.previous is None
+            else draw_diff(frame.previous, frame.snapshot),
+        )
+        for frame in frames
+    ]
 
 
 def write(
@@ -165,9 +173,7 @@ def _index(frames: Sequence[Frame], extension: str, *, images: bool) -> str:
         commit = frame.commit
         lines += ["", f"## {frame.index:04d} · {commit.date} · `{commit.short}`"]
         lines += ["", commit.subject]
-        names = [f"{frame.stem}.diff", frame.stem] if frame.previous else [frame.stem]
-        for name in names:
-            label = "What changed" if name.endswith(".diff") else "Diagram"
-            link = f"[{label}]({name}.{extension})"
-            lines += ["", f"!{link}" if images else link]
+        label = "What changed" if frame.previous else "Diagram"
+        link = f"[{label}]({frame.stem}.{extension})"
+        lines += ["", f"!{link}" if images else link]
     return "\n".join(lines)
