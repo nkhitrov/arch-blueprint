@@ -162,8 +162,10 @@ happens, for a fresh extraction and a loaded snapshot alike.
    them, so a cycle through a facade exists, yet drawing every facade's imports would bury the
    diagram. A `Tangle` holds its members, drawn links and the hidden edges closing it; a lone mutual
    pair is only a `Cycle`, a pair inside a longer cycle is both. Renderers mark a tangle's one-way
-   links with `cyclic_link_styles` and, with cycle details, add a note listing its imports (hidden
-   ones marked "package facade import, not drawn"). `GroupAnalyzer.build` decides which link endpoints
+   links with `cyclic_link_styles` and, with cycle details, add one note listing all its imports
+   (hidden ones marked "package facade import, not drawn"), tied to every member by a dotted line.
+   A pair on a tangle gets no note of its own (`_format_cycle(..., details=False)`), in a diff too:
+   its imports are in the tangle's note, so a cycle of any length lists each import once. `GroupAnalyzer.build` decides which link endpoints
    need a container (see below). All are agnostic to node kind and run in the pipeline — **not**
    in a renderer. Snapshots store `facade_edges`; tangles are re-derived.
 6. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
@@ -318,7 +320,8 @@ render) and `RendererOptions` (depth colors, cycle details). `fmt` is a `ClassVa
 set; the constructor rejects a plan built for another format.
 
 Abstract hooks: `_format_node`, `_format_link(source, target, decoration)`,
-`_format_cycle(cycle, decoration)`, `_combine_output`. `_format_group(namespace, nodes)` is
+`_format_cycle(cycle, decoration, *, details)`, `_combine_output`. `details` is decided by the
+template (cycle details on, the pair on no tangle), not by the renderer. `_format_group(namespace, nodes)` is
 **concrete**, defaulting to no wrapping — D2 nests by dotted name on its own, and an abstract method
 would break every renderer outside this package. `_format_cycle` returns a
 `CycleRender(inline, deferred)` so a renderer that must place cycle details elsewhere (D2) carries

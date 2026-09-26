@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from collections.abc import Callable
 from string import Template
 from typing import Final
 
@@ -65,13 +66,23 @@ def format_cycle_note(cycle: Cycle) -> str:
     )
 
 
-def format_tangle_note(tangle: Tangle) -> str:
-    """A floating note listing every import on a longer cycle."""
-    lines = [f"note as {tangle_note_id(tangle)}", f"  **{tangle_title(tangle)}**"]
+def format_tangle_note(
+    tangle: Tangle,
+    ref: Callable[[str], str] = lambda endpoint: endpoint,
+) -> str:
+    """A note listing every import on a longer cycle, tied to each member.
+
+    The dotted lines are what ties it to the cycle rather than to one arrow:
+    the pairs on it get no note of their own, so this is the one place its
+    imports are listed. ``ref`` spells a member as an arrow endpoint.
+    """
+    note_id = tangle_note_id(tangle)
+    lines = [f"note as {note_id}", f"  **{tangle_title(tangle)}**"]
     for heading, imports in tangle_detail_sections(tangle):
         lines.append(f"  **{heading}:**")
         lines.extend(f"  {line}" for line in imports)
     lines.append("end note")
+    lines.extend(f"{note_id} .. {ref(member)}" for member in tangle.members)
     return "\n".join(lines)
 
 
@@ -114,13 +125,19 @@ class PlantUmlRenderer(BlueprintRenderer):
             link = f"{link} : {' '.join(decoration.labels)}"
         return link
 
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+    def _format_cycle(
+        self,
+        cycle: Cycle,
+        decoration: LinkDecoration,
+        *,
+        details: bool,
+    ) -> CycleRender:
         color = CYCLE_HIGHLIGHT_COLOR
         link = f"{cycle.endpoint_from} <-[{color},bold]-> {cycle.endpoint_to}"
         if decoration.labels:
             link = f"{link} : {' '.join(decoration.labels)}"
 
-        if not self.options.show_cycle_details:
+        if not details:
             return CycleRender(inline=link)
 
         return CycleRender(inline=f"{link}\n{format_cycle_note(cycle)}")

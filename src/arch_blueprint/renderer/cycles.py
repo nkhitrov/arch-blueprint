@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import textwrap
 from collections import defaultdict
 
@@ -72,5 +73,12 @@ def tangle_title(tangle: Tangle) -> str:
 
 
 def tangle_note_id(tangle: Tangle) -> str:
-    """An identifier unique per tangle: tangles never share an endpoint."""
-    return f"tangle_{tangle.members[0].replace('.', '_')}"
+    """An identifier unique per tangle: tangles never share an endpoint.
+
+    Built from the first member, spelled with word characters only, and
+    injectively: ``_`` doubles before ``.`` becomes ``_`` (so ``a.b_c`` and
+    ``a_b.c`` differ), and anything else — a shadowed node's parentheses — is
+    its code point.
+    """
+    name = tangle.members[0].replace("_", "__").replace(".", "_")
+    return "tangle_" + re.sub(r"\W", lambda m: f"_x{ord(m.group()):x}_", name)

@@ -29,6 +29,7 @@ from arch_blueprint.renderer.d2 import (
     format_cycle_note,
     format_cycle_notes_container,
     format_tangle_note,
+    format_tangle_ties,
 )
 
 # D2 has no spot letter, so a changed node's marker goes into the label; D2
@@ -107,7 +108,10 @@ class D2LangDiffRenderer(DiffRenderer):
         return f"{_key_of(source)} -> {_key_of(target)}{label}{style}"
 
     def _format_tangle(self, tangle: Tangle) -> CycleRender:
-        return CycleRender(inline="", deferred=format_tangle_note(tangle))
+        return CycleRender(
+            inline=format_tangle_ties(tangle, _key_of),
+            deferred=format_tangle_note(tangle),
+        )
 
     def _format_context_cycle(self, cycle: Cycle) -> str:
         return CYCLE_CONNECTION_TEMPLATE.substitute(
@@ -117,7 +121,7 @@ class D2LangDiffRenderer(DiffRenderer):
             color=CYCLE_HIGHLIGHT_COLOR,
         )
 
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
+    def _format_cycle(self, delta: CycleDelta, *, details: bool) -> CycleRender:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
             return CycleRender(inline=self._format_resolved(delta))
@@ -125,8 +129,7 @@ class D2LangDiffRenderer(DiffRenderer):
             f"{_key_of(cycle.endpoint_from)} <-> {_key_of(cycle.endpoint_to)}: "
             f"{NEW_CYCLE_LABEL} {{{_NEW_CYCLE_STYLE}}}"
         )
-        # Only a new cycle gets its imports listed: they are what to fix.
-        if delta.change is CycleChange.NEW and self.show_cycle_details:
+        if details:
             return CycleRender(inline=connection, deferred=format_cycle_note(cycle))
         return CycleRender(inline=connection)
 

@@ -1,0 +1,29 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class knot.a <<(M, #2ECC71)>>
+class knot.b <<(M, #2ECC71)>>
+class knot.c <<(M, #2ECC71)>>
+
+knot.a <-[#C0392B,bold]-> knot.b
+knot.b -[#C0392B,bold]-> knot.c
+knot.c -[#C0392B,bold]-> knot.a
+note as tangle_knot_a
+  **Cycle: knot.a, knot.b, knot.c**
+  **knot.a -> knot.b:**
+  - a → b
+  **knot.b -> knot.a:**
+  - b → a
+  **knot.b -> knot.c:**
+  - b → c
+  **knot.c -> knot.a:**
+  - c → a
+end note
+tangle_knot_a .. knot.a
+tangle_knot_a .. knot.b
+tangle_knot_a .. knot.c
+@enduml
+

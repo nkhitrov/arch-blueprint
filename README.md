@@ -98,7 +98,9 @@ snapshot records it — `render` and a diff of two snapshot files draw what they
 snapshots built at different levels are not diffed (exit 2).
 
 A cycle is not only a pair importing each other: a ring `a → b → c → a` of any length is found too,
-its links drawn red, with a note listing the imports on it. A cycle can also run through a package
+its links drawn red, with one note listing every import on it, tied to each module of the cycle by a
+dotted line. A pair importing each other inside such a cycle gets no note of its own: its imports
+are in the cycle's note, so they are listed once however long the cycle. A cycle can also run through a package
 facade — `api.handlers` imports `services`, whose `__init__.py` imports `services.engine`, which
 imports `api.handlers`. That `__init__.py` import closes the cycle but is not drawn (every facade's
 re-exports would bury the diagram); the note lists it as "package facade import, not drawn".

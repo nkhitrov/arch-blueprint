@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+from collections.abc import Callable
 from string import Template
 from typing import Final
 
@@ -68,6 +69,9 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
     ).rstrip(),
 )
 
+#: The container every cycle note is drawn in, and the grid inside it.
+_CYCLE_NOTES_PATH: Final = '"Cycle Details".grid'
+
 _CYCLE_CONTAINER_TEMPLATE: Final = Template(
     textwrap.dedent(
         """\
@@ -120,6 +124,27 @@ _TANGLE_NOTE_TEMPLATE: Final = Template(
         """,
     ).rstrip(),
 )
+
+
+_TANGLE_TIE_STYLE: Final = (
+    f'style.stroke: "{CYCLE_HIGHLIGHT_COLOR}"; style.stroke-dash: 3'
+)
+
+
+def format_tangle_ties(
+    tangle: Tangle,
+    key: Callable[[str], str] = lambda endpoint: endpoint,
+) -> str:
+    """Dashed lines from a longer cycle's note to each member of the cycle.
+
+    They tie the note to the cycle rather than to one arrow: the pairs on it
+    get no note of their own. Top-level connections, since the note itself sits
+    in the notes container; ``key`` spells a member as a connection end.
+    """
+    note = f"{_CYCLE_NOTES_PATH}.{tangle_note_id(tangle)}"
+    return "\n".join(
+        f"{note} -- {key(member)} {{{_TANGLE_TIE_STYLE}}}" for member in tangle.members
+    )
 
 
 def format_tangle_note(tangle: Tangle) -> str:
@@ -180,7 +205,13 @@ class D2LangRenderer(BlueprintRenderer):
             link = f"{link} {{{'; '.join(decoration.styles)}}}"
         return link
 
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+    def _format_cycle(
+        self,
+        cycle: Cycle,
+        decoration: LinkDecoration,
+        *,
+        details: bool,
+    ) -> CycleRender:
         label = "CYCLE"
         if decoration.labels:
             label = f"{label} {' '.join(decoration.labels)}"
@@ -190,12 +221,15 @@ class D2LangRenderer(BlueprintRenderer):
             label=quote_label(label),
             color=CYCLE_HIGHLIGHT_COLOR,
         )
-        if not self.options.show_cycle_details:
+        if not details:
             return CycleRender(inline=connection)
         return CycleRender(inline=connection, deferred=format_cycle_note(cycle))
 
     def _format_tangle(self, tangle: Tangle) -> CycleRender:
-        return CycleRender(inline="", deferred=format_tangle_note(tangle))
+        return CycleRender(
+            inline=format_tangle_ties(tangle),
+            deferred=format_tangle_note(tangle),
+        )
 
     def _combine_output(
         self,

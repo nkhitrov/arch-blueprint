@@ -43,5 +43,8 @@ note as tangle_ring_a
   **ring.c -> ring.a:**
   - c → a
 end note
+tangle_ring_a .. ring.a
+tangle_ring_a .. ring.b
+tangle_ring_a .. ring.c
 @enduml
 

@@ -60,6 +60,12 @@ ring.a -> ring.b {style.stroke: "#C0392B"; style.stroke-width: 4}
 ring.b -> ring.c {style.stroke: "#C0392B"; style.stroke-width: 4}
 ring.c -> ring.a {style.stroke: "#C0392B"; style.stroke-width: 4}
 services.engine -> api.handlers {style.stroke: "#C0392B"; style.stroke-width: 4}
+"Cycle Details".grid.tangle_api_handlers -- api.handlers {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_api_handlers -- services {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_api_handlers -- services.engine {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_ring_a -- ring.a {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_ring_a -- ring.b {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_ring_a -- ring.c {style.stroke: "#C0392B"; style.stroke-dash: 3}
 "Cycle Details": {
   style.fill: "#FEF9E7"
   style.stroke: "#F39C12"

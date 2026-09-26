@@ -113,6 +113,9 @@ TANGLE_MODULE_LINKS = Selection(
     TANGLE_MODULES,
     MODULE_LINKS,
 )
+# A pair inside a longer cycle: knot.a <-> knot.b, then b -> c -> a. The pair
+# gets no note of its own; the cycle's note lists every import, once.
+KNOT = Selection("knot", TANGLE_PROJECT, ["-m", "knot.*"], MODULE_LINKS)
 # Package nodes at the module level: every import lands inside a node.
 DEEP_PACKAGES_MODULE_LINKS = Selection(
     "deep_packages_module_links",
@@ -133,6 +136,7 @@ SELECTIONS = [
     ANCESTOR_DEP_MODULE_LINKS,
     TANGLE,
     TANGLE_MODULE_LINKS,
+    KNOT,
     DEEP_PACKAGES_MODULE_LINKS,
 ]
 
@@ -179,6 +183,7 @@ SCENARIOS = [
     Scenario("tangle", TANGLE),
     Scenario("tangle_module_links", TANGLE_MODULE_LINKS),
     Scenario("tangle_nodetails", TANGLE_MODULE_LINKS, ["--no-cycle-details"]),
+    Scenario("knot", KNOT),
     Scenario("deep_packages_module_links", DEEP_PACKAGES_MODULE_LINKS),
 ]
 
@@ -251,6 +256,14 @@ DIFF_CASES = [
         "new_tangle",
         _DIFF_FIXTURES / "tangle_open_ring.json",
         GOLDEN_DIR / "json" / "tangle_module_links.json",
+        ("--cycle-details",),
+    ),
+    # The pair and the longer cycle around it appear at once: one note, the
+    # cycle's, lists the imports of both.
+    DiffCase(
+        "new_knot",
+        _DIFF_FIXTURES / "knot_chain.json",
+        GOLDEN_DIR / "json" / "knot.json",
         ("--cycle-details",),
     ),
     DiffCase(

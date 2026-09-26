@@ -184,6 +184,12 @@ class BlueprintRenderer(ABC):
         cycle_map = {
             frozenset({c.endpoint_from, c.endpoint_to}): c for c in graph.cycles
         }
+        # A pair inside a longer cycle is listed in that cycle's note, once.
+        in_tangle = {
+            frozenset({link.source, link.target})
+            for tangle in graph.tangles
+            for link in tangle.links
+        }
 
         links: list[str] = []
         deferred: list[str] = []
@@ -203,6 +209,8 @@ class BlueprintRenderer(ABC):
                 rendered = self._format_cycle(
                     cycle,
                     self._cycle_decoration(graph, cycle),
+                    details=self.options.show_cycle_details
+                    and cycle_key not in in_tangle,
                 )
                 links.append(rendered.inline)
                 if rendered.deferred is not None:
@@ -331,8 +339,18 @@ class BlueprintRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
-        """Format a bidirectional cycle between endpoints, with any decoration."""
+    def _format_cycle(
+        self,
+        cycle: Cycle,
+        decoration: LinkDecoration,
+        *,
+        details: bool,
+    ) -> CycleRender:
+        """Format a bidirectional cycle between endpoints, with any decoration.
+
+        ``details`` says whether to list the cycle's imports: off without cycle
+        details, and off for a pair on a longer cycle, whose note lists them.
+        """
         ...
 
     @abstractmethod

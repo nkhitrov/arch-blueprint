@@ -5,7 +5,7 @@ import pytest
 from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.blueprint import ArchBlueprint
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge
+from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge, Tangle
 from arch_blueprint.domain.node import Node
 from arch_blueprint.metrics import (
     MetricDisplay,
@@ -20,7 +20,7 @@ from arch_blueprint.renderer.base import (
     LinkDecoration,
     RendererOptions,
 )
-from arch_blueprint.renderer.cycles import format_edges
+from arch_blueprint.renderer.cycles import format_edges, tangle_note_id
 from arch_blueprint.renderer.d2 import D2LangRenderer
 from arch_blueprint.renderer.puml import PlantUmlRenderer
 from tests.conftest import CYCLIC_PROJECT, make_edge, make_graph
@@ -78,7 +78,13 @@ class _CapturingRenderer(BlueprintRenderer):
     ) -> str:
         return ""
 
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+    def _format_cycle(
+        self,
+        cycle: Cycle,
+        decoration: LinkDecoration,
+        *,
+        details: bool,
+    ) -> CycleRender:
         return CycleRender(inline="")
 
     def _combine_output(
@@ -245,3 +251,16 @@ def test_pipeline_fills_in_the_groups() -> None:
 )
 def test_cycle_note_lines_cut_both_sides_alike(edge: Edge, line: str) -> None:
     assert format_edges(frozenset({edge})) == [line]
+
+
+def _tangle(first: str) -> Tangle:
+    return Tangle(members=(first, "z"), links=(), hidden_edges=frozenset())
+
+
+def test_tangle_note_id_tells_dots_from_underscores() -> None:
+    assert tangle_note_id(_tangle("a.b_c")) != tangle_note_id(_tangle("a_b.c"))
+
+
+def test_tangle_note_id_is_a_word_for_a_shadowed_member() -> None:
+    """``pkg.(module)`` would end a PlantUML alias at the parenthesis."""
+    assert tangle_note_id(_tangle("pkg.(module)")).isidentifier()

@@ -94,21 +94,20 @@ class PlantUmlDiffRenderer(DiffRenderer):
         return f"{_ref(source)} {arrow} {_ref(target)}{label}"
 
     def _format_tangle(self, tangle: Tangle) -> CycleRender:
-        return CycleRender(inline=format_tangle_note(tangle))
+        return CycleRender(inline=format_tangle_note(tangle, _ref))
 
     def _format_context_cycle(self, cycle: Cycle) -> str:
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},bold]->"
         return f"{_ref(cycle.endpoint_from)} {arrow} {_ref(cycle.endpoint_to)}"
 
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
+    def _format_cycle(self, delta: CycleDelta, *, details: bool) -> CycleRender:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
             return CycleRender(inline=self._format_resolved(delta))
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},dashed,thickness=3]->"
         ends = f"{_ref(cycle.endpoint_from)} {arrow} {_ref(cycle.endpoint_to)}"
         link = f"{ends} : {NEW_CYCLE_LABEL}"
-        # Only a new cycle gets its imports listed: they are what to fix.
-        if delta.change is CycleChange.NEW and self.show_cycle_details:
+        if details:
             link = f"{link}\n{format_cycle_note(cycle)}"
         return CycleRender(inline=link)
 

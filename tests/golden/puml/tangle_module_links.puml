@@ -36,6 +36,9 @@ note as tangle_api_handlers
   **services -> services.engine (package facade import, not drawn):**
   - services → engine
 end note
+tangle_api_handlers .. api.handlers
+tangle_api_handlers .. services
+tangle_api_handlers .. services.engine
 note as tangle_ring_a
   **Cycle: ring.a, ring.b, ring.c**
   **ring.a -> ring.b:**
@@ -45,5 +48,8 @@ note as tangle_ring_a
   **ring.c -> ring.a:**
   - c → a
 end note
+tangle_ring_a .. ring.a
+tangle_ring_a .. ring.b
+tangle_ring_a .. ring.c
 @enduml
 

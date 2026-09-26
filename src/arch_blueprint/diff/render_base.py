@@ -84,8 +84,27 @@ class DiffRenderer(ABC):
             (_first_pair(cycle), CycleRender(inline=self._format_context_cycle(cycle)))
             for cycle in diff.context_cycles
         ]
+        # A new pair on a new longer cycle is listed in that cycle's note, once.
+        noted = (
+            {
+                frozenset({link.source, link.target})
+                for delta in diff.tangle_changes
+                if delta.change is CycleChange.NEW
+                for link in delta.tangle.links
+            }
+            if self.show_cycle_details
+            else set()
+        )
         connections += [
-            (delta.remaining or _first_pair(delta.cycle), self._format_cycle(delta))
+            (
+                delta.remaining or _first_pair(delta.cycle),
+                self._format_cycle(
+                    delta,
+                    details=self.show_cycle_details
+                    and delta.change is CycleChange.NEW
+                    and _ends(delta.cycle) not in noted,
+                ),
+            )
             for delta in diff.cycle_changes
         ]
         connections.sort(key=lambda item: item[0])
@@ -142,8 +161,12 @@ class DiffRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
-        """Format a new or resolved cycle, with details for a new one."""
+    def _format_cycle(self, delta: CycleDelta, *, details: bool) -> CycleRender:
+        """Format a new or resolved cycle, listing its imports if ``details``.
+
+        Only a new cycle gets them — they are what to fix — and not one on a new
+        longer cycle, whose note lists them.
+        """
         ...
 
     @abstractmethod
@@ -200,3 +223,7 @@ def _first_pair(cycle: Cycle) -> tuple[str, str]:
         (cycle.endpoint_from, cycle.endpoint_to),
         (cycle.endpoint_to, cycle.endpoint_from),
     )
+
+
+def _ends(cycle: Cycle) -> frozenset[str]:
+    return frozenset({cycle.endpoint_from, cycle.endpoint_to})
