@@ -218,7 +218,7 @@ def test_d2_leaves_grouping_to_its_own_nesting() -> None:
     graph.groups = GroupAnalyzer.build(graph)
     output = D2LangRenderer(plan=_plan("d2")).render(graph)
     assert "package" not in output
-    assert output.startswith("direction: right\na.core: {")
+    assert output.startswith("direction: down\na.core: {")
 
 
 def test_pipeline_fills_in_the_groups() -> None:

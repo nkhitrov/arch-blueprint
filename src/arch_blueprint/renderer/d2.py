@@ -14,6 +14,10 @@ from arch_blueprint.renderer.base import (
 )
 from arch_blueprint.renderer.cycles import cycle_detail_sections
 
+#: Top to bottom, as the PlantUML diagrams are drawn: the layers of a project
+#: read downwards, and an album leafs through both formats alike.
+DIRECTION: Final = "direction: down"
+
 CYCLE_CONNECTION_TEMPLATE: Final = Template(
     '$ns_a <-> $ns_b: $label {style.stroke: "$color"; style.stroke-width: 4}',
 )
@@ -159,7 +163,7 @@ class D2LangRenderer(BlueprintRenderer):
         links: list[str],
         deferred: list[str],
     ) -> str:
-        sections = ["direction: right", "\n\n".join(nodes), "\n".join(links)]
+        sections = [DIRECTION, "\n\n".join(nodes), "\n".join(links)]
         if deferred:
             sections.append(format_cycle_notes_container(deferred))
         return "\n".join(sections)

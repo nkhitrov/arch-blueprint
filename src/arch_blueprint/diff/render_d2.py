@@ -24,6 +24,7 @@ from arch_blueprint.domain.graph import Cycle
 from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, CycleRender
 from arch_blueprint.renderer.d2 import (
     CYCLE_CONNECTION_TEMPLATE,
+    DIRECTION,
     format_cycle_note,
     format_cycle_notes_container,
 )
@@ -125,7 +126,7 @@ class D2LangDiffRenderer(DiffRenderer):
         return "\n".join([*head, *_LEGEND_ITEMS, "}"])
 
     def _format_empty(self) -> str:
-        return f'direction: right\nno_changes: "{NO_CHANGES_LABEL}" {{shape: text}}'
+        return f'{DIRECTION}\nno_changes: "{NO_CHANGES_LABEL}" {{shape: text}}'
 
     def _combine_output(
         self,
@@ -134,7 +135,7 @@ class D2LangDiffRenderer(DiffRenderer):
         links: list[str],
         deferred: list[str],
     ) -> str:
-        sections = ["direction: right", legend, "\n\n".join(nodes)]
+        sections = [DIRECTION, legend, "\n\n".join(nodes)]
         if links:
             sections.append("\n".join(links))
         if deferred:
