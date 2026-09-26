@@ -19,9 +19,11 @@ CYCLIC_PROJECT = _FIXTURES / "cyclic"
 DEEP_PROJECT = _FIXTURES / "deep_ns"
 INIT_IMPORTS_PROJECT = _FIXTURES / "init_imports"
 ANCESTOR_DEP_PROJECT = _FIXTURES / "ancestor_dep"
+TANGLE_PROJECT = _FIXTURES / "tangle"
 
 INIT_IMPORTS_MODULES = ["-m", "writer", "-m", "storage.*"]
 ANCESTOR_DEP_MODULES = ["-m", "api.*", "-m", "services.*"]
+TANGLE_MODULES = ["-m", "api.*", "-m", "services.*", "-m", "ring.*", "-m", "nest.*"]
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
 CYCLIC_MODULES = ["-m", "pkg_a.*", "-m", "pkg_b.*"]
@@ -102,6 +104,23 @@ ANCESTOR_DEP_MODULE_LINKS = Selection(
     MODULE_LINKS,
 )
 
+# Longer cycles: a ring of three modules, a cycle closed only by a package
+# facade's own imports (found, not drawn), and a pair through a nested package.
+TANGLE = Selection("tangle", TANGLE_PROJECT, TANGLE_MODULES)
+TANGLE_MODULE_LINKS = Selection(
+    "tangle_module_links",
+    TANGLE_PROJECT,
+    TANGLE_MODULES,
+    MODULE_LINKS,
+)
+# Package nodes at the module level: every import lands inside a node.
+DEEP_PACKAGES_MODULE_LINKS = Selection(
+    "deep_packages_module_links",
+    DEEP_PROJECT,
+    ["-m", "deep.*"],
+    MODULE_LINKS,
+)
+
 SELECTIONS = [
     EXAMPLE,
     CYCLIC,
@@ -112,6 +131,9 @@ SELECTIONS = [
     CYCLIC_MODULE_LINKS,
     DEEP_MODULE_LINKS,
     ANCESTOR_DEP_MODULE_LINKS,
+    TANGLE,
+    TANGLE_MODULE_LINKS,
+    DEEP_PACKAGES_MODULE_LINKS,
 ]
 
 
@@ -154,6 +176,10 @@ SCENARIOS = [
     Scenario("cyclic_module_links_metrics", CYCLIC_MODULE_LINKS, SHOW_LINK_METRIC),
     Scenario("deep_module_links", DEEP_MODULE_LINKS),
     Scenario("ancestor_dep_module_links", ANCESTOR_DEP_MODULE_LINKS),
+    Scenario("tangle", TANGLE),
+    Scenario("tangle_module_links", TANGLE_MODULE_LINKS),
+    Scenario("tangle_nodetails", TANGLE_MODULE_LINKS, ["--no-cycle-details"]),
+    Scenario("deep_packages_module_links", DEEP_PACKAGES_MODULE_LINKS),
 ]
 
 
@@ -218,6 +244,27 @@ DIFF_CASES = [
         "nested",
         _DIFF_FIXTURES / "deep_unlinked.json",
         GOLDEN_DIR / "json" / "deep.json",
+    ),
+    # A ring of three closed by one new import: a new longer cycle, marked on
+    # every link of it, with the notes on request.
+    DiffCase(
+        "new_tangle",
+        _DIFF_FIXTURES / "tangle_open_ring.json",
+        GOLDEN_DIR / "json" / "tangle_module_links.json",
+        ("--cycle-details",),
+    ),
+    DiffCase(
+        "resolved_tangle",
+        GOLDEN_DIR / "json" / "tangle_module_links.json",
+        _DIFF_FIXTURES / "tangle_open_ring.json",
+    ),
+    # Only a facade's own imports changed: no drawn link did, yet a cycle
+    # appeared, so the diff is not empty.
+    DiffCase(
+        "facade_closes_cycle",
+        _DIFF_FIXTURES / "tangle_no_facade_import.json",
+        GOLDEN_DIR / "json" / "tangle_module_links.json",
+        ("--changes-only",),
     ),
     DiffCase(
         "no_changes",

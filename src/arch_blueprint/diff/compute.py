@@ -8,9 +8,10 @@ from arch_blueprint.diff.model import (
     CycleChange,
     CycleDelta,
     GraphDiff,
+    TangleDelta,
     shadowed_id,
 )
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge, Link
+from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge, Link, Tangle
 from arch_blueprint.domain.node import Node
 
 
@@ -67,6 +68,19 @@ def diff_graphs(
     for cycle in (*(delta.cycle for delta in cycle_changes), *context_cycles):
         edges |= cycle.forward_edges | cycle.backward_edges
 
+    tangle_changes, context_tangles = _tangle_changes(old, new, changes_only)
+    for delta in tangle_changes:
+        for link in delta.tangle.links:
+            pair = (link.source, link.target)
+            unchanged = pair in old_links and pair in new_links
+            if (
+                unchanged
+                and pair not in link_status
+                and frozenset(pair) not in cycle_keys
+            ):
+                link_status[pair] = ChangeStatus.CONTEXT
+                edges |= new_links[pair].edges
+
     kinds = {node.id: node.kind for node in (*old.nodes, *new.nodes)}
     shown = _node_status(old, new, edges, everything=not changes_only)
     node_status = {_drawn_id(node_id, shown): st for node_id, st in shown.items()}
@@ -87,7 +101,36 @@ def diff_graphs(
         link_status=dict(sorted(link_status.items())),
         cycle_changes=cycle_changes,
         context_cycles=context_cycles,
+        tangle_changes=tangle_changes,
+        context_tangles=context_tangles,
     )
+
+
+def _tangle_changes(
+    old: BlueprintGraph,
+    new: BlueprintGraph,
+    changes_only: bool,
+) -> tuple[tuple[TangleDelta, ...], tuple[Tangle, ...]]:
+    """Tangles that appeared or went, and — unless ``changes_only`` — the rest."""
+    old_tangles = {frozenset(t.members): t for t in old.tangles}
+    new_tangles = {frozenset(t.members): t for t in new.tangles}
+    deltas = [
+        TangleDelta(CycleChange.NEW, new_tangles[key])
+        for key in new_tangles.keys() - old_tangles.keys()
+    ] + [
+        TangleDelta(CycleChange.RESOLVED, old_tangles[key])
+        for key in old_tangles.keys() - new_tangles.keys()
+    ]
+    context: tuple[Tangle, ...] = ()
+    if not changes_only:
+        context = tuple(
+            sorted(
+                (new_tangles[key] for key in new_tangles.keys() & old_tangles.keys()),
+                key=lambda t: t.members,
+            ),
+        )
+    ordered = sorted(deltas, key=lambda d: (d.tangle.members, d.change.value))
+    return tuple(ordered), context
 
 
 def _drawn_id(node_id: str, shown: Iterable[str]) -> str:

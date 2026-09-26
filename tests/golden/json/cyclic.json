@@ -43,6 +43,7 @@
       "target_endpoint": "pkg_a"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {
     "pkg_a.core": {
       "depth": 2,

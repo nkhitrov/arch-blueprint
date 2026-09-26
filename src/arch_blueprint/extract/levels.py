@@ -1,7 +1,7 @@
 """Link levels: which pair of names an import edge aggregates on.
 
 An :class:`~arch_blueprint.domain.graph.Edge` keeps the real importer and the
-real imported module; its namespaces are only the key links, cycles, groups and
+real imported module; its endpoints are only the key links, cycles, groups and
 link metrics are built on. A level chooses that key, so switching between
 namespace arrows and module-to-module arrows changes nothing downstream.
 """

@@ -86,6 +86,16 @@ class GrimpSource:
             module_names.update(self.graph.find_matching_modules(name))
         return sorted(self._exclude_sub_modules(module_names))
 
+    def own_imports_of(self, module: str) -> set[str]:
+        """What ``module`` itself imports — for a package, its ``__init__.py``.
+
+        Empty for a name the graph does not hold, such as a PEP 420 namespace
+        package: it has no ``__init__.py`` to import anything.
+        """
+        if module not in self.graph.modules:
+            return set()
+        return set(self.graph.find_modules_directly_imported_by(module))
+
     def imports_of(self, module: str) -> set[str]:
         """All modules imported by ``module`` or any of its descendants.
 

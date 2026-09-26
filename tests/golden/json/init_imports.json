@@ -27,6 +27,7 @@
       "target_endpoint": "storage"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {
     "storage.backend": {
       "depth": 2,

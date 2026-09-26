@@ -1,7 +1,8 @@
 """A graph snapshot: the one intermediate format every diagram is drawn from.
 
-A snapshot holds only *primary* data — nodes, edges and the metrics computed on
-them. ``links``, ``cycles`` and ``groups`` are derived from the edges and are
+A snapshot holds only *primary* data — nodes, edges, package facade edges and
+the metrics computed on them. ``links``, ``cycles``, ``tangles`` and ``groups``
+are derived from the edges and are
 re-derived on load, for the same reason ``BlueprintGraph.edges`` is a frozenset:
 a stored copy of derived data is a copy that can disagree with its source.
 
@@ -61,13 +62,8 @@ def dump(graph: BlueprintGraph, metrics: Iterable[str], links: str) -> str:
         "links": links,
         "metrics": sorted(metrics),
         "nodes": [{"id": node.id, "kind": node.kind.value} for node in graph.nodes],
-        "edges": [
-            {name: getattr(edge, name) for name in _EDGE_FIELDS}
-            for edge in sorted(
-                graph.edges,
-                key=lambda e: tuple(getattr(e, name) for name in _EDGE_FIELDS),
-            )
-        ],
+        "edges": _dump_edges(graph.edges),
+        "facade_edges": _dump_edges(graph.facade_edges),
         "node_metrics": {
             node_id: dict(sorted(values.items()))
             for node_id, values in sorted(graph.node_metrics.items())
@@ -101,6 +97,7 @@ def load(text: str) -> Snapshot:
     graph = BlueprintGraph(
         nodes=[_node(item) for item in _list(root, "nodes")],
         edges=frozenset(_edge(item) for item in _list(root, "edges")),
+        facade_edges=frozenset(_edge(item) for item in _list(root, "facade_edges")),
     )
     for node_id, values in _mapping(
         _field(root, "node_metrics"),
@@ -120,6 +117,16 @@ def load(text: str) -> Snapshot:
         msg = f"unknown link level {links!r}"
         raise SnapshotError(msg)
     return Snapshot(graph=analyze(graph), metrics=metrics, links=links)
+
+
+def _dump_edges(edges: frozenset[Edge]) -> list[dict[str, str]]:
+    return [
+        {name: getattr(edge, name) for name in _EDGE_FIELDS}
+        for edge in sorted(
+            edges,
+            key=lambda e: tuple(getattr(e, name) for name in _EDGE_FIELDS),
+        )
+    ]
 
 
 def _node(item: object) -> Node:

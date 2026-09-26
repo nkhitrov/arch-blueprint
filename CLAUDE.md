@@ -155,9 +155,17 @@ happens, for a fresh extraction and a loaded snapshot alike.
    a metric sits in *is* its target and results route without a cast. Register with
    `register_node` / `register_link`. `MetricRegistry.compute(graph, names)` computes only what is
    asked for. `depth` is compute-only (`render = None`) and drives node fill color.
-5. **Analyze** (`analyze/`) — `CycleAnalyzer.detect_cycles` finds bidirectional namespace
-   dependencies; `GroupAnalyzer.build` decides which link endpoints need a container (see below).
-   Both are agnostic to node kind, and both run in the pipeline — **not** in a renderer.
+5. **Analyze** (`analyze/`) — `CycleAnalyzer.detect_cycles` finds mutual pairs of link endpoints
+   (a `Cycle`, drawn as one two-headed arrow); `CycleAnalyzer.detect_tangles` finds every longer
+   cycle as a strongly connected component (`networkx`) of the links **plus** `facade_edges` — the
+   own imports of package facades (`__init__.py`), extracted but never drawn: importing `pkg` runs
+   them, so a cycle through a facade exists, yet drawing every facade's imports would bury the
+   diagram. A `Tangle` holds its members, drawn links and the hidden edges closing it; a lone mutual
+   pair is only a `Cycle`, a pair inside a longer cycle is both. Renderers mark a tangle's one-way
+   links with `cyclic_link_styles` and, with cycle details, add a note listing its imports (hidden
+   ones marked "package __init__, not drawn"). `GroupAnalyzer.build` decides which link endpoints
+   need a container (see below). All are agnostic to node kind and run in the pipeline — **not**
+   in a renderer. Snapshots store `facade_edges`; tangles are re-derived.
 6. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
 
 ### Snapshot and diff
@@ -186,6 +194,11 @@ renderer and no parser. `-f json` computes every registered metric so `render` c
   filtered), and no unchanged link. `is_empty` ignores context either way.
 - `GraphDiff.graph` holds shown nodes + shown edges, with `groups` built but `cycles` left empty on
   purpose (cycle detection on a partial edge set would report a resolved cycle as present).
+- tangles compare by their member set (`TangleDelta` NEW/RESOLVED, `context_tangles`); their links
+  stay in `link_status` and are marked by `OnCycle` — an unchanged one on an unchanged tangle drawn
+  as a plain diagram does, on a new/resolved one like a new/resolved pair. A changed tangle's links
+  are shown even with `changes_only`, and `is_empty` counts tangle changes: a facade's imports can
+  close a cycle with no drawn link changing.
 - a change to the imports inside a link present on both sides is not a change (YAGNI).
 - within one graph no node lies under another (the extractor keeps leaves), but a diff joins two:
   a module `pkg.py` removed and a package `pkg/` added are both shown. Such a node is drawn as

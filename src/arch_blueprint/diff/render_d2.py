@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Final
+from typing import Final, Optional
 
 from arch_blueprint.diff.model import (
     SHADOWED_SUFFIX,
     ChangeStatus,
     CycleChange,
     CycleDelta,
+    OnCycle,
     display_name,
     is_shadowed,
 )
@@ -20,13 +21,14 @@ from arch_blueprint.diff.render_base import (
     UNCHANGED_LABEL,
     DiffRenderer,
 )
-from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, CycleRender
 from arch_blueprint.renderer.d2 import (
     CYCLE_CONNECTION_TEMPLATE,
     DIRECTION,
     format_cycle_note,
     format_cycle_notes_container,
+    format_tangle_note,
 )
 
 # D2 has no spot letter, so a changed node's marker goes into the label; D2
@@ -55,6 +57,17 @@ _NEW_CYCLE_STYLE: Final = (
 )
 _RESOLVED_CYCLE_STYLE: Final = f'style.stroke: "{RESOLVED_COLOR}"; {_DASHED}'
 
+# An unchanged link on a longer cycle: as a plain diagram draws it when the cycle
+# is unchanged, marked like a new or resolved pair when the cycle is not.
+_ON_CYCLE_STYLE: Final = {
+    OnCycle.UNCHANGED: (
+        "",
+        f' {{style.stroke: "{CYCLE_HIGHLIGHT_COLOR}"; style.stroke-width: 4}}',
+    ),
+    OnCycle.NEW: (f": {NEW_CYCLE_LABEL}", f" {{{_NEW_CYCLE_STYLE}}}"),
+    OnCycle.RESOLVED: (f": {RESOLVED_CYCLE_LABEL}", f" {{{_RESOLVED_CYCLE_STYLE}}}"),
+}
+
 _LEGEND_ITEMS: Final = (
     f'  unchanged: "{UNCHANGED_LABEL}"',
     f'  added: "+ added" {{style.fill: "{ADDED_COLOR}"; {_DASHED}}}',
@@ -80,14 +93,26 @@ class D2LangDiffRenderer(DiffRenderer):
         lines += ["  }", "}"]
         return "\n".join(lines)
 
-    def _format_link(self, source: str, target: str, status: ChangeStatus) -> str:
-        label, style = _LINK_STYLE[status]
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        status: ChangeStatus,
+        on_cycle: Optional[OnCycle],
+    ) -> str:
+        if status is ChangeStatus.CONTEXT and on_cycle is not None:
+            label, style = _ON_CYCLE_STYLE[on_cycle]
+        else:
+            label, style = _LINK_STYLE[status]
         return f"{source} -> {target}{label}{style}"
+
+    def _format_tangle(self, tangle: Tangle) -> CycleRender:
+        return CycleRender(inline="", deferred=format_tangle_note(tangle))
 
     def _format_context_cycle(self, cycle: Cycle) -> str:
         return CYCLE_CONNECTION_TEMPLATE.substitute(
-            ns_a=cycle.endpoint_from,
-            ns_b=cycle.endpoint_to,
+            a=cycle.endpoint_from,
+            b=cycle.endpoint_to,
             label="CYCLE",
             color=CYCLE_HIGHLIGHT_COLOR,
         )

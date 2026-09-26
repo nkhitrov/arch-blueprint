@@ -1,0 +1,47 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+package api {
+  class api.handlers <<(M, #2ECC71)>>
+}
+class nest.a <<(M, #2ECC71)>>
+class nest.b <<(M, #2ECC71)>>
+class ring.a <<(M, #2ECC71)>>
+class ring.b <<(M, #2ECC71)>>
+class ring.c <<(M, #2ECC71)>>
+package services {
+  class services.engine <<(M, #2ECC71)>>
+  class services.other <<(M, #2ECC71)>>
+}
+
+api <-[#C0392B,bold]-> services
+note on link
+  **api -> services:**
+  - handlers → services
+  **services -> api:**
+  - engine → handlers
+end note
+nest.a <-[#C0392B,bold]-> nest.b
+note on link
+  **nest.a -> nest.b:**
+  - a → x
+  **nest.b -> nest.a:**
+  - b → a
+end note
+ring.a -[#C0392B,bold]-> ring.b
+ring.b -[#C0392B,bold]-> ring.c
+ring.c -[#C0392B,bold]-> ring.a
+note as tangle_ring_a
+  **Cycle: ring.a, ring.b, ring.c**
+  **ring.a -> ring.b:**
+  - a → b
+  **ring.b -> ring.c:**
+  - b → c
+  **ring.c -> ring.a:**
+  - c → a
+end note
+@enduml
+

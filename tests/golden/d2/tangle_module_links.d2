@@ -1,0 +1,132 @@
+direction: down
+api.handlers: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+nest.a: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+nest.b: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+ring.a: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+ring.b: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+ring.c: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+services.engine: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+services.other: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+api.handlers -> services {style.stroke: "#C0392B"; style.stroke-width: 4}
+nest.a <-> nest.b: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
+ring.a -> ring.b {style.stroke: "#C0392B"; style.stroke-width: 4}
+ring.b -> ring.c {style.stroke: "#C0392B"; style.stroke-width: 4}
+ring.c -> ring.a {style.stroke: "#C0392B"; style.stroke-width: 4}
+services.engine -> api.handlers {style.stroke: "#C0392B"; style.stroke-width: 4}
+"Cycle Details": {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.stroke-width: 2
+  style.border-radius: 12
+
+  grid: {
+    label: ""
+    grid-rows: 1
+    grid-gap: 32
+    style.stroke: transparent
+    style.fill: transparent
+
+    "cycle nest.a nest.b": |md
+      **nest.a ↔ nest.b**
+
+      **nest.a → nest.b:**
+
+      - a → x
+
+      **nest.b → nest.a:**
+
+      - b → a
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+
+    tangle_api_handlers: |md
+      **Cycle: api.handlers, services, services.engine**
+
+      **api.handlers -> services:**
+
+      - handlers → services
+
+      **services.engine -> api.handlers:**
+
+      - engine → handlers
+
+      **services -> services.engine (package __init__, not drawn):**
+
+      - services → engine
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+
+    tangle_ring_a: |md
+      **Cycle: ring.a, ring.b, ring.c**
+
+      **ring.a -> ring.b:**
+
+      - a → b
+
+      **ring.b -> ring.c:**
+
+      - b → c
+
+      **ring.c -> ring.a:**
+
+      - c → a
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+  }
+}

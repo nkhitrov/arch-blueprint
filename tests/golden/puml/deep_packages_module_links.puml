@@ -1,0 +1,12 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class deep.api <<(M, #2ECC71)>>
+class deep.core <<(M, #2ECC71)>>
+
+deep.api ---> deep.core
+@enduml
+

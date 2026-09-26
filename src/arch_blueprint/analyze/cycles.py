@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from arch_blueprint.domain.graph import Cycle, Link
+import networkx as nx
+
+from arch_blueprint.domain.graph import Cycle, Link, Tangle
 
 
 class CycleAnalyzer:
@@ -39,3 +41,40 @@ class CycleAnalyzer:
                 processed.add(reverse_key)
 
         return cycles
+
+    @staticmethod
+    def detect_tangles(links: Iterable[Link], hidden: Iterable[Link]) -> list[Tangle]:
+        """Every cycle of any length: the strongly connected components.
+
+        ``hidden`` links (package facade imports) take part in the search but
+        are not drawn, so a cycle closed by a facade is still found. A component
+        that is just one mutual pair is left to :meth:`detect_cycles`.
+        """
+        drawn = {(link.source, link.target): link for link in links}
+        facade = list(hidden)
+        graph = nx.DiGraph()
+        graph.add_edges_from(drawn)
+        graph.add_edges_from((link.source, link.target) for link in facade)
+
+        tangles: list[Tangle] = []
+        for component in nx.strongly_connected_components(graph):
+            if len(component) < 2:
+                continue
+            inside = sorted(
+                pair for pair in drawn if pair[0] in component and pair[1] in component
+            )
+            if len(component) == 2 and len(inside) == 2:
+                continue  # a mutual pair, drawn as one two-headed Cycle arrow
+            tangles.append(
+                Tangle(
+                    members=tuple(sorted(component)),
+                    links=tuple(drawn[pair] for pair in inside),
+                    hidden_edges=frozenset(
+                        edge
+                        for link in facade
+                        if link.source in component and link.target in component
+                        for edge in link.edges
+                    ),
+                ),
+            )
+        return sorted(tangles, key=lambda tangle: tangle.members)

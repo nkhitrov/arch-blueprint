@@ -11,9 +11,9 @@ class pkg_b.util <<(M, #2ECC71)>>
 pkg_a.core <-[#C0392B,bold]-> pkg_b.util
 note on link
   **pkg_a.core -> pkg_b.util:**
-  - pkg_a.core → pkg_b.util
+  - core → util
   **pkg_b.util -> pkg_a.core:**
-  - pkg_b.util → pkg_a.core
+  - util → core
 end note
 pkg_a.services ---> pkg_b.util
 @enduml

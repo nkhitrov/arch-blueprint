@@ -13,10 +13,11 @@ MetricValue = Union[int, float, str]
 class Edge:
     """A single directed import, with the endpoints it is drawn between.
 
-    ``source`` is the importing node and ``target`` the imported module, as they
-    are. ``source_endpoint``/``target_endpoint`` are what the link layer
-    aggregates on, chosen by the link level (``extract/levels.py``): the
-    namespaces where the two paths diverge, or the nodes themselves.
+    ``source`` is the importing node (or, for a facade edge, the importing
+    package facade) and ``target`` the imported module, as they are.
+    ``source_endpoint``/``target_endpoint`` are what the link layer aggregates
+    on, chosen by the link level (``extract/levels.py``): the namespaces where
+    the two paths diverge, or the nodes themselves.
     """
 
     source: str
@@ -57,6 +58,25 @@ class Cycle:
     backward_edges: frozenset[Edge]
 
 
+@dataclass(frozen=True)
+class Tangle:
+    """Link endpoints that all reach one another: a cycle of any length.
+
+    ``links`` are the drawn links inside it, sorted by pair. ``hidden_edges``
+    are package facade imports (``BlueprintGraph.facade_edges``) that close it
+    without an arrow of their own: importing ``pkg`` runs ``pkg/__init__.py``,
+    so what it imports is on the cycle, yet drawing every facade's imports
+    would bury the diagram.
+
+    A lone mutual pair is a :class:`Cycle` — drawn as one two-headed arrow — and
+    not also a tangle; a mutual pair inside a longer cycle is both.
+    """
+
+    members: tuple[str, ...]
+    links: tuple[Link, ...]
+    hidden_edges: frozenset[Edge]
+
+
 def build_links(edges: frozenset[Edge]) -> set[Link]:
     """Aggregate edges into one Link per ``(source_endpoint, target_endpoint)``."""
     edges_by_pair: dict[tuple[str, str], set[Edge]] = defaultdict(set)
@@ -75,16 +95,21 @@ class BlueprintGraph:
     Metrics are stored beside identity (keyed by node id / endpoint pair) so new
     metrics never change node/edge hashing or the extractor.
 
-    ``links``, ``cycles`` and ``groups`` are derived: ``links`` is aggregated
-    from ``edges`` once at construction, the other two are filled by the analyze
-    step of the pipeline. ``edges`` is a frozenset so those derivations cannot
-    silently go stale behind a mutation.
+    ``facade_edges`` are the own imports of package facades above the nodes
+    (their ``__init__.py``): primary data, never drawn, only closing cycles.
+
+    ``links``, ``cycles``, ``tangles`` and ``groups`` are derived: ``links`` is
+    aggregated from ``edges`` once at construction, the rest are filled by the
+    analyze step of the pipeline. ``edges`` is a frozenset so those derivations
+    cannot silently go stale behind a mutation.
     """
 
     nodes: list[Node]
     edges: frozenset[Edge]
+    facade_edges: frozenset[Edge] = frozenset()
     links: set[Link] = field(init=False)
     cycles: list[Cycle] = field(init=False, default_factory=list)
+    tangles: list[Tangle] = field(init=False, default_factory=list)
     groups: list[Group] = field(init=False, default_factory=list)
     node_metrics: dict[str, dict[str, MetricValue]] = field(
         init=False,

@@ -1,0 +1,25 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+class api.handlers <<(M, #2ECC71)>>
+class nest.a <<(M, #2ECC71)>>
+class nest.b <<(M, #2ECC71)>>
+class ring.a <<(M, #2ECC71)>>
+class ring.b <<(M, #2ECC71)>>
+class ring.c <<(M, #2ECC71)>>
+package services {
+  class services.engine <<(M, #2ECC71)>>
+  class services.other <<(M, #2ECC71)>>
+}
+
+api.handlers -[#C0392B,bold]-> services
+nest.a <-[#C0392B,bold]-> nest.b
+ring.a -[#C0392B,bold]-> ring.b
+ring.b -[#C0392B,bold]-> ring.c
+ring.c -[#C0392B,bold]-> ring.a
+services.engine -[#C0392B,bold]-> api.handlers
+@enduml
+

@@ -35,6 +35,7 @@
       "target_endpoint": "deep.core.models"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {},
   "link_metrics": []
 }

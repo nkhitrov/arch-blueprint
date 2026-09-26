@@ -27,6 +27,7 @@
       "target_endpoint": "services"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {
     "api.handlers": {
       "depth": 2,

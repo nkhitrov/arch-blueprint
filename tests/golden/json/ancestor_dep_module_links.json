@@ -27,6 +27,14 @@
       "target_endpoint": "services"
     }
   ],
+  "facade_edges": [
+    {
+      "source": "services",
+      "target": "services.engine",
+      "source_endpoint": "services",
+      "target_endpoint": "services.engine"
+    }
+  ],
   "node_metrics": {
     "api.handlers": {
       "depth": 2,

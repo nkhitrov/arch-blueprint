@@ -37,6 +37,7 @@
       "target_endpoint": "plugins.auth.backend"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {
     "app1.models": {
       "depth": 2,

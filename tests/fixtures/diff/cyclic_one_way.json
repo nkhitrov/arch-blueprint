@@ -31,6 +31,7 @@
       "target_endpoint": "pkg_b"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {},
   "link_metrics": []
 }

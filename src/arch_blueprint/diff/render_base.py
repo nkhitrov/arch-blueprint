@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import ClassVar, Final
+from typing import ClassVar, Final, Optional
 
 from arch_blueprint.diff.model import (
     ChangeStatus,
+    CycleChange,
     CycleDelta,
     GraphDiff,
+    OnCycle,
     depth_of,
 )
-from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.renderer.base import (
     DEFAULT_OPTIONS,
     CycleRender,
@@ -68,8 +70,14 @@ class DiffRenderer(ABC):
         # Every connection at the place a plain diagram declares it — by its
         # first endpoint pair — so the layout matches the plain diagram's: the
         # layout engine places things by declaration order.
+        on_cycle = _on_cycle(diff)
         connections: list[tuple[tuple[str, str], CycleRender]] = [
-            (pair, CycleRender(inline=self._format_link(*pair, status)))
+            (
+                pair,
+                CycleRender(
+                    inline=self._format_link(*pair, status, on_cycle.get(pair)),
+                ),
+            )
             for pair, status in diff.link_status.items()
         ]
         connections += [
@@ -81,7 +89,14 @@ class DiffRenderer(ABC):
             for delta in diff.cycle_changes
         ]
         connections.sort(key=lambda item: item[0])
-        links = [cycle.inline for _, cycle in connections]
+        # Only a new cycle gets its imports listed, as for a pair: what to fix.
+        if self.show_cycle_details:
+            connections += [
+                ((delta.tangle.members[0], "~note"), self._format_tangle(delta.tangle))
+                for delta in diff.tangle_changes
+                if delta.change is CycleChange.NEW
+            ]
+        links = [cycle.inline for _, cycle in connections if cycle.inline]
         deferred = [c.deferred for _, c in connections if c.deferred is not None]
         legend = self._format_legend(unchanged=diff.is_empty)
         return self._combine_output(legend, nodes, links, deferred)
@@ -100,8 +115,25 @@ class DiffRenderer(ABC):
         ...
 
     @abstractmethod
-    def _format_link(self, source: str, target: str, status: ChangeStatus) -> str:
-        """Format an added, removed or unchanged link between endpoints."""
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        status: ChangeStatus,
+        on_cycle: Optional[OnCycle],
+    ) -> str:
+        """Format an added, removed or unchanged link between endpoints.
+
+        ``on_cycle`` says which longer cycle an unchanged link lies on: one on
+        an unchanged cycle is drawn as a plain diagram draws it, one on a new or
+        resolved cycle is marked like a new or resolved pair. An added or
+        removed link is marked as that whatever cycle it is on.
+        """
+        ...
+
+    @abstractmethod
+    def _format_tangle(self, tangle: Tangle) -> CycleRender:
+        """The note listing the imports of a new longer cycle."""
         ...
 
     @abstractmethod
@@ -134,6 +166,32 @@ class DiffRenderer(ABC):
     ) -> str:
         """Combine all parts into final output with header/footer."""
         ...
+
+
+def _on_cycle(diff: GraphDiff) -> dict[tuple[str, str], OnCycle]:
+    """Which longer cycle each link lies on; a new one wins over a resolved one.
+
+    A link can be on a resolved cycle and a new one at once — the cycle changed
+    shape around it — and what it is on now is what a reviewer needs.
+    """
+    marks: dict[tuple[str, str], OnCycle] = {}
+    ordered = [
+        *((t, OnCycle.UNCHANGED) for t in diff.context_tangles),
+        *(
+            (d.tangle, OnCycle.RESOLVED)
+            for d in diff.tangle_changes
+            if d.change is CycleChange.RESOLVED
+        ),
+        *(
+            (d.tangle, OnCycle.NEW)
+            for d in diff.tangle_changes
+            if d.change is CycleChange.NEW
+        ),
+    ]
+    for tangle, mark in ordered:
+        for link in tangle.links:
+            marks[(link.source, link.target)] = mark
+    return marks
 
 
 def _first_pair(cycle: Cycle) -> tuple[str, str]:

@@ -34,16 +34,16 @@ pkg_a.services -> pkg_b.util: edge_weight=1
     style.stroke: transparent
     style.fill: transparent
 
-    cycle_pkg_a_core_pkg_b_util: |md
+    "cycle pkg_a.core pkg_b.util": |md
       **pkg_a.core ↔ pkg_b.util**
 
       **pkg_a.core → pkg_b.util:**
 
-      - pkg_a.core → pkg_b.util
+      - core → util
 
       **pkg_b.util → pkg_a.core:**
 
-      - pkg_b.util → pkg_a.core
+      - util → core
     | {
       style.fill: "#FADBD8"
       style.stroke: "#C0392B"

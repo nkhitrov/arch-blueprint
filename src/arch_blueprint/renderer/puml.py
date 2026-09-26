@@ -4,7 +4,7 @@ import textwrap
 from string import Template
 from typing import Final
 
-from arch_blueprint.domain.graph import Cycle
+from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
@@ -12,7 +12,12 @@ from arch_blueprint.renderer.base import (
     CycleRender,
     LinkDecoration,
 )
-from arch_blueprint.renderer.cycles import cycle_detail_sections
+from arch_blueprint.renderer.cycles import (
+    cycle_detail_sections,
+    tangle_detail_sections,
+    tangle_note_id,
+    tangle_title,
+)
 
 PUML_HEADER: Final = textwrap.dedent(
     """\
@@ -29,9 +34,9 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
     textwrap.dedent(
         """\
         note on link
-          **$ns_a -> $ns_b:**
+          **$a -> $b:**
         $forward_details
-          **$ns_b -> $ns_a:**
+          **$b -> $a:**
         $backward_details
         end note
         """,
@@ -53,17 +58,28 @@ def format_cycle_note(cycle: Cycle) -> str:
     """The ``note on link`` listing both directions' imports of a cycle."""
     forward_details, backward_details = cycle_detail_sections(cycle)
     return _CYCLE_NOTE_TEMPLATE.substitute(
-        ns_a=cycle.endpoint_from,
-        ns_b=cycle.endpoint_to,
+        a=cycle.endpoint_from,
+        b=cycle.endpoint_to,
         forward_details=forward_details,
         backward_details=backward_details,
     )
+
+
+def format_tangle_note(tangle: Tangle) -> str:
+    """A floating note listing every import on a longer cycle."""
+    lines = [f"note as {tangle_note_id(tangle)}", f"  **{tangle_title(tangle)}**"]
+    for heading, imports in tangle_detail_sections(tangle):
+        lines.append(f"  **{heading}:**")
+        lines.extend(f"  {line}" for line in imports)
+    lines.append("end note")
+    return "\n".join(lines)
 
 
 class PlantUmlRenderer(BlueprintRenderer):
     """PlantUML diagram renderer."""
 
     fmt = "puml"
+    cyclic_link_styles = (CYCLE_HIGHLIGHT_COLOR, "bold")
 
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
         spot = _SPOT_LETTER.get(node.kind, _DEFAULT_SPOT)
@@ -108,6 +124,9 @@ class PlantUmlRenderer(BlueprintRenderer):
             return CycleRender(inline=link)
 
         return CycleRender(inline=f"{link}\n{format_cycle_note(cycle)}")
+
+    def _format_tangle(self, tangle: Tangle) -> CycleRender:
+        return CycleRender(inline=format_tangle_note(tangle))
 
     def _combine_output(
         self,

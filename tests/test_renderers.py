@@ -5,7 +5,7 @@ import pytest
 from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.blueprint import ArchBlueprint
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle
+from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge
 from arch_blueprint.domain.node import Node
 from arch_blueprint.metrics import (
     MetricDisplay,
@@ -20,6 +20,7 @@ from arch_blueprint.renderer.base import (
     LinkDecoration,
     RendererOptions,
 )
+from arch_blueprint.renderer.cycles import format_edges
 from arch_blueprint.renderer.d2 import D2LangRenderer
 from arch_blueprint.renderer.puml import PlantUmlRenderer
 from tests.conftest import CYCLIC_PROJECT, make_edge, make_graph
@@ -229,3 +230,18 @@ def test_pipeline_fills_in_the_groups() -> None:
         renderer=renderer,
     ).run()
     assert {group.namespace for group in renderer.captured.groups} == {"pkg_a", "pkg_b"}
+
+
+@pytest.mark.parametrize(
+    ("edge", "line"),
+    [
+        # Namespace level: both sides below their endpoints.
+        pytest.param(make_edge("a.b.c", "a.d.e", "a.b", "a.d"), "- c → e", id="ns"),
+        # Module level: each side is its endpoint, so each is its own name.
+        pytest.param(make_edge("p.a", "p.b", "p.a", "p.b"), "- a → b", id="module"),
+        # An import that lands inside a package node: cut the same way.
+        pytest.param(make_edge("p.a", "p.b.x", "p.a", "p.b"), "- a → x", id="inside"),
+    ],
+)
+def test_cycle_note_lines_cut_both_sides_alike(edge: Edge, line: str) -> None:
+    assert format_edges(frozenset({edge})) == [line]

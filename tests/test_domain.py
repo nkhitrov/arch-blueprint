@@ -113,3 +113,51 @@ def test_nodes_outside_every_endpoint_namespace_stay_ungrouped() -> None:
 
 def test_no_links_means_no_groups() -> None:
     assert GroupAnalyzer.build(make_graph(["a.core"], [])) == []
+
+
+def _tangles(
+    edges: list[tuple[str, str]],
+    hidden: tuple[tuple[str, str], ...] = (),
+) -> list[tuple[tuple[str, ...], list[tuple[str, str]], set[tuple[str, str]]]]:
+    """Tangles over node-to-node edges, as (members, drawn pairs, hidden pairs)."""
+    drawn = frozenset(make_edge(s, t, s, t) for s, t in edges)
+    facade = frozenset(make_edge(s, t, s, t) for s, t in hidden)
+    return [
+        (
+            tangle.members,
+            [(link.source, link.target) for link in tangle.links],
+            {(e.source, e.target) for e in tangle.hidden_edges},
+        )
+        for tangle in CycleAnalyzer.detect_tangles(
+            build_links(drawn),
+            build_links(facade),
+        )
+    ]
+
+
+def test_detect_tangles_finds_a_ring_of_any_length() -> None:
+    ring = [("a", "b"), ("b", "c"), ("c", "a"), ("c", "d")]
+    assert _tangles(ring) == [
+        (("a", "b", "c"), [("a", "b"), ("b", "c"), ("c", "a")], set()),
+    ]
+
+
+def test_a_lone_mutual_pair_is_a_cycle_not_a_tangle() -> None:
+    assert _tangles([("a", "b"), ("b", "a")]) == []
+
+
+def test_a_mutual_pair_on_a_longer_cycle_is_in_the_tangle() -> None:
+    edges = [("a", "b"), ("b", "a"), ("b", "c"), ("c", "a")]
+    [(members, drawn, _)] = _tangles(edges)
+    assert members == ("a", "b", "c")
+    assert ("a", "b") in drawn
+    assert ("b", "a") in drawn
+
+
+def test_facade_imports_close_a_cycle_without_being_drawn() -> None:
+    """``h`` imports the facade ``pkg``, whose ``__init__`` imports ``pkg.e``."""
+    edges = [("h", "pkg"), ("pkg.e", "h")]
+    assert _tangles(edges) == []
+    assert _tangles(edges, hidden=(("pkg", "pkg.e"),)) == [
+        (("h", "pkg", "pkg.e"), [("h", "pkg"), ("pkg.e", "h")], {("pkg", "pkg.e")}),
+    ]

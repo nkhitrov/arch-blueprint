@@ -53,6 +53,7 @@
       "target_endpoint": "deep.core.models"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {
     "deep.api.v1.handlers": {
       "depth": 4,

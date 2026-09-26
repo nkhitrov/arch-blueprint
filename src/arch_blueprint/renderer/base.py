@@ -5,7 +5,13 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import ClassVar, Final, Optional, final
 
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Group, MetricValue
+from arch_blueprint.domain.graph import (
+    BlueprintGraph,
+    Cycle,
+    Group,
+    MetricValue,
+    Tangle,
+)
 from arch_blueprint.domain.node import Node
 from arch_blueprint.metrics import RenderContext, RenderPlan
 
@@ -114,6 +120,11 @@ class BlueprintRenderer(ABC):
     #: Concrete renderers must set this; it is what a plan is built against.
     fmt: ClassVar[str] = ""
 
+    #: Style payloads marking a one-way link that lies on a longer cycle (a
+    #: :class:`Tangle`). Empty draws it as any other link, so a renderer written
+    #: outside this package keeps working without knowing about tangles.
+    cyclic_link_styles: ClassVar[tuple[str, ...]] = ()
+
     def __init__(
         self,
         plan: RenderPlan,
@@ -203,14 +214,45 @@ class BlueprintRenderer(ABC):
                 links.append(self._format_link(pair[0], pair[1], decoration))
                 processed.add(pair)
 
-        return links, deferred
+        notes, deferred_notes = self._render_tangle_notes(graph)
+        return [*links, *notes], [*deferred, *deferred_notes]
+
+    def _render_tangle_notes(
+        self,
+        graph: BlueprintGraph,
+    ) -> tuple[list[str], list[str]]:
+        """Each longer cycle's note, after every link: it belongs to no one arrow."""
+        inline: list[str] = []
+        deferred: list[str] = []
+        if not self.options.show_cycle_details:
+            return inline, deferred
+        for tangle in graph.tangles:
+            note = self._format_tangle(tangle)
+            if note is None:
+                continue
+            if note.inline:
+                inline.append(note.inline)
+            if note.deferred is not None:
+                deferred.append(note.deferred)
+        return inline, deferred
 
     def _link_decoration(
         self,
         graph: BlueprintGraph,
         pair: tuple[str, str],
     ) -> LinkDecoration:
-        return self._decorate(graph.link_metrics.get(pair, {}))
+        decoration = self._decorate(graph.link_metrics.get(pair, {}))
+        on_cycle = any(
+            (link.source, link.target) == pair
+            for tangle in graph.tangles
+            for link in tangle.links
+        )
+        if not on_cycle:
+            return decoration
+        return LinkDecoration(
+            labels=decoration.labels,
+            styles=(*self.cyclic_link_styles, *decoration.styles),
+        )
 
     def _cycle_decoration(
         self,
@@ -264,6 +306,14 @@ class BlueprintRenderer(ABC):
         extension point the docs advertise.
         """
         return nodes
+
+    def _format_tangle(self, tangle: Tangle) -> Optional[CycleRender]:
+        """The note listing a longer cycle's imports; by default, none.
+
+        Concrete for the same reason as ``_format_group``: the cycle is still
+        marked on its links through ``cyclic_link_styles``.
+        """
+        return None
 
     @abstractmethod
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
