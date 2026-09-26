@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 import pytest
@@ -104,6 +105,13 @@ def test_errors_are_utf8_whatever_the_console_encoding() -> None:
     )
     assert result.returncode == _USAGE_ERROR
     assert "проект" in result.stderr
+
+
+@pytest.mark.parametrize("args", [(), ("--help",)])
+def test_help_is_utf8_whatever_the_console_encoding(args: tuple[str, ...]) -> None:
+    """The help text carries dashes; argparse would write them in cp1252."""
+    result = run_command(*args, check=False, extra_env={"PYTHONIOENCODING": "cp1252"})
+    assert "—" in result.stdout + result.stderr
 
 
 def test_link_metrics_reach_cyclic_connections() -> None:
@@ -312,7 +320,8 @@ def test_list_metrics_describes_every_displayable_metric() -> None:
 def test_the_old_implicit_command_says_what_to_run() -> None:
     result = run_command(str(EXAMPLE_PROJECT), "-m", "app1.*", check=False)
     assert result.returncode == _USAGE_ERROR
-    assert f"arch-blueprint draw {EXAMPLE_PROJECT} -m 'app1.*'" in result.stderr
+    project = shlex.quote(str(EXAMPLE_PROJECT))  # a Windows path gets quoted
+    assert f"arch-blueprint draw {project} -m 'app1.*'" in result.stderr
 
 
 def test_without_patterns_every_package_is_drawn_whole() -> None:

@@ -1175,8 +1175,20 @@ def _version() -> str:
         return "unknown"
 
 
+class _Parser(argparse.ArgumentParser):
+    """Help, usage and argument errors go out as UTF-8 too (see ``_emit``).
+
+    They carry dashes and arrows, which a non-UTF-8 console cannot encode.
+    Subcommand parsers inherit this class.
+    """
+
+    def _print_message(self, message: str, file: Any = None) -> None:
+        if message:
+            _emit(sys.stderr if file is None else file, message.rstrip("\n"))
+
+
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser: argparse.ArgumentParser = _Parser(
         prog=_PROG,
         description=(
             "Draw the import graph of a Python project as a diagram — PlantUML\n"
