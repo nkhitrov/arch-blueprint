@@ -82,6 +82,8 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   output changes *intentionally*, regenerate the affected golden.
 - `test_golden_structure.py` — invariants the goldens must satisfy, not just their bytes: every link
   endpoint is declared, and no package wraps a class of its own name. Covers diff goldens too.
+- `test_golden_d2_render.py` — what the D2 compiler *draws*, not what we emit: every markdown box
+  must be at least as tall as the text inside it. Skipped without the `d2` binary.
 - `test_snapshot.py` — golden snapshots (`tests/golden/json/<selection>.json`, one per
   `conftest.py:SELECTIONS`), and the key invariant: `render` of a snapshot equals every
   `tests/golden/<fmt>/` diagram byte for byte. Plus validation errors.
@@ -133,6 +135,12 @@ ruff and mypy — they are analysis subjects, not code we ship.
   invariants in `test_golden_structure.py` instead.
 - `tests/golden/` and `docs/images/` are excluded from the whitespace fixers: both hold verbatim tool
   output, and a "fix" makes them stop matching it.
+- D2 **sizes a `|md|` box about 17px shorter than its text**, so the bottom row lands outside the
+  box and is cut from the render while sitting perfectly well in the source — invisible to every
+  byte-exact golden. The legend carries a `---` rule above each section to buy the slack back: that
+  rule is load-bearing, not decoration. `tests/test_golden_d2_render.py` compiles every d2 golden
+  and fails if any text falls below its box; it skips when the `d2` binary is absent, which is most
+  runs and CI, so install `d2` before touching the legend's markdown.
 - PlantUML **silently clips** a render at `PLANTUML_LIMIT_SIZE` (4096 px by default) — no error, just
   a missing bottom. Detail notes make that reachable: consigliere's features slice is 6106 px tall
   with them on. Render big diagrams with `PLANTUML_LIMIT_SIZE=16384`, and treat a dimension that

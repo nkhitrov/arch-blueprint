@@ -94,6 +94,14 @@ _LINK_NOTE_TEMPLATE: Final = Template(
     ).rstrip(),
 )
 
+#: A rule above every legend section, and it is **load-bearing, not decoration**.
+#: D2 0.9 sizes a ``|md|`` box about 17px shorter than the text it holds, so the
+#: last row lands outside the box and is cut from the render while sitting
+#: perfectly well in the source — the failure text checks cannot see. A rule is
+#: measured generously enough to cover the shortfall twice over. Delete it and
+#: the bottom row of the legend disappears from every D2 diagram.
+_SECTION_RULE: Final = "  ---\n"
+
 _LEGEND_TEMPLATE: Final = Template(
     textwrap.dedent(
         """\
@@ -258,9 +266,10 @@ class D2LangRenderer(BlueprintRenderer):
             return ""
         blocks: list[str] = []
         for section in sections:
-            rows = [f"  - {row}" for row in section.rows]
+            rows = [_SECTION_RULE]
             if section.title:
-                rows.insert(0, f"  **{section.title}**\n")
+                rows.append(f"  **{section.title}**\n")
+            rows.extend(f"  - {row}" for row in section.rows)
             blocks.append("\n".join(rows))
         return _LEGEND_TEMPLATE.substitute(
             rows="\n\n".join(blocks),
