@@ -68,6 +68,16 @@ def test_cycle_introduced_in_the_working_tree(repo: Path) -> None:
     assert "- util → core" in _diff(repo, "--cycle-details").stdout
 
 
+def test_metrics_are_computed_for_both_sides(repo: Path) -> None:
+    """One more import inside ``pkg_a -> pkg_b``: a change only a metric shows."""
+    core = repo / "src" / "pkg_a" / "core.py"
+    core.write_text(f"import pkg_b\n{core.read_text()}")
+    assert _diff(repo).returncode == 0  # structure alone: nothing changed
+    result = _diff(repo, "--metric", "edge_weight")
+    assert result.returncode == _DIFFERENT, result.stderr
+    assert "pkg_a ---> pkg_b : edge_weight=2 → 3 (+1)" in result.stdout
+
+
 def test_head_revision_instead_of_the_working_tree(repo: Path) -> None:
     _restore_backward_import(repo)
     git(repo, "commit", "-q", "-am", "cycle")

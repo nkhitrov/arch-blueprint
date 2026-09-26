@@ -1,0 +1,52 @@
+direction: right
+diff_legend: Legend {
+  near: top-left
+  unchanged: "unchanged: drawn as on a plain diagram"
+  added: "+ added" {style.fill: "#00C853"; style.stroke-dash: 5}
+  removed: "- removed" {style.fill: "#FF1744"; style.stroke-dash: 5}
+  new_cycle: "NEW CYCLE" {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
+  resolved: "cycle resolved" {style.stroke: "#95A5A6"; style.stroke-dash: 5}
+  metric: "metric: old → new (difference)" {shape: text}
+}
+app1.models: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 1 → 2 (+1)
+  fan_out: 0
+}
+
+app2.service: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 0
+  fan_out: 2 → 1 (-1)
+}
+
+app3.api: {
+  shape: class
+  label: "+ api"
+  style: {
+    fill: "#00C853"
+    stroke-dash: 5
+  }
+  fan_in: 0
+  fan_out: 1
+}
+
+plugins.auth.backend: {
+  shape: class
+  label: "- backend"
+  style: {
+    fill: "#FF1744"
+    stroke-dash: 5
+  }
+  fan_in: 1
+  fan_out: 0
+}
+app2 -> app1: edge_weight=1
+app2 -> plugins: removed edge_weight=1 {style.stroke: "#FF1744"; style.stroke-dash: 5}
+app3 -> app1: added edge_weight=1 {style.stroke: "#00C853"; style.stroke-width: 3; style.stroke-dash: 5}

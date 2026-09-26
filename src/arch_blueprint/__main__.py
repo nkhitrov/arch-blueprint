@@ -15,7 +15,7 @@ from typing import Any, Final, NoReturn, Optional, TextIO
 from grimp.exceptions import GrimpException
 
 from arch_blueprint.blueprint import build_graph
-from arch_blueprint.diff import DIFF_RENDERERS, diff_graphs
+from arch_blueprint.diff import DIFF_RENDERERS, DiffRenderer, diff_graphs
 from arch_blueprint.domain.graph import BlueprintGraph
 from arch_blueprint.extract.layout import detect_roots, has_source, is_package
 from arch_blueprint.extract.module_extractor import ModuleExtractor
@@ -46,6 +46,7 @@ from arch_blueprint.metrics import (
     MetricConfigError,
     MetricDisplay,
     MetricRegistry,
+    RenderPlan,
     build_render_plan,
     default_registry,
     default_renders,
@@ -359,6 +360,24 @@ def _output(
 # --- shared steps ---------------------------------------------------------
 
 
+def _plan(
+    fmt: str,
+    metrics: Sequence[str],
+    registry: MetricRegistry,
+    code: int = _EXIT_USAGE,
+) -> RenderPlan:
+    """Resolve ``--metric`` for ``fmt``: the one check, for a diagram and a diff."""
+    try:
+        return build_render_plan(
+            registry=registry,
+            renders=default_renders(),
+            display=MetricDisplay(shown=tuple(metrics)),
+            fmt=fmt,
+        )
+    except MetricConfigError as error:
+        _abort(str(error), code)
+
+
 def _renderer(
     fmt: str,
     metrics: Sequence[str],
@@ -367,20 +386,27 @@ def _renderer(
     registry: MetricRegistry,
 ) -> BlueprintRenderer:
     renderer_cls = _RENDERERS[fmt]
-    try:
-        plan = build_render_plan(
-            registry=registry,
-            renders=default_renders(),
-            display=MetricDisplay(shown=tuple(metrics)),
-            fmt=renderer_cls.fmt,
-        )
-    except MetricConfigError as error:
-        _abort(str(error), _EXIT_USAGE)
     options = RendererOptions(
         depth_colors=DEFAULT_OPTIONS.depth_colors,
         show_cycle_details=cycle_details,
     )
+    plan = _plan(renderer_cls.fmt, metrics, registry)
     return renderer_cls(plan=plan, options=options)
+
+
+def _diff_renderer(
+    fmt: str,
+    metrics: Sequence[str],
+    *,
+    cycle_details: bool,
+    registry: MetricRegistry,
+    code: int,
+) -> DiffRenderer:
+    renderer_cls = DIFF_RENDERERS[fmt]
+    return renderer_cls(
+        show_cycle_details=cycle_details,
+        plan=_plan(renderer_cls.fmt, metrics, registry, code),
+    )
 
 
 def _check_project_dir(project_dir: str, code: int) -> None:
@@ -484,6 +510,22 @@ def _warn_single_boxes(
                 f"-m {pattern!r} draws the package as a single box; "
                 f"use '{pattern}.*' for its modules or '{pattern}.**' for all of them",
             )
+
+
+def _check_metrics(
+    path: str,
+    snapshot: Snapshot,
+    wanted: Iterable[str],
+    code: int,
+) -> None:
+    """A metric to draw must have been computed into the snapshot."""
+    missing = sorted(set(wanted) - snapshot.metrics)
+    if missing:
+        _abort(
+            f"{path} holds no metric {', '.join(map(repr, missing))} "
+            f"(it has: {', '.join(sorted(snapshot.metrics)) or 'none'})",
+            code,
+        )
 
 
 def _read_snapshot(path: str, code: int = _EXIT_USAGE) -> Snapshot:
@@ -640,13 +682,7 @@ def _draw_snapshot(args: argparse.Namespace, output: _Output) -> None:
         cycle_details=args.cycle_details,
         registry=default_registry(),
     )
-    missing = sorted(renderer.plan.required_metrics - snapshot.metrics)
-    if missing:
-        _abort(
-            f"{args.source} holds no metric {', '.join(map(repr, missing))} "
-            f"(it has: {', '.join(sorted(snapshot.metrics)) or 'none'})",
-            _EXIT_USAGE,
-        )
+    _check_metrics(args.source, snapshot, renderer.plan.required_metrics, _EXIT_USAGE)
     output.write(renderer.render(snapshot.graph), failure_code=_EXIT_FAILURE)
 
 
@@ -662,13 +698,18 @@ def _add_diff(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
             "  diff OLD.json NEW.json            two snapshots from 'draw -f json'\n"
             "  diff --base REV PROJECT_DIR       a git revision against the working\n"
             "                                    tree (or against --head REV)\n\n"
+            "--metric draws a metric as a plain diagram does, each changed value\n"
+            "as old -> new (difference): 'fan_in: 3 -> 5 (+2)'.\n\n"
             "Exits like diff(1): 0 nothing changed, 1 something did, 2 an error.\n"
+            "With --metric, a shown metric that changed counts as a change.\n"
             "The diagram is written either way."
         ),
         examples=(
             "  arch-blueprint diff --base origin/main src -o diff.png\n"
             "  arch-blueprint diff --base v1.0 --head v2.0 src -m 'myapp.*'\n"
             "  arch-blueprint diff old.json new.json --changes-only\n"
+            "  arch-blueprint diff --base origin/main src --metric fan_in "
+            "--metric edge_weight\n"
             "  arch-blueprint diff --base origin/main src > diff.puml "
             "|| test $? -eq 1   # CI: fail on errors only"
         ),
@@ -697,6 +738,7 @@ def _add_diff(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
         extra=" Default: puml, or what -o's extension says.",
     )
     _add_output_file_arg(parser, _DIFF_FORMATS)
+    _add_metric_arg(parser)
     _add_cycle_details_arg(parser)
     _add_changes_only_arg(parser)
 
@@ -704,6 +746,13 @@ def _add_diff(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
 def _diff(args: argparse.Namespace) -> None:
     """``arch-blueprint diff``: draw what changed; exit 0 same, 1 different."""
     output = _output(args.format, args.output, _DIFF_FORMATS, code=_EXIT_DIFF_TROUBLE)
+    renderer = _diff_renderer(
+        output.fmt,
+        args.metrics,
+        cycle_details=args.cycle_details,
+        registry=default_registry(),
+        code=_EXIT_DIFF_TROUBLE,
+    )
     if args.base is None:
         if len(args.inputs) != 2 or args.modules or args.head:
             _abort(
@@ -711,17 +760,33 @@ def _diff(args: argparse.Namespace) -> None:
                 "or --base REV PROJECT_DIR [-m ...]",
                 _EXIT_DIFF_TROUBLE,
             )
-        old = _read_snapshot(args.inputs[0], _EXIT_DIFF_TROUBLE).graph
-        new = _read_snapshot(args.inputs[1], _EXIT_DIFF_TROUBLE).graph
+        sides = []
+        for path in args.inputs:
+            snapshot = _read_snapshot(path, _EXIT_DIFF_TROUBLE)
+            _check_metrics(path, snapshot, args.metrics, _EXIT_DIFF_TROUBLE)
+            sides.append(snapshot.graph)
+        old, new = sides
     else:
         if len(args.inputs) != 1:
             _abort("diff --base takes one PROJECT_DIR", _EXIT_DIFF_TROUBLE)
-        old, new = _git_sides(args.inputs[0], args.modules, args.base, args.head)
+        old, new = _git_sides(
+            args.inputs[0],
+            args.modules,
+            args.base,
+            args.head,
+            args.metrics,
+        )
 
-    diff = diff_graphs(old, new, changes_only=args.changes_only)
-    renderer = DIFF_RENDERERS[output.fmt](show_cycle_details=args.cycle_details)
+    diff = diff_graphs(
+        old,
+        new,
+        changes_only=args.changes_only,
+        metrics=args.metrics,
+    )
     output.write(renderer.render(diff), failure_code=_EXIT_DIFF_TROUBLE)
-    raise SystemExit(0 if diff.is_empty else _EXIT_DIFFERENT)
+    # Without --metric, structure alone; with it, a shown value that changed too.
+    same = diff.is_empty and not diff.metrics_changed
+    raise SystemExit(0 if same else _EXIT_DIFFERENT)
 
 
 def _git_sides(
@@ -729,6 +794,7 @@ def _git_sides(
     modules: Sequence[str],
     base: str,
     head: Optional[str],
+    metrics: Sequence[str],
 ) -> tuple[BlueprintGraph, BlueprintGraph]:
     """Build the graph at ``base`` and at ``head`` (default: the working tree)."""
     _check_project_dir(project_dir, _EXIT_DIFF_TROUBLE)
@@ -752,23 +818,27 @@ def _git_sides(
             _note(f"comparing {', '.join(roots)} (all modules; narrow with -m)")
             modules = [f"{root}.**" for root in roots]
         old_modules, new_modules = split_patterns(modules, old_dir, new_dir)
-        old = _side(old_dir, old_modules)
-        new = _side(new_dir, new_modules)
+        old = _side(old_dir, old_modules, metrics)
+        new = _side(new_dir, new_modules, metrics)
     if not old.nodes and not new.nodes:
         _no_match(modules)
     return old, new
 
 
-def _side(project_dir: str, modules: Sequence[str]) -> BlueprintGraph:
+def _side(
+    project_dir: str,
+    modules: Sequence[str],
+    metrics: Sequence[str],
+) -> BlueprintGraph:
     if not modules:  # this side has none of the selected packages
         return BlueprintGraph(nodes=[], edges=frozenset())
-    # No metrics: a diff compares structure only. No cache: grimp would take two
-    # checkouts whose files share an mtime (git archive stamps the commit time)
-    # for one and the same project.
+    # Only the metrics to show: without --metric a diff compares structure only.
+    # No cache: grimp would take two checkouts whose files share an mtime (git
+    # archive stamps the commit time) for one and the same project.
     return _build(
         project_dir,
         modules,
-        (),
+        metrics,
         failure_code=_EXIT_DIFF_TROUBLE,
         use_cache=False,
     )
@@ -785,7 +855,9 @@ def _add_history(
             "Walk the branch's first-parent history and, for every commit that\n"
             "changed the graph, write the full diagram and the diff against the\n"
             "previous one: numbered files to leaf through, plus an index.md.\n"
-            "Commits that leave the graph alone are skipped.\n\n"
+            "Commits that leave the graph alone are skipped. With --metric, every\n"
+            "frame shows the metrics (a changed value as old -> new), and a commit\n"
+            "that changes a shown metric is a frame too.\n\n"
             "Snapshots and images are cached, so a rerun only does what is missing."
         ),
         examples=(
@@ -865,7 +937,13 @@ def _history(args: argparse.Namespace) -> None:
         cycle_details=args.cycle_details,
         registry=registry,
     )
-    diff_renderer = DIFF_RENDERERS[diagram_fmt](show_cycle_details=args.cycle_details)
+    diff_renderer = _diff_renderer(
+        diagram_fmt,
+        args.metrics,
+        cycle_details=args.cycle_details,
+        registry=registry,
+        code=_EXIT_USAGE,
+    )
     if args.scale is not None and not (
         as_images and IMAGE_RENDERERS[diagram_fmt].scalable
     ):
@@ -899,6 +977,7 @@ def _history(args: argparse.Namespace) -> None:
                 statuses,
             ),
             _progress_reporter(len(commits), statuses),
+            metrics=args.metrics,
         )
     except GitError as error:
         _abort(str(error), _EXIT_USAGE)
@@ -910,7 +989,12 @@ def _history(args: argparse.Namespace) -> None:
         frames,
         lambda snapshot: renderer.render(snapshot.graph),
         lambda old, new: diff_renderer.render(
-            diff_graphs(old.graph, new.graph, changes_only=args.changes_only),
+            diff_graphs(
+                old.graph,
+                new.graph,
+                changes_only=args.changes_only,
+                metrics=args.metrics,
+            ),
         ),
     )
     if images is None:

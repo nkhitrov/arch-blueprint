@@ -238,6 +238,51 @@ def test_diff_shows_new_cycle_details_on_request_only() -> None:
     assert "NEW CYCLE" in hidden
 
 
+def test_diff_draws_the_metrics_asked_for() -> None:
+    [changes] = [case for case in DIFF_CASES if case.name == "changes"]
+    result = run_command(
+        "diff",
+        str(changes.old),
+        str(changes.new),
+        "--metric",
+        "edge_weight",
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "edge_weight=1" in result.stdout
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    ("extra", "expected"),
+    [
+        pytest.param(["--metric", "fan_inn"], "unknown metric 'fan_inn'", id="typo"),
+        pytest.param(["--metric", "depth"], "compute-only", id="compute_only"),
+    ],
+)
+def test_diff_rejects_a_bad_metric(extra: list[str], expected: str) -> None:
+    result = run_command(
+        "diff",
+        _CYCLIC_SNAPSHOT,
+        _CYCLIC_SNAPSHOT,
+        *extra,
+        check=False,
+    )
+    assert result.returncode == _USAGE_ERROR
+    assert expected in result.stderr
+    assert result.stdout == ""
+
+
+def test_diff_rejects_a_metric_a_snapshot_lacks(tmp_path: Path) -> None:
+    text = Path(_CYCLIC_SNAPSHOT).read_text(encoding="utf-8")
+    lean = tmp_path / "lean.json"
+    lean.write_text(text.replace('"fan_in",', ""), encoding="utf-8")
+    args = ["--metric", "fan_in"]
+    result = run_command("diff", _CYCLIC_SNAPSHOT, str(lean), *args, check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "lean.json holds no metric 'fan_in'" in result.stderr
+
+
 # --- finding one's way: commands, help, hints -------------------------------
 
 

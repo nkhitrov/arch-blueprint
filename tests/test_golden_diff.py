@@ -19,4 +19,4 @@ def test_diff_output_matches_golden(case: DiffCase, fmt: str) -> None:
         check=False,
     )
     assert result.stdout == expected
-    assert result.returncode == (0 if case.name == "no_changes" else 1)
+    assert result.returncode == case.exit_code

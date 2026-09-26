@@ -11,6 +11,7 @@ from arch_blueprint.diff.model import (
 )
 from arch_blueprint.diff.render_base import (
     ADDED_COLOR,
+    METRIC_CHANGE_LABEL,
     NEW_CYCLE_LABEL,
     NO_CHANGES_LABEL,
     REMOVED_COLOR,
@@ -20,7 +21,11 @@ from arch_blueprint.diff.render_base import (
     DiffRenderer,
 )
 from arch_blueprint.domain.graph import Cycle
-from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, CycleRender
+from arch_blueprint.renderer.base import (
+    CYCLE_HIGHLIGHT_COLOR,
+    CycleRender,
+    LinkDecoration,
+)
 from arch_blueprint.renderer.puml import (
     PUML_HEADER,
     format_cycle_note,
@@ -36,10 +41,11 @@ _CHANGED_NODE: Final = {
     ),
 }
 
-_LINK_ARROW: Final = {
-    ChangeStatus.ADDED: (f"-[{ADDED_COLOR},dashed,thickness=3]->", " : added"),
-    ChangeStatus.REMOVED: (f"-[{REMOVED_COLOR},dashed,thickness=2]->", " : removed"),
-    ChangeStatus.CONTEXT: ("--->", ""),
+#: Per status: the arrow's styles and its label; a context link is a plain one.
+_LINK_ARROW: Final[dict[ChangeStatus, tuple[tuple[str, ...], str]]] = {
+    ChangeStatus.ADDED: ((ADDED_COLOR, "dashed", "thickness=3"), "added"),
+    ChangeStatus.REMOVED: ((REMOVED_COLOR, "dashed", "thickness=2"), "removed"),
+    ChangeStatus.CONTEXT: ((), ""),
 }
 
 _LEGEND_LINES: Final = (
@@ -53,35 +59,61 @@ _LEGEND_LINES: Final = (
 )
 
 
+def _labelled(link: str, *labels: str) -> str:
+    """``link`` with its non-empty labels after a colon, as a plain diagram does."""
+    text = " ".join(label for label in labels if label)
+    return f"{link} : {text}" if text else link
+
+
 class PlantUmlDiffRenderer(DiffRenderer):
     """PlantUML diff renderer."""
 
     fmt = "puml"
 
-    def _format_node(self, node_id: str, status: ChangeStatus) -> str:
+    def _format_node(self, node_id: str, status: ChangeStatus, rows: list[str]) -> str:
         marker = _CHANGED_NODE.get(status) or f"<<(M, {self._depth_color(node_id)})>>"
         if is_shadowed(node_id):  # quoted: the id's last part is not a name
-            return f'class "{display_name(node_id)}" as {node_id} {marker}'
-        return f"class {node_id} {marker}"
+            head = f'class "{display_name(node_id)}" as {node_id} {marker}'
+        else:
+            head = f"class {node_id} {marker}"
+        if not rows:
+            return head
+        body = "\n".join(f"  {row}" for row in rows)
+        return f"{head} {{\n{body}\n}}"
 
     def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
         return format_package(namespace, nodes)
 
-    def _format_link(self, source: str, target: str, status: ChangeStatus) -> str:
-        arrow, label = _LINK_ARROW[status]
-        return f"{source} {arrow} {target}{label}"
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        status: ChangeStatus,
+        decoration: LinkDecoration,
+    ) -> str:
+        styles, label = _LINK_ARROW[status]
+        styles = (*styles, *decoration.styles)
+        arrow = f"-[{','.join(styles)}]->" if styles else "--->"
+        return _labelled(f"{source} {arrow} {target}", label, *decoration.labels)
 
-    def _format_context_cycle(self, cycle: Cycle) -> str:
+    def _format_context_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> str:
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},bold]->"
-        return f"{cycle.namespace_from} {arrow} {cycle.namespace_to}"
+        link = f"{cycle.namespace_from} {arrow} {cycle.namespace_to}"
+        return _labelled(link, *decoration.labels)
 
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
+    def _format_cycle(
+        self,
+        delta: CycleDelta,
+        decoration: LinkDecoration,
+    ) -> CycleRender:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
-            return CycleRender(inline=self._format_resolved(delta))
+            return CycleRender(inline=self._format_resolved(delta, decoration))
         arrow = f"<-[{CYCLE_HIGHLIGHT_COLOR},dashed,thickness=3]->"
-        link = (
-            f"{cycle.namespace_from} {arrow} {cycle.namespace_to} : {NEW_CYCLE_LABEL}"
+        link = _labelled(
+            f"{cycle.namespace_from} {arrow} {cycle.namespace_to}",
+            NEW_CYCLE_LABEL,
+            *decoration.labels,
         )
         # Only a new cycle gets its imports listed: they are what to fix.
         if delta.change is CycleChange.NEW and self.show_cycle_details:
@@ -89,7 +121,7 @@ class PlantUmlDiffRenderer(DiffRenderer):
         return CycleRender(inline=link)
 
     @staticmethod
-    def _format_resolved(delta: CycleDelta) -> str:
+    def _format_resolved(delta: CycleDelta, decoration: LinkDecoration) -> str:
         """The dependency the cycle left behind; a bare line if none is left."""
         if delta.remaining is None:
             source, target = delta.cycle.namespace_from, delta.cycle.namespace_to
@@ -97,10 +129,16 @@ class PlantUmlDiffRenderer(DiffRenderer):
         else:
             source, target = delta.remaining
             connector = f"-[{RESOLVED_COLOR},dashed]->"
-        return f"{source} {connector} {target} : {RESOLVED_CYCLE_LABEL}"
+        return _labelled(
+            f"{source} {connector} {target}",
+            RESOLVED_CYCLE_LABEL,
+            *decoration.labels,
+        )
 
-    def _format_legend(self, *, unchanged: bool) -> str:
+    def _format_legend(self, *, unchanged: bool, metrics: bool) -> str:
         lines = ([f"**{NO_CHANGES_LABEL}**"] if unchanged else []) + [*_LEGEND_LINES]
+        if metrics:
+            lines.append(METRIC_CHANGE_LABEL)
         body = "\n".join(f"  {line}" for line in lines)
         return f"legend top left\n{body}\nendlegend"
 

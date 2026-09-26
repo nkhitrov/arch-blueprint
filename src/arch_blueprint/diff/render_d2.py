@@ -12,6 +12,7 @@ from arch_blueprint.diff.model import (
 )
 from arch_blueprint.diff.render_base import (
     ADDED_COLOR,
+    METRIC_CHANGE_LABEL,
     NEW_CYCLE_LABEL,
     NO_CHANGES_LABEL,
     REMOVED_COLOR,
@@ -21,11 +22,16 @@ from arch_blueprint.diff.render_base import (
     DiffRenderer,
 )
 from arch_blueprint.domain.graph import Cycle
-from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, CycleRender
+from arch_blueprint.renderer.base import (
+    CYCLE_HIGHLIGHT_COLOR,
+    CycleRender,
+    LinkDecoration,
+)
 from arch_blueprint.renderer.d2 import (
     CYCLE_CONNECTION_TEMPLATE,
     format_cycle_note,
     format_cycle_notes_container,
+    quote_label,
 )
 
 # D2 has no spot letter, so a changed node's marker goes into the label; D2
@@ -37,16 +43,17 @@ _CHANGED_NODE: Final = {
 
 _DASHED: Final = "style.stroke-dash: 5"
 
-_LINK_STYLE: Final = {
+#: Per status: the link's label and styles; a context link is a plain one.
+_LINK_STYLE: Final[dict[ChangeStatus, tuple[str, tuple[str, ...]]]] = {
     ChangeStatus.ADDED: (
-        ": added",
-        f' {{style.stroke: "{ADDED_COLOR}"; style.stroke-width: 3; {_DASHED}}}',
+        "added",
+        (f'style.stroke: "{ADDED_COLOR}"', "style.stroke-width: 3", _DASHED),
     ),
     ChangeStatus.REMOVED: (
-        ": removed",
-        f' {{style.stroke: "{REMOVED_COLOR}"; {_DASHED}}}',
+        "removed",
+        (f'style.stroke: "{REMOVED_COLOR}"', _DASHED),
     ),
-    ChangeStatus.CONTEXT: ("", ""),
+    ChangeStatus.CONTEXT: ("", ()),
 }
 
 _NEW_CYCLE_STYLE: Final = (
@@ -61,6 +68,7 @@ _LEGEND_ITEMS: Final = (
     f'  new_cycle: "{NEW_CYCLE_LABEL}" {{{_NEW_CYCLE_STYLE}}}',
     f'  resolved: "{RESOLVED_CYCLE_LABEL}" {{{_RESOLVED_CYCLE_STYLE}}}',
 )
+_METRIC_LEGEND_ITEM: Final = f'  metric: "{METRIC_CHANGE_LABEL}" {{shape: text}}'
 
 
 class D2LangDiffRenderer(DiffRenderer):
@@ -68,7 +76,7 @@ class D2LangDiffRenderer(DiffRenderer):
 
     fmt = "d2"
 
-    def _format_node(self, node_id: str, status: ChangeStatus) -> str:
+    def _format_node(self, node_id: str, status: ChangeStatus, rows: list[str]) -> str:
         prefix, fill = _CHANGED_NODE.get(status, ("", self._depth_color(node_id)))
         lines = [f"{_key_of(node_id)}: {{", "  shape: class"]
         if prefix or is_shadowed(node_id):
@@ -76,28 +84,49 @@ class D2LangDiffRenderer(DiffRenderer):
         lines += ["  style: {", f'    fill: "{fill}"']
         if prefix:
             lines.append("    stroke-dash: 5")
-        lines += ["  }", "}"]
+        lines.append("  }")
+        lines += [f"  {row}" for row in rows]  # where a plain diagram puts them
+        lines.append("}")
         return "\n".join(lines)
 
-    def _format_link(self, source: str, target: str, status: ChangeStatus) -> str:
-        label, style = _LINK_STYLE[status]
-        return f"{source} -> {target}{label}{style}"
+    def _format_link(
+        self,
+        source: str,
+        target: str,
+        status: ChangeStatus,
+        decoration: LinkDecoration,
+    ) -> str:
+        label, styles = _LINK_STYLE[status]
+        # The status, then the metric labels joined as a plain diagram joins them.
+        text = " ".join(part for part in (label, ", ".join(decoration.labels)) if part)
+        link = f"{source} -> {target}"
+        if text:
+            link = f"{link}: {quote_label(text)}"
+        styles = (*styles, *decoration.styles)
+        if styles:
+            link = f"{link} {{{'; '.join(styles)}}}"
+        return link
 
-    def _format_context_cycle(self, cycle: Cycle) -> str:
+    def _format_context_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> str:
         return CYCLE_CONNECTION_TEMPLATE.substitute(
             ns_a=cycle.namespace_from,
             ns_b=cycle.namespace_to,
-            label="CYCLE",
+            label=quote_label(_cycle_label("CYCLE", decoration)),
             color=CYCLE_HIGHLIGHT_COLOR,
         )
 
-    def _format_cycle(self, delta: CycleDelta) -> CycleRender:
+    def _format_cycle(
+        self,
+        delta: CycleDelta,
+        decoration: LinkDecoration,
+    ) -> CycleRender:
         cycle = delta.cycle
         if delta.change is CycleChange.RESOLVED:
-            return CycleRender(inline=self._format_resolved(delta))
+            return CycleRender(inline=self._format_resolved(delta, decoration))
+        label = quote_label(_cycle_label(NEW_CYCLE_LABEL, decoration))
         connection = (
             f"{cycle.namespace_from} <-> {cycle.namespace_to}: "
-            f"{NEW_CYCLE_LABEL} {{{_NEW_CYCLE_STYLE}}}"
+            f"{label} {{{_NEW_CYCLE_STYLE}}}"
         )
         # Only a new cycle gets its imports listed: they are what to fix.
         if delta.change is CycleChange.NEW and self.show_cycle_details:
@@ -105,7 +134,7 @@ class D2LangDiffRenderer(DiffRenderer):
         return CycleRender(inline=connection)
 
     @staticmethod
-    def _format_resolved(delta: CycleDelta) -> str:
+    def _format_resolved(delta: CycleDelta, decoration: LinkDecoration) -> str:
         """The dependency the cycle left behind; a bare line if none is left."""
         if delta.remaining is None:
             source, target = delta.cycle.namespace_from, delta.cycle.namespace_to
@@ -113,16 +142,15 @@ class D2LangDiffRenderer(DiffRenderer):
         else:
             source, target = delta.remaining
             connector = "->"
-        return (
-            f"{source} {connector} {target}: "
-            f"{RESOLVED_CYCLE_LABEL} {{{_RESOLVED_CYCLE_STYLE}}}"
-        )
+        label = quote_label(_cycle_label(RESOLVED_CYCLE_LABEL, decoration))
+        return f"{source} {connector} {target}: {label} {{{_RESOLVED_CYCLE_STYLE}}}"
 
-    def _format_legend(self, *, unchanged: bool) -> str:
+    def _format_legend(self, *, unchanged: bool, metrics: bool) -> str:
         head = ["diff_legend: Legend {", "  near: top-left"]
         if unchanged:
             head.append(f'  no_changes: "{NO_CHANGES_LABEL}" {{shape: text}}')
-        return "\n".join([*head, *_LEGEND_ITEMS, "}"])
+        items = [*_LEGEND_ITEMS, *([_METRIC_LEGEND_ITEM] if metrics else [])]
+        return "\n".join([*head, *items, "}"])
 
     def _format_empty(self) -> str:
         return f'direction: right\nno_changes: "{NO_CHANGES_LABEL}" {{shape: text}}'
@@ -140,6 +168,11 @@ class D2LangDiffRenderer(DiffRenderer):
         if deferred:
             sections.append(format_cycle_notes_container(deferred))
         return "\n".join(sections)
+
+
+def _cycle_label(label: str, decoration: LinkDecoration) -> str:
+    """A cycle's label, then its metric labels, as a plain diagram writes them."""
+    return " ".join((label, *decoration.labels))
 
 
 def _key_of(node_id: str) -> str:

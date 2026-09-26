@@ -130,7 +130,11 @@ class DiffCase:
     old: Path
     new: Path
     args: tuple[str, ...] = ()
+    #: 0 nothing changed, 1 something did — structure, or a shown metric.
+    exit_code: int = 1
 
+
+SHOW_DIFF_METRICS = ("--metric", "fan_in", "--metric", "fan_out", *SHOW_LINK_METRIC)
 
 DIFF_CASES = [
     # Removed module with its link, added module with its link, drawn over the
@@ -181,6 +185,51 @@ DIFF_CASES = [
         "no_changes",
         GOLDEN_DIR / "json" / "example.json",
         GOLDEN_DIR / "json" / "example.json",
+        exit_code=0,
+    ),
+    # Metrics on added, removed and unchanged modules and links: a changed
+    # value reads old → new, an added one its new value, a removed one its old.
+    DiffCase(
+        "metrics",
+        GOLDEN_DIR / "json" / "example.json",
+        _DIFF_FIXTURES / "example_changed.json",
+        SHOW_DIFF_METRICS,
+    ),
+    # A link metric on a new cycle: one direction before, both after.
+    DiffCase(
+        "metrics_new_cycle",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        SHOW_DIFF_METRICS,
+    ),
+    # ... and on a resolved one, drawn as the direction that remains.
+    DiffCase(
+        "metrics_resolved_cycle",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+        SHOW_DIFF_METRICS,
+    ),
+    # One more import inside a link that exists: no structural change, but the
+    # metrics shown move — the cycle's forward/backward among them. Exit 1.
+    DiffCase(
+        "metrics_only",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_weighted.json",
+        (*SHOW_DIFF_METRICS, "--metric", "instability"),
+    ),
+    # With --changes-only the modules and connections whose value moved.
+    DiffCase(
+        "metrics_only_changes_only",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_weighted.json",
+        (*SHOW_DIFF_METRICS, "--changes-only"),
+    ),
+    # The same change without --metric is no change at all: structure only.
+    DiffCase(
+        "metrics_only_unshown",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_weighted.json",
+        exit_code=0,
     ),
 ]
 
