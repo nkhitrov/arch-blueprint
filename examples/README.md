@@ -21,7 +21,8 @@ project_root/                 # passed as <project_dir>; NO __init__.py here (a 
 Three things make this project interesting:
 
 - The **project root has no `__init__.py`**, so `app1`, `app2`, and `plugins` are separate
-  top-level packages (the tool appends `project_root` to `sys.path` so they are importable).
+  top-level packages (the tool puts `project_root` on `sys.path` so they resolve). Without `-m`,
+  `arch-blueprint draw examples/project_root` finds all three and draws each whole.
 - `app2` imports from a **sibling** package (`app1.models`), so a cross-app link should appear.
 - `plugins/` is a **PEP 420 namespace package** (no `__init__.py`). grimp cannot graph a namespace
   package directly, so the tool expands it to its regular sub-package `plugins.auth` and graphs
@@ -32,7 +33,7 @@ Three things make this project interesting:
 From the repo root:
 
 ```bash
-uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'
+uv run arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'
 ```
 
 Expected (PlantUML): an `app2 ---> app1` link and an `app2 ---> plugins` link, with no warning and

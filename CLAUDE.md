@@ -18,8 +18,17 @@ This project uses `uv` for environment and dependency management.
 - Format: `uv run ruff format`
 - Lint (with autofix): `uv run ruff check --fix src tests`
 - Type-check (strict mypy): `uv run mypy ./src ./tests`
-- Run the CLI against a project: `uv run arch-blueprint <project_dir> -m '<pattern>' [-f puml|d2]`
-  - Example: `uv run arch-blueprint src -m 'arch_blueprint.*'`
+- Run the CLI against a project: `uv run arch-blueprint draw <project_dir> [-m '<pattern>'] [-f FMT] [-o FILE]`
+  - Example: `uv run arch-blueprint draw src -m 'arch_blueprint.*'`
+  - Every command is explicit (`draw`, `render`, `diff`, `history`). The old implicit form
+    `arch-blueprint <dir> -m ...` is gone; it gets an exit-2 hint naming the `draw` command.
+  - Without `-m`, `draw` and `diff --base` draw every package in `<project_dir>` whole
+    (`extract/layout.py:detect_roots` → `pkg.**`, noted on stderr); `history` without ROOTs does
+    the same at `--head`. A src-layout root (`src/` a namespace dir holding packages) is refused
+    with a hint rather than drawn as `src.myapp`.
+  - `-o FILE` writes to a file; without `-f` its extension picks the format (`.puml`, `.d2`,
+    `.json`, `.png` → `puml-png`). `-f puml-png` / `d2-png` draw an image through the
+    `IMAGE_RENDERERS` tool and require `-o`.
   - Graphing **this** project is a special case: `arch_blueprint` is already in `sys.modules`
     (the CLI *is* it), so `find_spec` resolves to the running copy whatever `<project_dir>` says.
     To graph a different checkout, put it first on `PYTHONPATH` so that copy is the one running.
@@ -38,15 +47,15 @@ This project uses `uv` for environment and dependency management.
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
     not a silent no-op.
 - Snapshot / render / diff (see **Snapshot and diff** below):
-  - `uv run arch-blueprint <project_dir> -m '<pattern>' -f json > graph.json` — graph snapshot.
-  - `uv run arch-blueprint render graph.json [-f puml|d2] [--metric NAME]` — draw a snapshot.
-  - `uv run arch-blueprint diff OLD.json NEW.json [-f puml|d2]` — draw what changed.
-  - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> -m '<pattern>'` — both sides
+  - `uv run arch-blueprint draw <project_dir> -m '<pattern>' -o graph.json` — graph snapshot.
+  - `uv run arch-blueprint render graph.json [-f FMT] [-o FILE] [--metric NAME]` — draw a snapshot.
+  - `uv run arch-blueprint diff OLD.json NEW.json [-f FMT] [-o FILE]` — draw what changed.
+  - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> [-m '<pattern>']` — both sides
     built from git (`--head` defaults to the working tree).
-  - `uv run arch-blueprint history <project_dir> ROOT [ROOT ...] [-m '<pattern>'] [--base REV]
+  - `uv run arch-blueprint history <project_dir> [ROOT ...] [-m '<pattern>'] [--base REV]
     [--head REV] [-o DIR] [-f puml|d2|puml-png|d2-png]` — an album: a diagram and a diff per commit
     that changed the graph (see **History album** below).
-- Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
+- Runnable example fixture: `uv run arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
 CI (`.github/workflows/test.yml`) has two jobs: a single-version `lint` job (`pre-commit`, skipping
@@ -61,8 +70,9 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
 - `test_domain.py` — link aggregation, `CycleAnalyzer`, `GroupAnalyzer`.
 - `test_metrics.py` — metric computation, registry routing, render plugins, `RenderPlan` validation.
 - `test_renderers.py` — both renderers **in-process** (build a graph, render it, assert on the text).
-- `test_source.py` — `GrimpSource`, interpreter-state hygiene, extraction.
-- `test_cli.py` — exit codes, stderr messages, output encoding.
+- `test_source.py` — `GrimpSource`, interpreter-state hygiene, extraction, `detect_roots`.
+- `test_cli.py` — exit codes, stderr messages and hints, output encoding, `-o` / PNG (through a
+  stand-in tool from `conftest.stand_in_tool`), help / `--version` / `--list-metrics`.
 - `test_golden_puml.py` / `test_golden_d2.py` — run the CLI as a subprocess over every scenario in
   `tests/conftest.py:SCENARIOS` and assert byte-exact output against `tests/golden/<fmt>/`. When
   output changes *intentionally*, regenerate the affected golden.
@@ -188,7 +198,7 @@ graph with "No architectural changes" in the legend, or just that note when noth
 `git archive`s only the project's subtree for that commit into a temp dir, and yields the project
 path inside it.
 `split_patterns` gives each side only the `-m` patterns whose top-level package it has code for
-(`has_source`; a package added or removed wholesale is a diff, not an error); a pattern on neither
+(`extract/layout.has_source`; a package added or removed wholesale is a diff, not an error); a pattern on neither
 side goes to both, so a typo still fails.
 
 ### History album
@@ -216,10 +226,11 @@ side goes to both, so a typo still fails.
   failed. A failed source never gets an image. d2 refuses to rasterize past a fixed amount of work
   (a large project's full diagram): `D2Images` retries at half the scale up to `HALVINGS` times,
   starting from `--scale` if given (`scalable` renderers only; `--scale` elsewhere is exit 2).
-- CLI (`_history`): `_HISTORY_FORMATS` maps `-f` to (diagram format, images?), built from
-  `_RENDERERS` and `IMAGE_RENDERERS` — a format with an image renderer gets `<fmt>-png`. Roots are
-  positional and required; `-m` defaults to `ROOT.**` and must lie under a root. A root is dropped
-  for a commit where `git.has_source` finds no analyzable code (mirroring what `GrimpSource` can
+- CLI (`_history`): `_DIAGRAM_FORMATS` (from `_formats()`, shared with `draw` / `render`; `diff`
+  has `_DIFF_FORMATS`) maps `-f` to (diagram format, images?), built from the renderers and
+  `IMAGE_RENDERERS` — a format with an image renderer gets `<fmt>-png`. Roots are positional and
+  optional (default: `detect_roots` of the `--head` tree); `-m` defaults to `ROOT.**` and must lie
+  under a root. A root is dropped for a commit where `extract/layout.has_source` finds no analyzable code (mirroring what `GrimpSource` can
   build, so grimp never warns); a commit with none is `no source yet`. A commit whose analysis fails
   is `skipped (reason)`. Exit 2 for bad input (including a missing image tool, checked before any
   work), 1 when images failed — caches keep everything else for the rerun.
@@ -300,11 +311,23 @@ Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer
 
 ### CLI behaviour
 
-`main()` dispatches on the first argument: `render` / `diff` / `history` select a subcommand, anything else is
-the original `<project_dir> -m ...` interface, unchanged. Failures are one line on stderr with no
+One `argparse` parser with required subcommands (`_COMMANDS`: `draw`, `render`, `diff`,
+`history`; each an `_add_*` builder that sets its handler). No arguments prints the help to stderr
+(exit 2); a first argument that is an existing directory is the retired implicit form and gets a
+hint naming `draw`. Top-level `--version` and `--list-metrics` (from each metric's `description`,
+displayable ones only). Every subcommand's help ends with examples — keep them runnable.
+
+Output is settled by `_output()` **before** any analysis: `-f` / `-o` agree or it is exit 2, an
+image needs `-o`, and a missing image tool fails in a second rather than after the build. The
+error hints (`_layout_hint`: a package passed instead of its parent, a src layout, the packages
+that do exist) are built in the CLI from `PackageNotFoundError` — `extract/source.py` carries the
+package name, not the wording.
+
+Failures are one line on stderr with no
 traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
 matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
-for an analysis that could not finish (`history`: images that could not be drawn). `diff` exits
+for an analysis that could not finish (`history`: images that could not be drawn; `draw` /
+`render`: an image the tool refused). `diff` exits
 like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
 diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
 details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all

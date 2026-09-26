@@ -12,6 +12,7 @@ class FanOutMetric:
     """Number of distinct nodes a given node depends on (outgoing edges)."""
 
     name = "fan_out"
+    description = "how many modules this one depends on"
     applies_to = ALL_KINDS
     render: Optional[str] = "text_row"
 

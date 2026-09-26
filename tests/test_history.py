@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import re
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -12,10 +10,19 @@ import pytest
 
 from arch_blueprint.__main__ import _RENDERERS
 from arch_blueprint.analyze import analyze
-from arch_blueprint.git import Commit, has_source
+from arch_blueprint.extract.layout import has_source
+from arch_blueprint.git import Commit
 from arch_blueprint.history import IMAGE_RENDERERS, ImageCache, SnapshotCache, collect
 from arch_blueprint.snapshot import Snapshot
-from tests.conftest import CliResult, git, make_edge, make_graph, run_command
+from tests.conftest import (
+    CliResult,
+    git,
+    make_edge,
+    make_graph,
+    posix_only,
+    run_command,
+    stand_in_tool,
+)
 
 _USAGE = 2
 _FAILURE = 1
@@ -113,6 +120,25 @@ def test_album_has_a_frame_per_graph_change(repo: Path) -> None:
     assert "close a cycle" in index
     assert "reword" not in index
     assert "unchanged" in result.stderr
+
+
+def test_roots_default_to_every_package_at_head(repo: Path) -> None:
+    assert _history(repo).returncode == 0
+    result = run_command(
+        "history",
+        "src",
+        "-o",
+        "detected",
+        "--cache-dir",
+        "cache",
+        check=False,
+        cwd=repo,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "drawing pkg_a, pkg_b (as of HEAD" in result.stderr
+    named = {path.name: path.read_bytes() for path in (repo / "album").iterdir()}
+    detected = {path.name: path.read_bytes() for path in (repo / "detected").iterdir()}
+    assert detected == named
 
 
 def test_rerun_builds_nothing_and_rewrites_nothing(repo: Path) -> None:
@@ -262,22 +288,8 @@ def test_has_source(tmp_path: Path, layout: dict[str, str], expected: bool) -> N
 
 # --- images through a stand-in tool on PATH --------------------------------
 
-_posix_only = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="the stand-in tool is a shell script",
-)
-
-#: Every stand-in logs its arguments, one call per line.
-_LOG_CALL = 'echo "$@" >> "$(dirname "$0")/calls"'
-
-
-def _tool(tmp_path: Path, body: str, name: str = "plantuml") -> dict[str, str]:
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir(exist_ok=True)
-    tool = bin_dir / name
-    tool.write_text(f"#!/bin/sh\n{_LOG_CALL}\n{body}\n")
-    tool.chmod(0o755)
-    return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+_posix_only = posix_only
+_tool = stand_in_tool
 
 
 def _calls(tmp_path: Path) -> list[str]:

@@ -16,6 +16,7 @@ class InstabilityMetric:
     """
 
     name = "instability"
+    description = "fan_out / (fan_in + fan_out): 0 = stable, 1 = unstable"
     applies_to = ALL_KINDS
     render: Optional[str] = "text_row"
 

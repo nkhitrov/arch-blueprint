@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import pytest
+
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
 from arch_blueprint.domain.node import Node, NodeKind
 
@@ -207,7 +209,13 @@ def run_cli(
     extra_env: Optional[dict[str, str]] = None,
 ) -> CliResult:
     """Run the arch-blueprint CLI end-to-end on a project directory."""
-    return run_command(str(project_dir), *args, check=check, extra_env=extra_env)
+    return run_command(
+        "draw",
+        str(project_dir),
+        *args,
+        check=check,
+        extra_env=extra_env,
+    )
 
 
 def run_command(
@@ -271,3 +279,27 @@ def make_graph(node_ids: Iterable[str], edges: Iterable[Edge]) -> BlueprintGraph
         nodes=[Node(id=node_id, kind=NodeKind.MODULE) for node_id in node_ids],
         edges=frozenset(edges),
     )
+
+
+# --- an image tool stood in for by a shell script on PATH ------------------
+
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="the stand-in tool is a shell script",
+)
+
+#: Every stand-in logs its arguments, one call per line.
+_LOG_CALL = 'echo "$@" >> "$(dirname "$0")/calls"'
+
+
+def stand_in_tool(tmp_path: Path, body: str, name: str = "plantuml") -> dict[str, str]:
+    """Put a shell script named ``name`` first on PATH; return that environment.
+
+    It logs each call to ``tmp_path/bin/calls``, then runs ``body``.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    tool = bin_dir / name
+    tool.write_text(f"#!/bin/sh\n{_LOG_CALL}\n{body}\n")
+    tool.chmod(0o755)
+    return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}

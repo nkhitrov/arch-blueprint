@@ -11,6 +11,7 @@ class DepthMetric:
     """Dotted-path depth of a node. Drives node fill color; never displayed."""
 
     name = "depth"
+    description = "nesting depth of the module path; colors the nodes"
     applies_to = ALL_KINDS
     render: Optional[str] = None
 
