@@ -416,7 +416,13 @@ def _diff(argv: Sequence[str]) -> None:
     args = parser.parse_args(argv)
 
     if args.base is None:
-        if len(args.inputs) != 2 or args.modules or args.head or args.links is not None:
+        if args.links is not None:
+            _abort(
+                "--links applies to diff --base; "
+                "a snapshot already records its link level",
+                _EXIT_DIFF_TROUBLE,
+            )
+        if len(args.inputs) != 2 or args.modules or args.head:
             _abort(
                 "diff takes two snapshots (OLD.json NEW.json), "
                 "or --base REV PROJECT_DIR -m ... [--links LEVEL]",
@@ -427,7 +433,7 @@ def _diff(argv: Sequence[str]) -> None:
         if old_snapshot.links != new_snapshot.links:
             _abort(
                 f"cannot diff a {old_snapshot.links}-level snapshot against a "
-                f"{new_snapshot.links}-level one: every link would differ",
+                f"{new_snapshot.links}-level one: they aggregate imports differently",
                 _EXIT_DIFF_TROUBLE,
             )
         old, new = old_snapshot.graph, new_snapshot.graph

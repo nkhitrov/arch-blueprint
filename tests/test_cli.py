@@ -167,18 +167,19 @@ def test_render_rejects_a_metric_the_snapshot_lacks(tmp_path: Path) -> None:
         # A snapshot is already built at a level; drawing cannot change it.
         pytest.param(
             ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT, "--links", "module"],
-            "two snapshots",
+            "a snapshot already records its link level",
             id="diff_files_with_links",
         ),
         # Even the default: it would read as a request to re-aggregate.
         pytest.param(
             ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_SNAPSHOT, "--links", "namespace"],
-            "two snapshots",
+            "a snapshot already records its link level",
             id="diff_files_with_default_links",
         ),
         pytest.param(
             ["diff", _CYCLIC_SNAPSHOT, _CYCLIC_MODULE_SNAPSHOT],
-            "cannot diff a namespace-level snapshot against a module-level one",
+            "cannot diff a namespace-level snapshot against a module-level one: "
+            "they aggregate imports differently",
             id="diff_across_link_levels",
         ),
         pytest.param(
