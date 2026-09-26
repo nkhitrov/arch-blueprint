@@ -33,7 +33,7 @@ note as tangle_api_handlers
   - handlers → services
   **services.engine -> api.handlers:**
   - engine → handlers
-  **services -> services.engine (package __init__, not drawn):**
+  **services -> services.engine (package facade import, not drawn):**
   - services → engine
 end note
 note as tangle_ring_a

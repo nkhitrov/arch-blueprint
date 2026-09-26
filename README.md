@@ -92,16 +92,16 @@ package of its own name is a syntax error.
 `--links module` draws imports node to node instead: the same run gives
 `app2.service ---> app1.models` and `app2.service ---> plugins.auth.backend`. An import that lands
 inside a selected package ends on that package; an import of a package facade ends on its container.
-Cycles, `edge_weight` and `diff` then work between modules.
+Cycles, `edge_weight` and `diff` then work between modules. The level is part of how the graph is
+built, so it is given to the command that builds it (`-f json`, `diff --base`, `history`), and a
+snapshot records it — `render` and a diff of two snapshot files draw what they are given, and two
+snapshots built at different levels are not diffed (exit 2).
 
 A cycle is not only a pair importing each other: a ring `a → b → c → a` of any length is found too,
 its links drawn red, with a note listing the imports on it. A cycle can also run through a package
 facade — `api.handlers` imports `services`, whose `__init__.py` imports `services.engine`, which
 imports `api.handlers`. That `__init__.py` import closes the cycle but is not drawn (every facade's
-re-exports would bury the diagram); the note lists it as "package __init__, not drawn". The level is part of how the graph is
-built, so it is given to the command that builds it (`-f json`, `diff --base`, `history`), and a
-snapshot records it — `render` and a diff of two snapshot files draw what they are given, and two
-snapshots built at different levels are not diffed (exit 2).
+re-exports would bury the diagram); the note lists it as "package facade import, not drawn".
 
 `-m` is repeatable, which is how you graph sibling packages under a root that has no `__init__.py`
 of its own. A link is drawn when both endpoints belong to the selected set — including a dependency

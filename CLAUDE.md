@@ -163,7 +163,7 @@ happens, for a fresh extraction and a loaded snapshot alike.
    diagram. A `Tangle` holds its members, drawn links and the hidden edges closing it; a lone mutual
    pair is only a `Cycle`, a pair inside a longer cycle is both. Renderers mark a tangle's one-way
    links with `cyclic_link_styles` and, with cycle details, add a note listing its imports (hidden
-   ones marked "package __init__, not drawn"). `GroupAnalyzer.build` decides which link endpoints
+   ones marked "package facade import, not drawn"). `GroupAnalyzer.build` decides which link endpoints
    need a container (see below). All are agnostic to node kind and run in the pipeline — **not**
    in a renderer. Snapshots store `facade_edges`; tangles are re-derived.
 6. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.

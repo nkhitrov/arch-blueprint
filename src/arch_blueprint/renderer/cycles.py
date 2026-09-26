@@ -6,8 +6,9 @@ from collections import defaultdict
 from arch_blueprint.domain.graph import Cycle, Edge, Tangle
 
 #: Marks the imports of a package ``__init__.py`` in a tangle's note: they close
-#: the cycle but have no arrow on the diagram.
-HIDDEN_LINK_NOTE = "package __init__, not drawn"
+#: the cycle but have no arrow on the diagram. No underscores: PlantUML creole
+#: and Markdown would both read ``__init__`` as formatting.
+HIDDEN_LINK_NOTE = "package facade import, not drawn"
 
 
 def _short(module: str, endpoint: str) -> str:
