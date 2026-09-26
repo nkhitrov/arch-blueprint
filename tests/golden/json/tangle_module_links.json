@@ -99,8 +99,8 @@
     "api.handlers": {
       "depth": 2,
       "fan_in": 1,
-      "fan_out": 1,
-      "instability": 0.5
+      "fan_out": 0,
+      "instability": 0.0
     },
     "nest.a": {
       "depth": 2,
@@ -110,9 +110,9 @@
     },
     "nest.b": {
       "depth": 2,
-      "fan_in": 0,
+      "fan_in": 1,
       "fan_out": 1,
-      "instability": 1.0
+      "instability": 0.5
     },
     "ring.a": {
       "depth": 2,

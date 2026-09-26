@@ -38,12 +38,12 @@
     "deep.api": {
       "depth": 2,
       "fan_in": 0,
-      "fan_out": 2,
+      "fan_out": 1,
       "instability": 1.0
     },
     "deep.core": {
       "depth": 2,
-      "fan_in": 0,
+      "fan_in": 1,
       "fan_out": 0,
       "instability": 0.0
     }
