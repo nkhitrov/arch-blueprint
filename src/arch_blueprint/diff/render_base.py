@@ -4,12 +4,15 @@ from abc import ABC, abstractmethod
 from typing import ClassVar, Final, Optional
 
 from arch_blueprint.diff.model import (
+    SHADOWED_SUFFIX,
     ChangeStatus,
     CycleChange,
     CycleDelta,
     GraphDiff,
     OnCycle,
     depth_of,
+    display_name,
+    is_shadowed,
 )
 from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.renderer.base import (
@@ -66,7 +69,8 @@ class DiffRenderer(ABC):
             (node.id, self._format_node(node.id, diff.node_status[node.id]))
             for node in diff.graph.nodes
         ]
-        nodes = wrap_groups(diff.graph.groups, rendered, self._format_group)
+        format_group = self._format_group if self.options.nested else self._flat_group
+        nodes = wrap_groups(diff.graph.groups, rendered, format_group)
         # Every connection at the place a plain diagram declares it — by its
         # first endpoint pair — so the layout matches the plain diagram's: the
         # layout engine places things by declaration order.
@@ -124,9 +128,25 @@ class DiffRenderer(ABC):
         """The fill a plain diagram gives this node."""
         return self.options.get_color_for_depth(depth_of(node_id))
 
+    def _name_of(self, node_id: str) -> str:
+        """What a node is labelled: its own name, or its full name when flat.
+
+        Flat, a shadowed module sits beside the package that replaced it under
+        the same name, so it says which one it is.
+        """
+        if self.options.nested:
+            return display_name(node_id)
+        if is_shadowed(node_id):
+            return f"{node_id.removesuffix(f'.{SHADOWED_SUFFIX}')} {SHADOWED_SUFFIX}"
+        return node_id
+
     def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
         """Wrap one namespace's nodes; by default, do not wrap (D2 nests itself)."""
         return nodes
+
+    def _flat_group(self, namespace: str, nodes: list[str]) -> list[str]:
+        """No container: the package an arrow ends on is a node of its own."""
+        return [self._format_node(namespace, ChangeStatus.CONTEXT), *nodes]
 
     @abstractmethod
     def _format_node(self, node_id: str, status: ChangeStatus) -> str:

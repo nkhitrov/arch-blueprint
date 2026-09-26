@@ -12,7 +12,7 @@ from arch_blueprint.domain.graph import (
     MetricValue,
     Tangle,
 )
-from arch_blueprint.domain.node import Node
+from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.metrics import RenderContext, RenderPlan
 
 # A distinct danger red for cycles; intentionally not one of DEFAULT_OPTIONS'
@@ -31,6 +31,9 @@ class RendererOptions:
 
     depth_colors: Sequence[str]
     show_cycle_details: bool = False
+    #: Draw nodes inside the namespaces of their dotted names; off, each node is
+    #: a flat box under its full name (the link level decides, ``Level.nested``).
+    nested: bool = True
 
     def __post_init__(self) -> None:
         if not self.depth_colors:
@@ -162,7 +165,18 @@ class BlueprintRenderer(ABC):
                 self._render_metric_blocks(node, metrics),
             )
             rendered.append((node.id, text))
-        return wrap_groups(graph.groups, rendered, self._format_group)
+        format_group = self._format_group if self.options.nested else self._flat_group
+        return wrap_groups(graph.groups, rendered, format_group)
+
+    def _flat_group(self, namespace: str, nodes: list[str]) -> list[str]:
+        """No container: the package an arrow ends on is a node of its own.
+
+        Importing ``pkg`` runs ``pkg/__init__.py``, a module like any other, so
+        drawing it as a box beside the modules under it is what the import means.
+        """
+        color = self.options.get_color_for_depth(len(namespace.split(".")))
+        facade = self._format_node(Node(namespace, NodeKind.MODULE), color, [])
+        return [facade, *nodes]
 
     def _render_metric_blocks(
         self,

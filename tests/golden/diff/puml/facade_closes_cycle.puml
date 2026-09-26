@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 legend top left
   unchanged: drawn as on a plain diagram
@@ -13,10 +14,9 @@ legend top left
 endlegend
 
 class api.handlers <<(M, #2ECC71)>>
-package services {
-  class services.engine <<(M, #2ECC71)>>
-  class services.other <<(M, #2ECC71)>>
-}
+class services <<(M, #3498DB)>>
+class services.engine <<(M, #2ECC71)>>
+class services.other <<(M, #2ECC71)>>
 
 api.handlers -[#C0392B,dashed,thickness=3]-> services : NEW CYCLE
 services.engine -[#C0392B,dashed,thickness=3]-> api.handlers : NEW CYCLE

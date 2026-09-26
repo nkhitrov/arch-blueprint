@@ -7,7 +7,6 @@ from arch_blueprint.diff.model import (
     CycleChange,
     CycleDelta,
     OnCycle,
-    display_name,
     is_shadowed,
 )
 from arch_blueprint.diff.render_base import (
@@ -23,10 +22,10 @@ from arch_blueprint.diff.render_base import (
 from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, CycleRender
 from arch_blueprint.renderer.puml import (
-    PUML_HEADER,
     format_cycle_note,
     format_package,
     format_tangle_note,
+    puml_header,
 )
 
 # A changed node: spot letter, stereotype text, fill and a dashed border. The
@@ -74,7 +73,8 @@ class PlantUmlDiffRenderer(DiffRenderer):
     def _format_node(self, node_id: str, status: ChangeStatus) -> str:
         marker = _CHANGED_NODE.get(status) or f"<<(M, {self._depth_color(node_id)})>>"
         if is_shadowed(node_id):  # quoted: the id's last part is not a name
-            return f'class "{display_name(node_id)}" as {node_id} {marker}'
+            name = self._name_of(node_id)
+            return f'class "{name}" as {node_id} {marker}'
         return f"class {node_id} {marker}"
 
     def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
@@ -128,7 +128,8 @@ class PlantUmlDiffRenderer(DiffRenderer):
         return f"legend top left\n{body}\nendlegend"
 
     def _format_empty(self) -> str:
-        return f'{PUML_HEADER}note "{NO_CHANGES_LABEL}" as no_changes\n@enduml\n'
+        header = puml_header(nested=self.options.nested)
+        return f'{header}note "{NO_CHANGES_LABEL}" as no_changes\n@enduml\n'
 
     def _combine_output(
         self,
@@ -139,7 +140,8 @@ class PlantUmlDiffRenderer(DiffRenderer):
     ) -> str:
         nodes_section = "\n".join(nodes)
         links_section = "\n".join(links) + "\n" if links else ""
-        return f"{PUML_HEADER}{legend}\n\n{nodes_section}\n\n{links_section}@enduml\n"
+        header = puml_header(nested=self.options.nested)
+        return f"{header}{legend}\n\n{nodes_section}\n\n{links_section}@enduml\n"
 
 
 def _ref(endpoint: str) -> str:

@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 class app1.models <<(M, #2ECC71)>>
 class app2.service <<(M, #2ECC71)>>

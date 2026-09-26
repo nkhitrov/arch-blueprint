@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 legend top left
   unchanged: drawn as on a plain diagram
@@ -13,7 +14,7 @@ legend top left
 endlegend
 
 class app.other <<(M, #2ECC71)>>
-class "pkg" as app.pkg.(module) <<(-, #FF1744) removed>> #FF1744;line.dashed
+class "app.pkg (module)" as app.pkg.(module) <<(-, #FF1744) removed>> #FF1744;line.dashed
 class app.pkg.child <<(+, #00C853) added>> #00C853;line.dashed
 
 app.other -[#FF1744,dashed,thickness=2]-> "app.pkg.(module)" : removed

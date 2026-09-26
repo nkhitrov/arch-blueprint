@@ -7,64 +7,71 @@ diff_legend: Legend {
   new_cycle: "NEW CYCLE" {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
   resolved: "cycle resolved" {style.stroke: "#95A5A6"; style.stroke-dash: 5}
 }
-api.handlers: {
+"api.handlers": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-nest.a: {
+"nest.a": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-nest.b: {
+"nest.b": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-ring.a: {
+"ring.a": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-ring.b: {
+"ring.b": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-ring.c: {
+"ring.c": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-services.engine: {
+"services": {
+  shape: class
+  style: {
+    fill: "#3498DB"
+  }
+}
+
+"services.engine": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-services.other: {
+"services.other": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
-api.handlers -> services {style.stroke: "#C0392B"; style.stroke-width: 4}
-nest.a <-> nest.b: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
-ring.a -> ring.b: cycle resolved {style.stroke: "#95A5A6"; style.stroke-dash: 5}
-ring.b -> ring.c: cycle resolved {style.stroke: "#95A5A6"; style.stroke-dash: 5}
-ring.c -> ring.a: removed {style.stroke: "#FF1744"; style.stroke-dash: 5}
-services.engine -> api.handlers {style.stroke: "#C0392B"; style.stroke-width: 4}
+"api.handlers" -> "services" {style.stroke: "#C0392B"; style.stroke-width: 4}
+"nest.a" <-> "nest.b": CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
+"ring.a" -> "ring.b": cycle resolved {style.stroke: "#95A5A6"; style.stroke-dash: 5}
+"ring.b" -> "ring.c": cycle resolved {style.stroke: "#95A5A6"; style.stroke-dash: 5}
+"ring.c" -> "ring.a": removed {style.stroke: "#FF1744"; style.stroke-dash: 5}
+"services.engine" -> "api.handlers" {style.stroke: "#C0392B"; style.stroke-width: 4}

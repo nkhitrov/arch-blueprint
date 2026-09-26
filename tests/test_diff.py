@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable
 
 import pytest
 
-from arch_blueprint.__main__ import _RENDERERS, _renderer
+from arch_blueprint.__main__ import _RENDERERS, _diff_renderer, _renderer
 from arch_blueprint.analyze import analyze
 from arch_blueprint.diff import (
     DIFF_RENDERERS,
@@ -16,6 +16,7 @@ from arch_blueprint.diff import (
 )
 from arch_blueprint.diff.render_base import ADDED_COLOR, REMOVED_COLOR, RESOLVED_COLOR
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
+from arch_blueprint.extract import DEFAULT_LINK_LEVEL
 from arch_blueprint.metrics import default_registry
 from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, DEFAULT_OPTIONS
 from arch_blueprint.snapshot import load
@@ -409,14 +410,21 @@ def test_no_change_in_full_draws_the_graph_and_says_so(fmt: str) -> None:
     assert "d.w" in text
 
 
-def _snapshot_graph(name: str) -> BlueprintGraph:
-    return load(snapshot_path(name).read_text(encoding="utf-8")).graph
+def _snapshot_graph(name: str) -> tuple[BlueprintGraph, str]:
+    snapshot = load(snapshot_path(name).read_text(encoding="utf-8"))
+    return snapshot.graph, snapshot.links
 
 
 _SAME_GRAPHS = [
     *((s.name, lambda name=s.name: _snapshot_graph(name)) for s in SELECTIONS),
     # A cycle whose pair sorts before a plain link: declared first on both.
-    ("cycle_first", lambda: _with_metrics(_graph(NODES, [A_TO_B, B_TO_A, A_TO_C]))),
+    (
+        "cycle_first",
+        lambda: (
+            _with_metrics(_graph(NODES, [A_TO_B, B_TO_A, A_TO_C])),
+            DEFAULT_LINK_LEVEL,
+        ),
+    ),
 ]
 
 
@@ -434,16 +442,22 @@ def _with_metrics(graph: BlueprintGraph) -> BlueprintGraph:
 def test_diff_of_a_graph_with_itself_is_its_plain_diagram(
     fmt: str,
     name: str,
-    build: Callable[[], BlueprintGraph],
+    build: Callable[[], tuple[BlueprintGraph, str]],
 ) -> None:
     """Same declarations in the same order, so an album's frames lay out alike.
 
     The layout engine places things by declaration order: a diff that declared
     them otherwise would draw the same graph as a different picture.
     """
-    graph = build()
-    plain = _renderer(fmt, (), cycle_details=False, registry=default_registry())
-    diff = DIFF_RENDERERS[fmt](show_cycle_details=False)
+    graph, links = build()
+    plain = _renderer(
+        fmt,
+        (),
+        cycle_details=False,
+        registry=default_registry(),
+        links=links,
+    )
+    diff = _diff_renderer(fmt, cycle_details=False, links=links)
     drawn = diff.render(diff_graphs(graph, graph))
     assert _without_legend(drawn) == _without_legend(plain.render(graph))
 

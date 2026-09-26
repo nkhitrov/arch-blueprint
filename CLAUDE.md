@@ -39,6 +39,10 @@ This project uses `uv` for environment and dependency management.
     snapshot-file `diff` — a snapshot records the level it was built at. Even an explicit
     `--links namespace` is rejected there (the parser default is `None`, resolved by
     `_link_level`), and a diff of two snapshots of different levels is exit 2.
+    A level also says how it is drawn (`Level.nested` → `RendererOptions.nested`): `module` is
+    flat — every node one box under its full name (PlantUML `set separator none`, d2 quoted keys),
+    and a group's namespace (a facade an arrow ends on) is declared as a node of its own
+    (`_flat_group`) instead of wrapping its members. Containers only lengthen node-to-node arrows.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
@@ -136,7 +140,7 @@ happens, for a fresh extraction and a loaded snapshot alike.
    node ids)` to the edge's `(source_endpoint, target_endpoint)` — the aggregation key, nothing
    else; `Edge.source`/`target` stay the real import. `namespace_level` cuts both names where they
    diverge; `module_level` keeps the node, resolving an import to the selected node it lies under
-   (a facade stays itself and becomes a container). `None` drops the edge (an import of itself or
+   (a facade stays itself; drawn flat, it is a node of its own). `None` drops the edge (an import of itself or
    of its own package). Links, cycles, groups, metrics, snapshot and diff are untouched by the
    choice; `SnapshotCache.key` includes the level. Selection
    matches **both directions**: a dependency under a selected module, and a dependency *on* a package

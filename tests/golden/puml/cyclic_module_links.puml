@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 class pkg_a.core <<(M, #2ECC71)>>
 class pkg_a.services <<(M, #2ECC71)>>

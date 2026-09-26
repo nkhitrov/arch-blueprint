@@ -2,6 +2,7 @@ from arch_blueprint.extract.base import GraphExtractor
 from arch_blueprint.extract.levels import (
     DEFAULT_LINK_LEVEL,
     LINK_LEVELS,
+    Level,
     LinkLevel,
     module_level,
     namespace_level,
@@ -14,6 +15,7 @@ __all__ = [
     "LINK_LEVELS",
     "GraphExtractor",
     "GrimpSource",
+    "Level",
     "LinkLevel",
     "ModuleExtractor",
     "module_level",

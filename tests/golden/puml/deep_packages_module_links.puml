@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 class deep.api <<(M, #2ECC71)>>
 class deep.core <<(M, #2ECC71)>>

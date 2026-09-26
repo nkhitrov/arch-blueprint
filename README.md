@@ -91,8 +91,10 @@ package of its own name is a syntax error.
 
 `--links module` draws imports node to node instead: the same run gives
 `app2.service ---> app1.models` and `app2.service ---> plugins.auth.backend`. An import that lands
-inside a selected package ends on that package; an import of a package facade ends on its container.
-Cycles, `edge_weight` and `diff` then work between modules. The level is part of how the graph is
+inside a selected package ends on that package; an import of a package facade ends on that package.
+No arrow needs a container then, and frames only make the layout route arrows around them, so the
+nodes are drawn flat, each under its full name (`app2.service`), and a package an arrow ends on is a
+box of its own beside them. Cycles, `edge_weight` and `diff` then work between modules. The level is part of how the graph is
 built, so it is given to the command that builds it (`-f json`, `diff --base`, `history`), and a
 snapshot records it — `render` and a diff of two snapshot files draw what they are given, and two
 snapshots built at different levels are not diffed (exit 2).
@@ -212,7 +214,8 @@ arch-blueprint diff --base origin/master src -m 'myapp.*' > diff.puml || test $?
 ```
 
 A module replaced by a package of the same name (`api.py` → `api/`) is drawn inside that package,
-since no diagram can have one name be both a module and a container. A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
+since no diagram can have one name be both a module and a container (with `--links module`, beside
+it, as `api (module)`). A structural diff ignores metrics and depth colors (depth shifts whenever the graph does), and
 treats a change to the imports inside a link present on both sides as no change. Graphing
 `arch_blueprint` itself always resolves to the running copy, so `diff --base` cannot compare two
 versions of this tool.

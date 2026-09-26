@@ -1,30 +1,30 @@
 direction: down
-knot.a: {
+"knot.a": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-knot.b: {
+"knot.b": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-knot.c: {
+"knot.c": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
-knot.a <-> knot.b: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
-knot.b -> knot.c {style.stroke: "#C0392B"; style.stroke-width: 4}
-knot.c -> knot.a {style.stroke: "#C0392B"; style.stroke-width: 4}
-"Cycle Details".grid.tangle_knot_a -- knot.a {style.stroke: "#C0392B"; style.stroke-dash: 3}
-"Cycle Details".grid.tangle_knot_a -- knot.b {style.stroke: "#C0392B"; style.stroke-dash: 3}
-"Cycle Details".grid.tangle_knot_a -- knot.c {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"knot.a" <-> "knot.b": CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
+"knot.b" -> "knot.c" {style.stroke: "#C0392B"; style.stroke-width: 4}
+"knot.c" -> "knot.a" {style.stroke: "#C0392B"; style.stroke-width: 4}
+"Cycle Details".grid.tangle_knot_a -- "knot.a" {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_knot_a -- "knot.b" {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_knot_a -- "knot.c" {style.stroke: "#C0392B"; style.stroke-dash: 3}
 "Cycle Details": {
   style.fill: "#FEF9E7"
   style.stroke: "#F39C12"

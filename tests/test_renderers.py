@@ -264,3 +264,36 @@ def test_tangle_note_id_tells_dots_from_underscores() -> None:
 def test_tangle_note_id_is_a_word_for_a_shadowed_member() -> None:
     """``pkg.(module)`` would end a PlantUML alias at the parenthesis."""
     assert tangle_note_id(_tangle("pkg.(module)")).isidentifier()
+
+
+# --- flat names (module links) --------------------------------------------
+
+_FLAT = RendererOptions(depth_colors=["#000"], nested=False)
+
+
+def _facade_graph() -> BlueprintGraph:
+    """``a.core`` imports the package ``b`` itself: an endpoint no node carries."""
+    graph = make_graph(["a.core", "b.util"], [make_edge("a.core", "b", "a.core", "b")])
+    graph.groups = GroupAnalyzer.build(graph)
+    return graph
+
+
+def test_flat_puml_keeps_dotted_names_whole() -> None:
+    output = PlantUmlRenderer(plan=_plan("puml"), options=_FLAT).render(
+        _facade_graph(),
+    )
+    assert "set separator none\n" in output
+    assert "package" not in output
+    assert "class b <<(M, #000)>>\nclass b.util" in output
+
+
+def test_flat_d2_quotes_every_key() -> None:
+    output = D2LangRenderer(plan=_plan("d2"), options=_FLAT).render(_facade_graph())
+    assert output.index('"b": {') < output.index('"b.util": {')
+    assert '"a.core" -> "b"' in output
+
+
+def test_nested_is_the_default() -> None:
+    output = PlantUmlRenderer(plan=_plan("puml")).render(_facade_graph())
+    assert "set separator" not in output
+    assert "package b {\n  class b.util" in output

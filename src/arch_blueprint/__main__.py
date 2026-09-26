@@ -11,7 +11,7 @@ from typing import Final, NoReturn, Optional, TextIO
 from grimp.exceptions import GrimpException
 
 from arch_blueprint.blueprint import build_graph
-from arch_blueprint.diff import DIFF_RENDERERS, diff_graphs
+from arch_blueprint.diff import DIFF_RENDERERS, DiffRenderer, diff_graphs
 from arch_blueprint.domain.graph import BlueprintGraph
 from arch_blueprint.extract import DEFAULT_LINK_LEVEL, LINK_LEVELS, ModuleExtractor
 from arch_blueprint.extract.base import GraphExtractor
@@ -168,7 +168,7 @@ def _link_level(given: Optional[str]) -> str:
 
 
 def _extractor(links: str) -> Callable[[GrimpSource], GraphExtractor]:
-    return functools.partial(ModuleExtractor, level=LINK_LEVELS[links])
+    return functools.partial(ModuleExtractor, level=LINK_LEVELS[links].endpoints)
 
 
 def _add_metric_arg(parser: argparse.ArgumentParser) -> None:
@@ -231,6 +231,7 @@ def _renderer(
     *,
     cycle_details: bool,
     registry: MetricRegistry,
+    links: str,
 ) -> BlueprintRenderer:
     renderer_cls = _RENDERERS[fmt]
     try:
@@ -245,8 +246,17 @@ def _renderer(
     options = RendererOptions(
         depth_colors=DEFAULT_OPTIONS.depth_colors,
         show_cycle_details=cycle_details,
+        nested=LINK_LEVELS[links].nested,
     )
     return renderer_cls(plan=plan, options=options)
+
+
+def _diff_renderer(fmt: str, *, cycle_details: bool, links: str) -> DiffRenderer:
+    options = RendererOptions(
+        depth_colors=DEFAULT_OPTIONS.depth_colors,
+        nested=LINK_LEVELS[links].nested,
+    )
+    return DIFF_RENDERERS[fmt](show_cycle_details=cycle_details, options=options)
 
 
 def _build(
@@ -342,6 +352,7 @@ def _generate(argv: Sequence[str]) -> None:
         args.metrics,
         cycle_details=args.cycle_details,
         registry=registry,
+        links=links,
     )
     graph = _build(
         args.project_dir,
@@ -373,6 +384,7 @@ def _render(argv: Sequence[str]) -> None:
         args.metrics,
         cycle_details=args.cycle_details,
         registry=default_registry(),
+        links=snapshot.links,
     )
     missing = sorted(renderer.plan.required_metrics - snapshot.metrics)
     if missing:
@@ -437,22 +449,28 @@ def _diff(argv: Sequence[str]) -> None:
                 _EXIT_DIFF_TROUBLE,
             )
         old, new = old_snapshot.graph, new_snapshot.graph
+        links = old_snapshot.links
     else:
         if len(args.inputs) != 1 or not args.modules:
             _abort(
                 "diff --base takes one PROJECT_DIR and at least one -m pattern",
                 _EXIT_DIFF_TROUBLE,
             )
+        links = _link_level(args.links)
         old, new = _git_sides(
             args.inputs[0],
             args.modules,
             args.base,
             args.head,
-            links=_link_level(args.links),
+            links=links,
         )
 
     diff = diff_graphs(old, new, changes_only=args.changes_only)
-    renderer = DIFF_RENDERERS[args.format](show_cycle_details=args.cycle_details)
+    renderer = _diff_renderer(
+        args.format,
+        cycle_details=args.cycle_details,
+        links=links,
+    )
     _write(renderer.render(diff))
     raise SystemExit(0 if diff.is_empty else _EXIT_DIFFERENT)
 
@@ -574,8 +592,13 @@ def _history(argv: Sequence[str]) -> None:
         args.metrics,
         cycle_details=args.cycle_details,
         registry=registry,
+        links=_link_level(args.links),
     )
-    diff_renderer = DIFF_RENDERERS[diagram_fmt](show_cycle_details=args.cycle_details)
+    diff_renderer = _diff_renderer(
+        diagram_fmt,
+        cycle_details=args.cycle_details,
+        links=_link_level(args.links),
+    )
     if args.scale is not None and not (
         as_images and IMAGE_RENDERERS[diagram_fmt].scalable
     ):

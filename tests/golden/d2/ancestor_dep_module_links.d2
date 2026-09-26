@@ -1,15 +1,22 @@
 direction: down
-api.handlers: {
+"api.handlers": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-services.engine: {
+"services": {
+  shape: class
+  style: {
+    fill: "#3498DB"
+  }
+}
+
+"services.engine": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
-api.handlers -> services
+"api.handlers" -> "services"

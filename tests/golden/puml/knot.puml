@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 class knot.a <<(M, #2ECC71)>>
 class knot.b <<(M, #2ECC71)>>

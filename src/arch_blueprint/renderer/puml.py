@@ -31,6 +31,19 @@ PUML_HEADER: Final = textwrap.dedent(
     """,
 )
 
+# PlantUML reads the dots of ``class a.b.c`` as packages and nests the class in
+# them; with no separator the class is one box under its full name.
+_FLAT_HEADER: Final = PUML_HEADER.replace(
+    "hide empty members\n",
+    "hide empty members\nset separator none\n",
+)
+
+
+def puml_header(*, nested: bool) -> str:
+    """The diagram preamble; ``nested=False`` keeps dotted names flat."""
+    return PUML_HEADER if nested else _FLAT_HEADER
+
+
 _CYCLE_NOTE_TEMPLATE: Final = Template(
     textwrap.dedent(
         """\
@@ -153,4 +166,5 @@ class PlantUmlRenderer(BlueprintRenderer):
     ) -> str:
         nodes_section = "\n".join(nodes)
         links_section = "\n".join(links) + "\n" if links else ""
-        return f"{PUML_HEADER}{nodes_section}\n\n{links_section}@enduml\n"
+        header = puml_header(nested=self.options.nested)
+        return f"{header}{nodes_section}\n\n{links_section}@enduml\n"

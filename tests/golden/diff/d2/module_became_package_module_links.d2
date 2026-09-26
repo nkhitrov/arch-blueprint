@@ -7,29 +7,29 @@ diff_legend: Legend {
   new_cycle: "NEW CYCLE" {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
   resolved: "cycle resolved" {style.stroke: "#95A5A6"; style.stroke-dash: 5}
 }
-app.other: {
+"app.other": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-app.pkg."(module)": {
+"app.pkg.(module)": {
   shape: class
-  label: "- pkg"
+  label: "- app.pkg (module)"
   style: {
     fill: "#FF1744"
     stroke-dash: 5
   }
 }
 
-app.pkg.child: {
+"app.pkg.child": {
   shape: class
-  label: "+ child"
+  label: "+ app.pkg.child"
   style: {
     fill: "#00C853"
     stroke-dash: 5
   }
 }
-app.other -> app.pkg."(module)": removed {style.stroke: "#FF1744"; style.stroke-dash: 5}
-app.other -> app.pkg.child: added {style.stroke: "#00C853"; style.stroke-width: 3; style.stroke-dash: 5}
+"app.other" -> "app.pkg.(module)": removed {style.stroke: "#FF1744"; style.stroke-dash: 5}
+"app.other" -> "app.pkg.child": added {style.stroke: "#00C853"; style.stroke-width: 3; style.stroke-dash: 5}

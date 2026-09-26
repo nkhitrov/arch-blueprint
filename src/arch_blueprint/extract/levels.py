@@ -9,6 +9,7 @@ namespace arrows and module-to-module arrows changes nothing downstream.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final, Optional
 
@@ -59,10 +60,24 @@ def module_level(
     return source, resolved
 
 
-LINK_LEVELS: Final[MappingProxyType[str, LinkLevel]] = MappingProxyType(
+@dataclass(frozen=True)
+class Level:
+    """A registered link level: its endpoints, and how a diagram draws them.
+
+    ``nested`` draws nodes inside the namespaces their dotted names spell, so an
+    arrow can end on a container. Off, every node is a flat box under its full
+    name: node-to-node arrows need no container, and routing them through the
+    frames makes them long.
+    """
+
+    endpoints: LinkLevel
+    nested: bool
+
+
+LINK_LEVELS: Final[MappingProxyType[str, Level]] = MappingProxyType(
     {
-        "namespace": namespace_level,
-        "module": module_level,
+        "namespace": Level(namespace_level, nested=True),
+        "module": Level(module_level, nested=False),
     },
 )
 

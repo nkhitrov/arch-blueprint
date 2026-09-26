@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 class deep.api.v1.handlers <<(M, #F39C12)>>
 class deep.api.v1.schemas <<(M, #F39C12)>>

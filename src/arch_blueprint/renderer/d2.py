@@ -160,6 +160,11 @@ def format_tangle_note(tangle: Tangle) -> str:
     )
 
 
+def flat_key(name: str) -> str:
+    """``name`` as one D2 key, its dots literal: labelled by its full name."""
+    return f'"{name}"'
+
+
 def format_cycle_notes_container(notes: list[str]) -> str:
     """Wrap cycle notes in a styled box with grid layout."""
     notes_content = "\n\n".join(notes)
@@ -180,9 +185,13 @@ class D2LangRenderer(BlueprintRenderer):
         "style.stroke-width: 4",
     )
 
+    def _key(self, endpoint: str) -> str:
+        """A node's key: D2 nests a bare dotted key, a quoted one is one flat box."""
+        return endpoint if self.options.nested else flat_key(endpoint)
+
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
         lines = [
-            f"{node.id}: {{",
+            f"{self._key(node.id)}: {{",
             "  shape: class",
             "  style: {",
             f'    fill: "{color}"',
@@ -198,7 +207,7 @@ class D2LangRenderer(BlueprintRenderer):
         target: str,
         decoration: LinkDecoration,
     ) -> str:
-        link = f"{source} -> {target}"
+        link = f"{self._key(source)} -> {self._key(target)}"
         if decoration.labels:
             link = f"{link}: {quote_label(', '.join(decoration.labels))}"
         if decoration.styles:
@@ -216,8 +225,8 @@ class D2LangRenderer(BlueprintRenderer):
         if decoration.labels:
             label = f"{label} {' '.join(decoration.labels)}"
         connection = CYCLE_CONNECTION_TEMPLATE.substitute(
-            a=cycle.endpoint_from,
-            b=cycle.endpoint_to,
+            a=self._key(cycle.endpoint_from),
+            b=self._key(cycle.endpoint_to),
             label=quote_label(label),
             color=CYCLE_HIGHLIGHT_COLOR,
         )
@@ -227,7 +236,7 @@ class D2LangRenderer(BlueprintRenderer):
 
     def _format_tangle(self, tangle: Tangle) -> CycleRender:
         return CycleRender(
-            inline=format_tangle_ties(tangle),
+            inline=format_tangle_ties(tangle, self._key),
             deferred=format_tangle_note(tangle),
         )
 

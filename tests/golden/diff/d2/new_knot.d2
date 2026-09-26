@@ -7,32 +7,32 @@ diff_legend: Legend {
   new_cycle: "NEW CYCLE" {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
   resolved: "cycle resolved" {style.stroke: "#95A5A6"; style.stroke-dash: 5}
 }
-knot.a: {
+"knot.a": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-knot.b: {
+"knot.b": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
 
-knot.c: {
+"knot.c": {
   shape: class
   style: {
     fill: "#2ECC71"
   }
 }
-knot.a <-> knot.b: NEW CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
-knot.b -> knot.c: NEW CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
-knot.c -> knot.a: added {style.stroke: "#00C853"; style.stroke-width: 3; style.stroke-dash: 5}
-"Cycle Details".grid.tangle_knot_a -- knot.a {style.stroke: "#C0392B"; style.stroke-dash: 3}
-"Cycle Details".grid.tangle_knot_a -- knot.b {style.stroke: "#C0392B"; style.stroke-dash: 3}
-"Cycle Details".grid.tangle_knot_a -- knot.c {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"knot.a" <-> "knot.b": NEW CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
+"knot.b" -> "knot.c": NEW CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
+"knot.c" -> "knot.a": added {style.stroke: "#00C853"; style.stroke-width: 3; style.stroke-dash: 5}
+"Cycle Details".grid.tangle_knot_a -- "knot.a" {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_knot_a -- "knot.b" {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_knot_a -- "knot.c" {style.stroke: "#C0392B"; style.stroke-dash: 3}
 "Cycle Details": {
   style.fill: "#FEF9E7"
   style.stroke: "#F39C12"
