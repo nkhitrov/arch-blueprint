@@ -11,6 +11,7 @@ from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.domain.node import NodeKind
 from arch_blueprint.extract.base import common_depth_namespaces
 from arch_blueprint.extract.layout import detect_roots
+from arch_blueprint.extract.levels import module_level, namespace_level
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
 from tests.conftest import (
@@ -34,6 +35,44 @@ def test_common_depth_namespaces() -> None:
     assert common_depth_namespaces("app2.service", "app1.models") == ("app2", "app1")
     assert common_depth_namespaces("a.b.c", "a.b.d") == ("a.b.c", "a.b.d")
     assert common_depth_namespaces("a.b", "a.c") == ("a.b", "a.c")
+
+
+_NODES = frozenset({"a.b.c", "a.d", "x.y.z"})
+
+
+@pytest.mark.parametrize(
+    ("source", "target", "expected"),
+    [
+        pytest.param("a.b.c", "a.d.e", ("a.b", "a.d"), id="diverging_paths"),
+        pytest.param("a.b.c", "a.b", None, id="own_package"),
+    ],
+)
+def test_namespace_level(
+    source: str,
+    target: str,
+    expected: tuple[str, str] | None,
+) -> None:
+    assert namespace_level(source, target, _NODES) == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "target", "expected"),
+    [
+        pytest.param("x.y.z", "a.b.c", ("x.y.z", "a.b.c"), id="node_to_node"),
+        # The import lands inside a selected package: the arrow ends on it.
+        pytest.param("a.b.c", "a.d.e", ("a.b.c", "a.d"), id="inside_a_node"),
+        # A facade above the nodes stays itself: it is drawn as their container.
+        pytest.param("x.y.z", "a.b", ("x.y.z", "a.b"), id="facade"),
+        pytest.param("a.d", "a.d.e", None, id="own_descendant"),
+        pytest.param("a.b.c", "a.b", None, id="own_package"),
+    ],
+)
+def test_module_level(
+    source: str,
+    target: str,
+    expected: tuple[str, str] | None,
+) -> None:
+    assert module_level(source, target, _NODES) == expected
 
 
 # --- interpreter state ----------------------------------------------------
@@ -180,3 +219,13 @@ def test_detect_roots(
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text(text)
     assert detect_roots(str(tmp_path)) == expected
+
+
+def test_module_level_links_node_to_node() -> None:
+    """The level changes the aggregation key only: the edge keeps the real import."""
+    source = GrimpSource(str(EXAMPLE_PROJECT), ["app1.*", "app2.*", "plugins.**"])
+    graph = ModuleExtractor(source, module_level).extract()
+    assert {(link.source, link.target) for link in graph.links} == {
+        ("app2.service", "app1.models"),
+        ("app2.service", "plugins.auth.backend"),
+    }

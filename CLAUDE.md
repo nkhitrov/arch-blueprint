@@ -41,8 +41,18 @@ This project uses `uv` for environment and dependency management.
     endpoints belong to the selected set — which includes a dependency *on* a package whose
     children were selected, since `pkg.*` never selects `pkg` itself.
   - `--format`/`-f` defaults to `puml`. The notes listing a cycle's imports are opt-in in every
-    command (`--cycle-details`). `diff` and `history` draw the diff over the whole graph;
+    command (`--cycle-details`), for a pair and a longer cycle alike. `diff` and `history` draw the diff over the whole graph;
     `--changes-only` draws just the changes and the modules they touch.
+  - `--links namespace|module` (default `namespace`) chooses what an arrow connects: the
+    namespaces where two modules' paths diverge, or the nodes themselves. Accepted by every command
+    that *builds* a graph (`draw PROJECT_DIR`, `diff --base`, `history`), not by `draw SNAPSHOT`
+    or a snapshot-file `diff` (`_reject_links`) — a snapshot records the level it was built at. Even an explicit
+    `--links namespace` is rejected there (the parser default is `None`, resolved by
+    `_link_level`), and a diff of two snapshots of different levels is exit 2.
+    A level also says how it is drawn (`Level.nested` → `RendererOptions.nested`): `module` is
+    flat — every node one box under its full name (PlantUML `set separator none`, d2 quoted keys),
+    and every endpoint no node carries (a facade an arrow ends on) is declared as a node of its own
+    (`flat_nodes`, from the endpoints — a facade above another facade has no group of its own). Containers only lengthen node-to-node arrows.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
@@ -92,8 +102,9 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   stale frames, `*-png` through a stand-in `plantuml` / `d2` on `PATH`), plus `collect` and the caches
   in-process.
 
-A scenario is a `Selection` (project + `-m` patterns — what the snapshot golden is keyed by) plus
-`render_args` (drawing-only options, passed unchanged when drawing the snapshot).
+A scenario is a `Selection` (project + `-m` patterns + `build_args` such as `--links module` — what
+the snapshot golden is keyed by) plus `render_args` (drawing-only options, passed unchanged when
+drawing the snapshot). A golden holding cycle notes has `CYCLE_DETAILS` in its `render_args`.
 
 A hand-built `BlueprintGraph` has **empty `cycles` and `groups`** until the analyze step fills them.
 A renderer test that needs either must populate them explicitly, or it will silently assert against
@@ -102,10 +113,11 @@ ungrouped nodes and plain arrows.
 Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
-`tests/fixtures/ancestor_dep` (an import of a package facade), `tests/fixtures/diff` (snapshot
-edits used as diff inputs, every metric computed into them like a `-o graph.json` snapshot;
-`cyclic_weighted.json` is `cyclic` plus one import inside an existing link — a metric-only change;
-regenerate them if the snapshot format or a metric's counting changes). Fixture projects are excluded from
+`tests/fixtures/ancestor_dep` (an import of a package facade),
+`tests/fixtures/package_nodes` (nodes that are packages, so every edge targets a submodule),
+`tests/fixtures/diff` (snapshot edits used as diff inputs, every metric computed into them like a
+`-o graph.json` snapshot; `cyclic_weighted.json` is `cyclic` plus one import inside an existing link
+— a metric-only change; regenerate them if the snapshot format or a metric's counting changes). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 
 ## Git conventions
@@ -138,7 +150,14 @@ happens, for a fresh extraction and a loaded snapshot alike.
    revisions committed within a second would otherwise share one graph. Diff sides always opt out.
 2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`, no constructor
    dictated) turns the source into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected
-   module, and an edge when a selected module imports another across a namespace boundary. Selection
+   module, and an edge when a selected module imports another across a boundary of its link level.
+   A level (`extract/levels.py`, registry `LINK_LEVELS`, CLI `--links`) maps `(importer, imported,
+   node ids)` to the edge's `(source_endpoint, target_endpoint)` — the aggregation key, nothing
+   else; `Edge.source`/`target` stay the real import. `namespace_level` cuts both names where they
+   diverge; `module_level` keeps the node, resolving an import to the selected node it lies under
+   (a facade stays itself; drawn flat, it is a node of its own). `None` drops the edge (an import of itself or
+   of its own package). Links, cycles, groups, metrics, snapshot and diff are untouched by the
+   choice; `SnapshotCache.key` includes the level. Selection
    matches **both directions**: a dependency under a selected module, and a dependency *on* a package
    whose children are selected (`pkg.*` never selects `pkg`, so a re-exporting facade is otherwise
    unmatchable).
@@ -146,31 +165,45 @@ happens, for a fresh extraction and a loaded snapshot alike.
    fields** — which group a node belongs to depends on links that do not exist when it is built),
    `Edge`, `Link`, `Cycle`, `Group`, and `BlueprintGraph`. `edges` is a `frozenset` because `links`,
    `cycles` and `groups` are all derived from it and would silently go stale behind a mutation.
-   Metrics live in side maps keyed by node id / namespace pair.
+   Metrics live in side maps keyed by node id / endpoint pair. `Edge.source`/`target` are the real
+   import; `Edge.source_endpoint`/`target_endpoint`, `Link.source`/`target` and
+   `Cycle.endpoint_from`/`endpoint_to` are link endpoints — namespaces or nodes, by link level.
+   Only `Group.namespace` is always a namespace: a container is a dotted prefix no node carries.
 4. **Metrics** (`metrics/`) — compute-only plugins. `NodeMetric` and `LinkMetric` are **separate**
    protocols (`metrics/base.py`); the registry holds them in separate collections, so the collection
    a metric sits in *is* its target and results route without a cast. Register with
    `register_node` / `register_link`. `MetricRegistry.compute(graph, names)` computes only what is
    asked for. `depth` is compute-only (`render = None`) and drives node fill color.
-5. **Analyze** (`analyze/`) — `CycleAnalyzer.detect_cycles` finds bidirectional namespace
-   dependencies; `GroupAnalyzer.build` decides which link endpoints need a container (see below).
-   Both are agnostic to node kind, and both run in the pipeline — **not** in a renderer.
+5. **Analyze** (`analyze/`) — `CycleAnalyzer.detect_cycles` finds mutual pairs of link endpoints
+   (a `Cycle`, drawn as one two-headed arrow); `CycleAnalyzer.detect_tangles` finds every longer
+   cycle as a strongly connected component (`networkx`) of the links **plus** `facade_edges` — the
+   own imports of package facades (`__init__.py`), extracted but never drawn: importing `pkg` runs
+   them, so a cycle through a facade exists, yet drawing every facade's imports would bury the
+   diagram. A `Tangle` holds its members, drawn links and the hidden edges closing it; a lone mutual
+   pair is only a `Cycle`, a pair inside a longer cycle is both. Renderers mark a tangle's one-way
+   links with `cyclic_link_styles` and, with cycle details, add one note listing all its imports
+   (hidden ones marked "package facade import, not drawn"), tied to every member by a dotted line.
+   A pair on a tangle gets no note of its own (`_format_cycle(..., details=False)`), in a diff too:
+   its imports are in the tangle's note, so a cycle of any length lists each import once. `GroupAnalyzer.build` decides which link endpoints
+   need a container (see below). All are agnostic to node kind and run in the pipeline — **not**
+   in a renderer. Snapshots store `facade_edges`; tangles are re-derived.
 6. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
 
 ### Snapshot and diff
 
-`snapshot.py` is the one intermediate format: `dump(graph, metrics)` / `load(text) -> Snapshot`
-(graph + names of the metrics computed into it — stored, not inferred, since a graph with no links
-has no `edge_weight` values yet computed it). It holds **primary data only** — nodes (extractor
+`snapshot.py` is the one intermediate format: `dump(graph, metrics, links)` / `load(text) ->
+Snapshot` (graph + names of the metrics computed into it — stored, not inferred, since a graph with
+no links has no `edge_weight` values yet computed it — + the link level it was built at, stored for
+the same reason: endpoints alone cannot tell the levels apart). It holds **primary data only** — nodes (extractor
 order, which renderers draw in), edges, node/link metrics — and `load` re-derives links, cycles and
-groups via `analyze()`. `format` + `version` are checked; anything unexpected is `SnapshotError`.
+groups via `analyze()`. `format` + `version` (2) and the link level are checked; anything unexpected is `SnapshotError`.
 Rendering and diffing read snapshots, never rendered diagrams, so a new output format needs a
 renderer and no parser. `-f json` computes every registered metric so a snapshot can be drawn with any of them;
 `draw SNAPSHOT` rejects a `--metric` the snapshot does not hold.
 
 `diff/` compares two analyzed graphs. `diff_graphs(old, new) -> GraphDiff` (`compute.py`):
 
-- nodes and links by set difference; links by **directed** namespace pair, so `A→B` becoming `A↔B`
+- nodes and links by set difference; links by **directed** endpoint pair, so `A→B` becoming `A↔B`
   is a new cycle. A pair whose cycle appeared/disappeared is a `CycleDelta` (`NEW` carries the new
   side's `Cycle`, `RESOLVED` the old side's) and is **not** in `link_status` — drawn as one
   connection. A resolved one carries `remaining`, the direction that survived, and is drawn as that
@@ -182,24 +215,33 @@ renderer and no parser. `-f json` computes every registered metric so a snapshot
   filtered), and no unchanged link. `is_empty` ignores context either way.
 - `GraphDiff.graph` holds shown nodes + shown edges, with `groups` built but `cycles` left empty on
   purpose (cycle detection on a partial edge set would report a resolved cycle as present).
+- tangles compare by their member set (`TangleDelta` NEW/RESOLVED, `context_tangles`); their links
+  stay in `link_status` and are marked by `OnCycle` — an unchanged one on an unchanged tangle drawn
+  as a plain diagram does, on a new/resolved one like a new/resolved pair. A changed tangle's links
+  are shown even with `changes_only`, and `is_empty` counts tangle changes: a facade's imports can
+  close a cycle with no drawn link changing.
 - a change to the imports inside a link present on both sides is not a structural change — but it
   moves metrics, which is what `metrics=` is for.
 - `diff_graphs(..., metrics=names)` compares those metrics from each side's computed values (the
   metric plugins stay compute-only; no registry is involved). Every shown node, link and cycle gets
   a `MetricChange(old, new)` per metric it has a value for, in `node_metrics` (by drawn id),
   `link_metrics` (by `link_status` pair) and `cycle_metrics` (by `frozenset` of the two
-  namespaces). A side without the node/link has `None`, so added/removed need no special case. A
+  endpoints); all keyed where drawn (a shadowed endpoint follows its node), read at each side's own endpoints. A side without the node/link has `None`, so added/removed need no special case. A
   cycle's value on each side is `domain.cycle_metric_values` — the same `forward/backward`
   combination a plain renderer draws, oriented as the cycle; on a side where the pair is one arrow it
   is that arrow's value, so a new cycle reads `2 → 2/1` and a resolved one `2/1 → 2`.
   `metrics_changed` is true when some value is on both sides and differs. `is_empty` stays
-  structure only, for every caller; "something changed" is `not is_empty or metrics_changed`. With
+  structure only (tangle changes included), for every caller; "something changed" is `not is_empty or metrics_changed`. With
   `changes_only`, a node/link/cycle whose value changed is shown as context too (plus the modules
   such a link's edges connect); without `metrics` nothing about the diff changes.
 - within one graph no node lies under another (the extractor keeps leaves), but a diff joins two:
   a module `pkg.py` removed and a package `pkg/` added are both shown. Such a node is drawn as
   `shadowed_id(pkg)` = `pkg.(module)` (not a possible module name), labelled via `display_name`, so
   it sits inside the `pkg` container — both formats reject a class that is also a container.
+  A link endpoint that is such a node **on the side the link comes from** follows it
+  (`compute.py:_Redraw`: added/unchanged links from the new side, removed ones from the old), so at
+  the module level a removed arrow ends on `pkg.(module)`, not on the new container; renderers quote
+  a shadowed endpoint (`_ref` / `_key_of`).
 
 Diff renderers (`render_base.py` Template Method, `render_puml.py`, `render_d2.py`, registry
 `diff/__init__.py:DIFF_RENDERERS`) reuse `wrap_groups` (`renderer/base.py`), `format_package` /
@@ -210,7 +252,7 @@ shadowed node at its module's depth), plain arrows, cycles — and every change 
 change colors in `render_base.py` must stay out of `depth_colors` and `CYCLE_HIGHLIGHT_COLOR`
 (`test_diff.py` checks); every marker also carries text. An empty diff is still a valid diagram: the
 graph with "No architectural changes" in the legend, or just that note when nothing is shown.
-Connections are declared in the plain renderer's order (by first namespace pair, a cycle at its
+Connections are declared in the plain renderer's order (by first endpoint pair, a cycle at its
 smaller pair), since the layout engine places things by declaration order: a diff of a graph with
 itself equals its plain diagram less the legend (`test_diff.py` checks), so album frames lay out
 alike.
@@ -221,7 +263,8 @@ through the same render plugins as a plain diagram, via the shared `metric_rows`
 `MetricChange` as the value handed to the plugin — the plain value when unchanged (same type, so
 it prints as a plain diagram prints it), the one side's value when added/removed, else
 `old → new (±difference)` (difference for numbers only). A changed link or cycle puts its status
-label first, then the metric labels (`added edge_weight=1`, `NEW CYCLE edge_weight=2 → 2/1`). With
+label first, then the metric labels (`added edge_weight=1`, `NEW CYCLE edge_weight=2 → 2/1`); an
+unchanged link on a changed longer cycle likewise (`_format_link(..., on_cycle, decoration)`). With
 a plan that shows metrics the legend adds `metric: old → new (difference)`; the identity invariant
 above holds with metrics too.
 
@@ -238,8 +281,8 @@ side goes to both, so a typo still fails.
 
 - `git.first_parent_commits` lists the commits on `--head`'s first-parent line that touched the
   project (plus `--base` itself, as the start). `git.tree_id` is the cache key: a snapshot is a
-  function of the project's tree and the patterns.
-- `history/cache.py` — `SnapshotCache`: entries keyed by `sha256(tree, patterns, snapshot version,
+  function of the project's tree, the patterns and the link level.
+- `history/cache.py` — `SnapshotCache`: entries keyed by `sha256(tree, patterns, link level, snapshot version,
   tool version)`. Every metric is computed into a cached snapshot, so any `--metric` can be drawn
   from it. `ImageCache`: images keyed by `sha256(format, tool settings, diagram source)` — the
   settings being d2's scale or PlantUML's size limit — drawn once for every run and album showing
@@ -284,7 +327,7 @@ of truth, so a custom one cannot go uncomputed and paint every node `depth_color
 
 Add one file under `src/arch_blueprint/metrics/` implementing `NodeMetric` (`name`, `applies_to`,
 `render`, `compute` keyed by node id) or `LinkMetric` (`name`, `render`, `compute` keyed by
-`(src_ns, tgt_ns)` — no `applies_to`, a link connects namespaces, not node kinds). Register it in
+`(source_endpoint, target_endpoint)` — no `applies_to`, a link connects endpoints, not node kinds). Register it in
 `metrics/__init__.py:default_registry` with the matching `register_*` call. The extractor and
 renderer cores do not change. Demo metrics: `fan_in`/`fan_out`/`instability` (node blocks, sharing
 `_degrees.degree_counts`) and `edge_weight` (link label). A cycle is one connection standing for two
@@ -324,7 +367,8 @@ render) and `RendererOptions` (depth colors, cycle details). `fmt` is a `ClassVa
 set; the constructor rejects a plan built for another format.
 
 Abstract hooks: `_format_node`, `_format_link(source, target, decoration)`,
-`_format_cycle(cycle, decoration)`, `_combine_output`. `_format_group(namespace, nodes)` is
+`_format_cycle(cycle, decoration, *, details)`, `_combine_output`. `details` is decided by the
+template (cycle details on, the pair on no tangle), not by the renderer. `_format_group(namespace, nodes)` is
 **concrete**, defaulting to no wrapping — D2 nests by dotted name on its own, and an abstract method
 would break every renderer outside this package. `_format_cycle` returns a
 `CycleRender(inline, deferred)` so a renderer that must place cycle details elsewhere (D2) carries

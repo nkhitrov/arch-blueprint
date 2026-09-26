@@ -1,0 +1,23 @@
+direction: down
+"app1.models": {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+"app2.service": {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+"plugins.auth.backend": {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+}
+"app2.service" -> "app1.models"
+"app2.service" -> "plugins.auth.backend"

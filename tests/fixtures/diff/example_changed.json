@@ -1,6 +1,7 @@
 {
   "format": "arch-blueprint-graph",
-  "version": 1,
+  "version": 2,
+  "links": "namespace",
   "metrics": [
     "depth",
     "edge_weight",
@@ -26,16 +27,17 @@
     {
       "source": "app2.service",
       "target": "app1.models",
-      "source_namespace": "app2",
-      "target_namespace": "app1"
+      "source_endpoint": "app2",
+      "target_endpoint": "app1"
     },
     {
       "source": "app3.api",
       "target": "app1.models",
-      "source_namespace": "app3",
-      "target_namespace": "app1"
+      "source_endpoint": "app3",
+      "target_endpoint": "app1"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {
     "app1.models": {
       "depth": 2,

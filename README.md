@@ -123,8 +123,37 @@ note on link
 end note
 ```
 
+A cycle isn't only a pair importing each other. A ring `a → b → c → a` of any length is found too
+and its arrows are drawn red; with `--cycle-details` it gets one note listing every import on it,
+tied to each of its modules. A pair inside such a ring gets no note of its own, so each import is
+listed once. A cycle can also run through a package's `__init__.py`: `api.handlers` imports
+`services`, whose `__init__.py` imports `services.engine`, which imports `api.handlers`. That
+`__init__.py` import closes the cycle but isn't drawn (every package's re-exports would bury the
+diagram); the note lists it as "package facade import, not drawn".
+
 A namespace that is itself a module (`writer` importing `storage.backend`) stays a plain box.
 Packages without an `__init__.py` (PEP 420 namespace packages) work as well.
+
+#### Arrows between packages or between modules
+
+By default an arrow joins the packages where two modules' paths part: `app2.service` importing
+`app1.models` is drawn `app2 ---> app1`, with each module inside its package's frame. `--links
+module` draws it module to module instead:
+
+```shell
+arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**' --links module
+```
+
+```puml
+app2.service ---> app1.models
+app2.service ---> plugins.auth.backend
+```
+
+Every arrow then ends on a box, so the boxes are drawn flat, each under its full name, without
+package frames. An import that lands inside a selected package ends on that package's box; an import
+of a package itself (its `__init__.py`) gets a box of its own. Cycles, `edge_weight` and `diff` then
+work between modules. `--links` is given to the commands that build a graph: `draw PROJECT_DIR`,
+`diff --base` and `history`.
 
 #### Snapshots
 
@@ -137,6 +166,9 @@ project isn't needed any more, and `diff` compares two snapshots:
 arch-blueprint draw src -m 'myapp.*' -o graph.json
 arch-blueprint draw graph.json -o graph.png --metric instability
 ```
+
+A snapshot records its `--links` level, so drawing or diffing one takes no `--links`, and two
+snapshots built at different levels can't be diffed.
 
 ### diff
 
@@ -166,10 +198,16 @@ label of its own:
 | new cycle | — | red dashed `<->`, `NEW CYCLE` |
 | cycle resolved | — | grey dashed arrow, `cycle resolved`, in the direction that remains (a bare line if neither does) |
 
+A longer cycle is marked on its arrows the same way: red dashed `NEW CYCLE` on the unchanged arrows
+of a new one (the import that closed it is `added`), grey dashed `cycle resolved` on what's left of
+one that went.
+
 - `--changes-only` draws just the changes and the modules they touch. That helps on a large
   project.
 - `--cycle-details` adds the notes that list the imports of each new cycle.
 - A package that exists on one side only is shown as added or removed; it doesn't fail the run.
+- A module replaced by a package of the same name (`api.py` → `api/`) is drawn inside that package
+  (with `--links module`, beside it, as `api (module)`).
 - When nothing changed, you still get a valid diagram, with "No architectural changes" in the
   legend.
 - `--metric NAME` draws a [metric](#metrics) as a plain diagram does, and shows how the changes
@@ -294,6 +332,8 @@ error, not an empty diagram. Common mistakes:
 | `-m took 'src' as a pattern` | `-m` takes every value up to the next option: put `PROJECT_DIR` first, or give one pattern per `-m`. |
 | `-f puml-png needs 'plantuml' on PATH` | Install PlantUML / D2, or write source (`-o x.puml`) and view it online. |
 | `unknown metric 'fanin'. Available: …` | See `arch-blueprint --list-metrics`. |
+| `--links applies when building a graph; a snapshot already records its link level` | Pass `--links` when saving the snapshot (`draw DIR --links module -o graph.json`), not when drawing it. |
+| `cannot diff a namespace-level snapshot against a module-level one` | Save both snapshots with the same `--links`. |
 
 A pattern resolves against `PROJECT_DIR` first, then against the installed packages. Graphing
 `arch_blueprint` itself always resolves to the running copy.

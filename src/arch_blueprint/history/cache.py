@@ -1,8 +1,8 @@
 """Snapshots kept on disk between runs, so a failed image render costs no rebuild.
 
-A snapshot is a function of the project's tree and the ``-m`` patterns, so the
-git tree id is the key: two commits that leave the project alone share one
-entry, and a rerun over the same history builds nothing.
+A snapshot is a function of the project's tree, the ``-m`` patterns and the link
+level, so the git tree id is the key: two commits that leave the project alone
+share one entry, and a rerun over the same history builds nothing.
 """
 
 from __future__ import annotations
@@ -51,14 +51,14 @@ class SnapshotCache:
         self._dir = root / "snapshots"
 
     @staticmethod
-    def key(tree: str, patterns: Sequence[str]) -> str:
-        """The entry for a project tree graphed with ``patterns``.
+    def key(tree: str, patterns: Sequence[str], links: str) -> str:
+        """The entry for a project tree graphed with ``patterns`` at ``links`` level.
 
         The versions are part of it: another snapshot format, or another
         release's extractor, may make another graph from the same tree.
         """
         material = json.dumps(
-            [tree, sorted(patterns), SNAPSHOT_VERSION, _tool_version()],
+            [tree, sorted(patterns), links, SNAPSHOT_VERSION, _tool_version()],
         )
         return hashlib.sha256(material.encode()).hexdigest()
 

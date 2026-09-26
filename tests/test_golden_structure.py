@@ -7,10 +7,12 @@ import pytest
 
 from tests.conftest import DIFF_CASES, SCENARIOS, diff_golden_path, golden_path
 
-_CLASS = re.compile(r"^\s*class\s+(?P<name>[\w.]+)")
+# ``class "label" as id``: a diff draws a shadowed node under its label.
+_CLASS = re.compile(r'^\s*class\s+(?:"[^"]*"\s+as\s+)?(?P<name>[\w.()]+)')
 _PACKAGE = re.compile(r'^\s*package\s+(?P<name>[\w.]+|"[^"]+")')
 _LINK = re.compile(
-    r"^(?P<source>[\w.]+)\s+(?:--->|<?-\[[^\]]*\]->)\s+(?P<target>[\w.]+)",
+    r'^(?P<source>[\w.]+|"[^"]+")\s+(?:--->|<?-\[[^\]]*\]->)\s+'
+    r'(?P<target>[\w.]+|"[^"]+")',
 )
 
 
@@ -30,7 +32,9 @@ def _link_endpoints(source: str) -> set[str]:
     for line in source.splitlines():
         match = _LINK.match(line)
         if match:
-            endpoints.update({match.group("source"), match.group("target")})
+            endpoints.update(
+                match.group(end).strip('"') for end in ("source", "target")
+            )
     return endpoints
 
 

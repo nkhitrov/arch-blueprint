@@ -5,7 +5,7 @@ import pytest
 from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.blueprint import ArchBlueprint
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle
+from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge, Tangle
 from arch_blueprint.domain.node import Node
 from arch_blueprint.metrics import (
     MetricDisplay,
@@ -20,6 +20,7 @@ from arch_blueprint.renderer.base import (
     LinkDecoration,
     RendererOptions,
 )
+from arch_blueprint.renderer.cycles import format_edges, tangle_note_id
 from arch_blueprint.renderer.d2 import D2LangRenderer
 from arch_blueprint.renderer.puml import PlantUmlRenderer
 from tests.conftest import CYCLIC_PROJECT, make_edge, make_graph
@@ -77,7 +78,13 @@ class _CapturingRenderer(BlueprintRenderer):
     ) -> str:
         return ""
 
-    def _format_cycle(self, cycle: Cycle, decoration: LinkDecoration) -> CycleRender:
+    def _format_cycle(
+        self,
+        cycle: Cycle,
+        decoration: LinkDecoration,
+        *,
+        details: bool,
+    ) -> CycleRender:
         return CycleRender(inline="")
 
     def _combine_output(
@@ -218,7 +225,7 @@ def test_d2_leaves_grouping_to_its_own_nesting() -> None:
     graph.groups = GroupAnalyzer.build(graph)
     output = D2LangRenderer(plan=_plan("d2")).render(graph)
     assert "package" not in output
-    assert output.startswith("direction: right\na.core: {")
+    assert output.startswith("direction: down\na.core: {")
 
 
 def test_pipeline_fills_in_the_groups() -> None:
@@ -229,3 +236,79 @@ def test_pipeline_fills_in_the_groups() -> None:
         renderer=renderer,
     ).run()
     assert {group.namespace for group in renderer.captured.groups} == {"pkg_a", "pkg_b"}
+
+
+@pytest.mark.parametrize(
+    ("edge", "line"),
+    [
+        # Namespace level: both sides below their endpoints.
+        pytest.param(make_edge("a.b.c", "a.d.e", "a.b", "a.d"), "- c → e", id="ns"),
+        # Module level: each side is its endpoint, so each is its own name.
+        pytest.param(make_edge("p.a", "p.b", "p.a", "p.b"), "- a → b", id="module"),
+        # An import that lands inside a package node: cut the same way.
+        pytest.param(make_edge("p.a", "p.b.x", "p.a", "p.b"), "- a → x", id="inside"),
+    ],
+)
+def test_cycle_note_lines_cut_both_sides_alike(edge: Edge, line: str) -> None:
+    assert format_edges(frozenset({edge})) == [line]
+
+
+def _tangle(first: str) -> Tangle:
+    return Tangle(members=(first, "z"), links=(), hidden_edges=frozenset())
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [("a.b_c", "a_b.c"), ("a_.b", "a._b"), ("a__b", "a.b"), ("a_x28_", "a(")],
+)
+def test_tangle_note_id_tells_dots_from_underscores(first: str, second: str) -> None:
+    assert tangle_note_id(_tangle(first)) != tangle_note_id(_tangle(second))
+
+
+def test_tangle_note_id_is_a_word_for_a_shadowed_member() -> None:
+    """``pkg.(module)`` would end a PlantUML alias at the parenthesis."""
+    assert tangle_note_id(_tangle("pkg.(module)")).isidentifier()
+
+
+# --- flat names (module links) --------------------------------------------
+
+_FLAT = RendererOptions(depth_colors=["#000"], nested=False)
+
+
+def _facade_graph() -> BlueprintGraph:
+    """``a.core`` imports the package ``b`` itself: an endpoint no node carries."""
+    graph = make_graph(["a.core", "b.util"], [make_edge("a.core", "b", "a.core", "b")])
+    graph.groups = GroupAnalyzer.build(graph)
+    return graph
+
+
+def test_flat_puml_keeps_dotted_names_whole() -> None:
+    output = PlantUmlRenderer(plan=_plan("puml"), options=_FLAT).render(
+        _facade_graph(),
+    )
+    assert "set separator none\n" in output
+    assert "package" not in output
+    assert "class b <<(M, #000)>>\nclass b.util" in output
+
+
+def test_flat_d2_quotes_every_key() -> None:
+    output = D2LangRenderer(plan=_plan("d2"), options=_FLAT).render(_facade_graph())
+    assert output.index('"b": {') < output.index('"b.util": {')
+    assert '"a.core" -> "b"' in output
+
+
+def test_nested_is_the_default() -> None:
+    output = PlantUmlRenderer(plan=_plan("puml")).render(_facade_graph())
+    assert "set separator" not in output
+    assert "package b {\n  class b.util" in output
+
+
+def test_flat_declares_a_facade_with_no_node_of_its_own() -> None:
+    """``a`` groups nothing — its nodes are under the deeper facade ``a.b``."""
+    graph = make_graph(
+        ["a.b.x", "z.m"],
+        [make_edge("z.m", "a", "z.m", "a"), make_edge("z.m", "a.b", "z.m", "a.b")],
+    )
+    graph.groups = GroupAnalyzer.build(graph)
+    output = PlantUmlRenderer(plan=_plan("puml"), options=_FLAT).render(graph)
+    assert "class a <<(M, #000)>>\nclass a.b <<(M, #000)>>\nclass a.b.x" in output

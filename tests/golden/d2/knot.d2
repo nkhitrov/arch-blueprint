@@ -1,0 +1,65 @@
+direction: down
+"knot.a": {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+"knot.b": {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+
+"knot.c": {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+}
+"knot.a" <-> "knot.b": CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
+"knot.b" -> "knot.c" {style.stroke: "#C0392B"; style.stroke-width: 4}
+"knot.c" -> "knot.a" {style.stroke: "#C0392B"; style.stroke-width: 4}
+"Cycle Details".grid.tangle_knot__a -- "knot.a" {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_knot__a -- "knot.b" {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_knot__a -- "knot.c" {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details": {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.stroke-width: 2
+  style.border-radius: 12
+
+  grid: {
+    label: ""
+    grid-rows: 1
+    grid-gap: 32
+    style.stroke: transparent
+    style.fill: transparent
+
+    tangle_knot__a: |md
+      **Cycle: knot.a, knot.b, knot.c**
+
+      **knot.a -> knot.b:**
+
+      - a → b
+
+      **knot.b -> knot.a:**
+
+      - b → a
+
+      **knot.b -> knot.c:**
+
+      - b → c
+
+      **knot.c -> knot.a:**
+
+      - c → a
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+  }
+}

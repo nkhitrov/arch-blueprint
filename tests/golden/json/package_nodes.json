@@ -1,0 +1,102 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 2,
+  "links": "namespace",
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "shop.billing",
+      "kind": "module"
+    },
+    {
+      "id": "shop.catalog",
+      "kind": "module"
+    },
+    {
+      "id": "shop.orders",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "shop.billing",
+      "target": "shop.catalog.constants",
+      "source_endpoint": "shop.billing",
+      "target_endpoint": "shop.catalog"
+    },
+    {
+      "source": "shop.billing",
+      "target": "shop.catalog.models",
+      "source_endpoint": "shop.billing",
+      "target_endpoint": "shop.catalog"
+    },
+    {
+      "source": "shop.orders",
+      "target": "shop.billing.invoice",
+      "source_endpoint": "shop.orders",
+      "target_endpoint": "shop.billing"
+    },
+    {
+      "source": "shop.orders",
+      "target": "shop.billing.tax",
+      "source_endpoint": "shop.orders",
+      "target_endpoint": "shop.billing"
+    },
+    {
+      "source": "shop.orders",
+      "target": "shop.catalog.models",
+      "source_endpoint": "shop.orders",
+      "target_endpoint": "shop.catalog"
+    }
+  ],
+  "facade_edges": [],
+  "node_metrics": {
+    "shop.billing": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "shop.catalog": {
+      "depth": 2,
+      "fan_in": 2,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "shop.orders": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 2,
+      "instability": 1.0
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "shop.billing",
+      "target": "shop.catalog",
+      "values": {
+        "edge_weight": 2
+      }
+    },
+    {
+      "source": "shop.orders",
+      "target": "shop.billing",
+      "values": {
+        "edge_weight": 2
+      }
+    },
+    {
+      "source": "shop.orders",
+      "target": "shop.catalog",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

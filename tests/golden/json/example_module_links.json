@@ -1,0 +1,77 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 2,
+  "links": "module",
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "app1.models",
+      "kind": "module"
+    },
+    {
+      "id": "app2.service",
+      "kind": "module"
+    },
+    {
+      "id": "plugins.auth.backend",
+      "kind": "module"
+    }
+  ],
+  "edges": [
+    {
+      "source": "app2.service",
+      "target": "app1.models",
+      "source_endpoint": "app2.service",
+      "target_endpoint": "app1.models"
+    },
+    {
+      "source": "app2.service",
+      "target": "plugins.auth.backend",
+      "source_endpoint": "app2.service",
+      "target_endpoint": "plugins.auth.backend"
+    }
+  ],
+  "facade_edges": [],
+  "node_metrics": {
+    "app1.models": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "app2.service": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 2,
+      "instability": 1.0
+    },
+    "plugins.auth.backend": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "app2.service",
+      "target": "app1.models",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "app2.service",
+      "target": "plugins.auth.backend",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

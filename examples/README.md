@@ -39,6 +39,15 @@ uv run arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plu
 Expected (PlantUML): an `app2 ---> app1` link and an `app2 ---> plugins` link, with no warning and
 no crash.
 
+Module to module instead of package to package:
+
+```bash
+uv run arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**' --links module
+```
+
+Expected: `app2.service ---> app1.models` and `app2.service ---> plugins.auth.backend`, the boxes
+drawn flat under their full names.
+
 ## Namespace package with no source
 
 If a namespace package contains **no** regular sub-package (no `__init__.py` anywhere underneath,

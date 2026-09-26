@@ -72,6 +72,81 @@ def test_instability() -> None:
     }
 
 
+def _package_node_graph() -> BlueprintGraph:
+    """Package nodes: every edge targets a submodule of a node, never a node id.
+
+    Edge namespaces are the two nodes themselves, as the extractor emits them.
+    """
+    imports = [
+        ("shop.billing", "shop.catalog.models"),
+        ("shop.billing", "shop.catalog.constants"),
+        ("shop.orders", "shop.billing.invoice"),
+        ("shop.orders", "shop.billing.tax"),
+        ("shop.orders", "shop.catalog.models"),
+    ]
+    return make_graph(
+        ["shop.billing", "shop.catalog", "shop.orders"],
+        [make_edge(src, dep, src, dep.rsplit(".", 1)[0]) for src, dep in imports],
+    )
+
+
+def test_degrees_count_the_node_owning_a_submodule_target() -> None:
+    graph = _package_node_graph()
+    assert FanInMetric().compute(graph) == {
+        "shop.billing": 1,
+        "shop.catalog": 2,
+        "shop.orders": 0,
+    }
+    assert FanOutMetric().compute(graph) == {
+        "shop.billing": 1,
+        "shop.catalog": 0,
+        "shop.orders": 2,
+    }
+    assert InstabilityMetric().compute(graph) == {
+        "shop.billing": 0.5,
+        "shop.catalog": 0.0,
+        "shop.orders": 1.0,
+    }
+
+
+def test_a_node_imported_through_several_submodules_counts_once() -> None:
+    graph = make_graph(
+        ["a", "b"],
+        [
+            make_edge("a", "b.x", "a", "b"),
+            make_edge("a", "b.y", "a", "b"),
+            make_edge("a", "b.y.z", "a", "b"),
+        ],
+    )
+    assert FanInMetric().compute(graph) == {"a": 0, "b": 1}
+    assert FanOutMetric().compute(graph) == {"a": 1, "b": 0}
+
+
+def test_distinct_dependents_each_count() -> None:
+    # Two importers of one node through the same submodule: two dependents.
+    assert FanInMetric().compute(_multi_edge_graph())["b.util"] == 2
+
+
+def test_a_target_owned_by_no_node_counts_nowhere() -> None:
+    # ``services`` is the facade package of the selected ``services.engine``:
+    # not a node, so neither side's degree changes.
+    graph = make_graph(
+        ["api.handlers", "services.engine"],
+        [make_edge("api.handlers", "services", "api", "services")],
+    )
+    assert FanInMetric().compute(graph) == {"api.handlers": 0, "services.engine": 0}
+    assert FanOutMetric().compute(graph) == {"api.handlers": 0, "services.engine": 0}
+
+
+def test_a_name_prefix_is_not_ownership() -> None:
+    # ``b.utils`` is not under ``b.util``: a dotted prefix, not a string prefix.
+    graph = make_graph(
+        ["a.core", "b.util"],
+        [make_edge("a.core", "b.utils", "a", "b")],
+    )
+    assert FanInMetric().compute(graph) == {"a.core": 0, "b.util": 0}
+
+
 def test_edge_weight_computes_per_link() -> None:
     assert EdgeWeightMetric().compute(_multi_edge_graph()) == {("a", "b"): 2}
 

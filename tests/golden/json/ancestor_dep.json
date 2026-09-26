@@ -1,6 +1,7 @@
 {
   "format": "arch-blueprint-graph",
-  "version": 1,
+  "version": 2,
+  "links": "namespace",
   "metrics": [
     "depth",
     "edge_weight",
@@ -22,16 +23,17 @@
     {
       "source": "api.handlers",
       "target": "services",
-      "source_namespace": "api",
-      "target_namespace": "services"
+      "source_endpoint": "api",
+      "target_endpoint": "services"
     }
   ],
+  "facade_edges": [],
   "node_metrics": {
     "api.handlers": {
       "depth": 2,
       "fan_in": 0,
-      "fan_out": 1,
-      "instability": 1.0
+      "fan_out": 0,
+      "instability": 0.0
     },
     "services.engine": {
       "depth": 2,
