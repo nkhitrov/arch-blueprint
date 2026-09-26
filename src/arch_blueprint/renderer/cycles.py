@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import textwrap
 from collections import defaultdict
+from typing import Final
 
 from arch_blueprint.domain.graph import Cycle, Edge, Tangle
 
@@ -72,13 +73,21 @@ def tangle_title(tangle: Tangle) -> str:
     return f"Cycle: {', '.join(tangle.members)}"
 
 
+_ID_ESCAPES: Final = {".": "__", "_": "_u"}
+
+
 def tangle_note_id(tangle: Tangle) -> str:
     """An identifier unique per tangle: tangles never share an endpoint.
 
     Built from the first member, spelled with word characters only, and
-    injectively: ``_`` doubles before ``.`` becomes ``_`` (so ``a.b_c`` and
-    ``a_b.c`` differ), and anything else — a shadowed node's parentheses — is
-    its code point.
+    injectively: every escape starts with ``_`` and the next character says
+    which — ``__`` a dot, ``_u`` an underscore, ``_x<hex>_`` anything else (a
+    shadowed node's parentheses) — so ``a.b_c``/``a_b.c`` and ``a_.b``/``a._b``
+    all differ.
     """
-    name = tangle.members[0].replace("_", "__").replace(".", "_")
-    return "tangle_" + re.sub(r"\W", lambda m: f"_x{ord(m.group()):x}_", name)
+
+    def escape(match: re.Match[str]) -> str:
+        char = match.group()
+        return _ID_ESCAPES.get(char) or f"_x{ord(char):x}_"
+
+    return "tangle_" + re.sub(r"[\W_]", escape, tangle.members[0])

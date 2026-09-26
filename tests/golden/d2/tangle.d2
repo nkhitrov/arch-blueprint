@@ -59,9 +59,9 @@ nest.a <-> nest.b: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
 ring.a -> ring.b {style.stroke: "#C0392B"; style.stroke-width: 4}
 ring.b -> ring.c {style.stroke: "#C0392B"; style.stroke-width: 4}
 ring.c -> ring.a {style.stroke: "#C0392B"; style.stroke-width: 4}
-"Cycle Details".grid.tangle_ring_a -- ring.a {style.stroke: "#C0392B"; style.stroke-dash: 3}
-"Cycle Details".grid.tangle_ring_a -- ring.b {style.stroke: "#C0392B"; style.stroke-dash: 3}
-"Cycle Details".grid.tangle_ring_a -- ring.c {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_ring__a -- ring.a {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_ring__a -- ring.b {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_ring__a -- ring.c {style.stroke: "#C0392B"; style.stroke-dash: 3}
 "Cycle Details": {
   style.fill: "#FEF9E7"
   style.stroke: "#F39C12"
@@ -107,7 +107,7 @@ ring.c -> ring.a {style.stroke: "#C0392B"; style.stroke-width: 4}
       style.border-radius: 8
     }
 
-    tangle_ring_a: |md
+    tangle_ring__a: |md
       **Cycle: ring.a, ring.b, ring.c**
 
       **ring.a -> ring.b:**

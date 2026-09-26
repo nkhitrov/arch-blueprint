@@ -41,8 +41,8 @@ This project uses `uv` for environment and dependency management.
     `_link_level`), and a diff of two snapshots of different levels is exit 2.
     A level also says how it is drawn (`Level.nested` → `RendererOptions.nested`): `module` is
     flat — every node one box under its full name (PlantUML `set separator none`, d2 quoted keys),
-    and a group's namespace (a facade an arrow ends on) is declared as a node of its own
-    (`_flat_group`) instead of wrapping its members. Containers only lengthen node-to-node arrows.
+    and every endpoint no node carries (a facade an arrow ends on) is declared as a node of its own
+    (`flat_nodes`, from the endpoints — a facade above another facade has no group of its own). Containers only lengthen node-to-node arrows.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,

@@ -19,6 +19,7 @@ from arch_blueprint.renderer.base import (
     DEFAULT_OPTIONS,
     CycleRender,
     RendererOptions,
+    flat_nodes,
     wrap_groups,
 )
 
@@ -69,8 +70,10 @@ class DiffRenderer(ABC):
             (node.id, self._format_node(node.id, diff.node_status[node.id]))
             for node in diff.graph.nodes
         ]
-        format_group = self._format_group if self.options.nested else self._flat_group
-        nodes = wrap_groups(diff.graph.groups, rendered, format_group)
+        if self.options.nested:
+            nodes = wrap_groups(diff.graph.groups, rendered, self._format_group)
+        else:
+            nodes = flat_nodes(rendered, _drawn_endpoints(diff), self._format_facade)
         # Every connection at the place a plain diagram declares it — by its
         # first endpoint pair — so the layout matches the plain diagram's: the
         # layout engine places things by declaration order.
@@ -144,9 +147,9 @@ class DiffRenderer(ABC):
         """Wrap one namespace's nodes; by default, do not wrap (D2 nests itself)."""
         return nodes
 
-    def _flat_group(self, namespace: str, nodes: list[str]) -> list[str]:
-        """No container: the package an arrow ends on is a node of its own."""
-        return [self._format_node(namespace, ChangeStatus.CONTEXT), *nodes]
+    def _format_facade(self, namespace: str) -> str:
+        """A package an arrow ends on, drawn flat: as an unchanged node."""
+        return self._format_node(namespace, ChangeStatus.CONTEXT)
 
     @abstractmethod
     def _format_node(self, node_id: str, status: ChangeStatus) -> str:
@@ -247,3 +250,14 @@ def _first_pair(cycle: Cycle) -> tuple[str, str]:
 
 def _ends(cycle: Cycle) -> frozenset[str]:
     return frozenset({cycle.endpoint_from, cycle.endpoint_to})
+
+
+def _drawn_endpoints(diff: GraphDiff) -> set[str]:
+    """Every name a connection or a cycle note of the diff ends on."""
+    ends = {end for pair in diff.link_status for end in pair}
+    cycles = [*diff.context_cycles, *(delta.cycle for delta in diff.cycle_changes)]
+    ends.update(end for cycle in cycles for end in _ends(cycle))
+    ends.update(
+        member for delta in diff.tangle_changes for member in delta.tangle.members
+    )
+    return ends

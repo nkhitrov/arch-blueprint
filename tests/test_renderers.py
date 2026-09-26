@@ -257,8 +257,12 @@ def _tangle(first: str) -> Tangle:
     return Tangle(members=(first, "z"), links=(), hidden_edges=frozenset())
 
 
-def test_tangle_note_id_tells_dots_from_underscores() -> None:
-    assert tangle_note_id(_tangle("a.b_c")) != tangle_note_id(_tangle("a_b.c"))
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [("a.b_c", "a_b.c"), ("a_.b", "a._b"), ("a__b", "a.b"), ("a_x28_", "a(")],
+)
+def test_tangle_note_id_tells_dots_from_underscores(first: str, second: str) -> None:
+    assert tangle_note_id(_tangle(first)) != tangle_note_id(_tangle(second))
 
 
 def test_tangle_note_id_is_a_word_for_a_shadowed_member() -> None:
@@ -297,3 +301,14 @@ def test_nested_is_the_default() -> None:
     output = PlantUmlRenderer(plan=_plan("puml")).render(_facade_graph())
     assert "set separator" not in output
     assert "package b {\n  class b.util" in output
+
+
+def test_flat_declares_a_facade_with_no_node_of_its_own() -> None:
+    """``a`` groups nothing — its nodes are under the deeper facade ``a.b``."""
+    graph = make_graph(
+        ["a.b.x", "z.m"],
+        [make_edge("z.m", "a", "z.m", "a"), make_edge("z.m", "a.b", "z.m", "a.b")],
+    )
+    graph.groups = GroupAnalyzer.build(graph)
+    output = PlantUmlRenderer(plan=_plan("puml"), options=_FLAT).render(graph)
+    assert "class a <<(M, #000)>>\nclass a.b <<(M, #000)>>\nclass a.b.x" in output

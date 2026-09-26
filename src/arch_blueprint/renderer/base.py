@@ -91,6 +91,32 @@ def wrap_groups(
     return result
 
 
+def flat_nodes(
+    rendered: Sequence[tuple[str, str]],
+    endpoints: Iterable[str],
+    format_facade: Callable[[str], str],
+) -> list[str]:
+    """Rendered ``(node_id, text)`` pairs, plus every endpoint no node carries.
+
+    Flat, nothing contains anything, so a package an arrow ends on (its facade,
+    ``__init__.py``) is declared as a node of its own. It goes before the first
+    node under it, shallower first — where its container would have been — and
+    last when no drawn node lies under it. From the endpoints, not the groups: a
+    group needs members of its own, which a facade above another facade lacks.
+    """
+    facades = sorted(set(endpoints) - {node_id for node_id, _ in rendered})
+    result: list[str] = []
+    emitted: set[str] = set()
+    for node_id, text in rendered:
+        for facade in facades:  # sorted: a prefix before the names under it
+            if facade not in emitted and node_id.startswith(f"{facade}."):
+                emitted.add(facade)
+                result.append(format_facade(facade))
+        result.append(text)
+    result += [format_facade(facade) for facade in facades if facade not in emitted]
+    return result
+
+
 @dataclass(frozen=True)
 class CycleRender:
     """A rendered cycle: an ``inline`` fragment and optional ``deferred`` block.
@@ -165,18 +191,22 @@ class BlueprintRenderer(ABC):
                 self._render_metric_blocks(node, metrics),
             )
             rendered.append((node.id, text))
-        format_group = self._format_group if self.options.nested else self._flat_group
-        return wrap_groups(graph.groups, rendered, format_group)
+        if self.options.nested:
+            return wrap_groups(graph.groups, rendered, self._format_group)
+        endpoints = {end for link in graph.links for end in (link.source, link.target)}
+        endpoints.update(
+            member for tangle in graph.tangles for member in tangle.members
+        )
+        return flat_nodes(rendered, endpoints, self._format_facade)
 
-    def _flat_group(self, namespace: str, nodes: list[str]) -> list[str]:
-        """No container: the package an arrow ends on is a node of its own.
+    def _format_facade(self, namespace: str) -> str:
+        """A package an arrow ends on, drawn flat: a node like any other.
 
         Importing ``pkg`` runs ``pkg/__init__.py``, a module like any other, so
         drawing it as a box beside the modules under it is what the import means.
         """
         color = self.options.get_color_for_depth(len(namespace.split(".")))
-        facade = self._format_node(Node(namespace, NodeKind.MODULE), color, [])
-        return [facade, *nodes]
+        return self._format_node(Node(namespace, NodeKind.MODULE), color, [])
 
     def _render_metric_blocks(
         self,

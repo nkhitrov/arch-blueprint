@@ -12,7 +12,7 @@ class knot.c <<(M, #2ECC71)>>
 knot.a <-[#C0392B,bold]-> knot.b
 knot.b -[#C0392B,bold]-> knot.c
 knot.c -[#C0392B,bold]-> knot.a
-note as tangle_knot_a
+note as tangle_knot__a
   **Cycle: knot.a, knot.b, knot.c**
   **knot.a -> knot.b:**
   - a → b
@@ -23,8 +23,8 @@ note as tangle_knot_a
   **knot.c -> knot.a:**
   - c → a
 end note
-tangle_knot_a .. knot.a
-tangle_knot_a .. knot.b
-tangle_knot_a .. knot.c
+tangle_knot__a .. knot.a
+tangle_knot__a .. knot.b
+tangle_knot__a .. knot.c
 @enduml
 

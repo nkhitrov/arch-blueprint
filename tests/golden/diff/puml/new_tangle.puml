@@ -29,7 +29,7 @@ ring.a -[#C0392B,dashed,thickness=3]-> ring.b : NEW CYCLE
 ring.b -[#C0392B,dashed,thickness=3]-> ring.c : NEW CYCLE
 ring.c -[#00C853,dashed,thickness=3]-> ring.a : added
 services.engine -[#C0392B,bold]-> api.handlers
-note as tangle_ring_a
+note as tangle_ring__a
   **Cycle: ring.a, ring.b, ring.c**
   **ring.a -> ring.b:**
   - a → b
@@ -38,8 +38,8 @@ note as tangle_ring_a
   **ring.c -> ring.a:**
   - c → a
 end note
-tangle_ring_a .. ring.a
-tangle_ring_a .. ring.b
-tangle_ring_a .. ring.c
+tangle_ring__a .. ring.a
+tangle_ring__a .. ring.b
+tangle_ring__a .. ring.c
 @enduml
 

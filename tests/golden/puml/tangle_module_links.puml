@@ -27,7 +27,7 @@ ring.a -[#C0392B,bold]-> ring.b
 ring.b -[#C0392B,bold]-> ring.c
 ring.c -[#C0392B,bold]-> ring.a
 services.engine -[#C0392B,bold]-> api.handlers
-note as tangle_api_handlers
+note as tangle_api__handlers
   **Cycle: api.handlers, services, services.engine**
   **api.handlers -> services:**
   - handlers → services
@@ -36,10 +36,10 @@ note as tangle_api_handlers
   **services -> services.engine (package facade import, not drawn):**
   - services → engine
 end note
-tangle_api_handlers .. api.handlers
-tangle_api_handlers .. services
-tangle_api_handlers .. services.engine
-note as tangle_ring_a
+tangle_api__handlers .. api.handlers
+tangle_api__handlers .. services
+tangle_api__handlers .. services.engine
+note as tangle_ring__a
   **Cycle: ring.a, ring.b, ring.c**
   **ring.a -> ring.b:**
   - a → b
@@ -48,8 +48,8 @@ note as tangle_ring_a
   **ring.c -> ring.a:**
   - c → a
 end note
-tangle_ring_a .. ring.a
-tangle_ring_a .. ring.b
-tangle_ring_a .. ring.c
+tangle_ring__a .. ring.a
+tangle_ring__a .. ring.b
+tangle_ring__a .. ring.c
 @enduml
 
