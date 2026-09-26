@@ -34,32 +34,51 @@
       "target": "pkg_b.util",
       "source_namespace": "pkg_a",
       "target_namespace": "pkg_b"
+    },
+    {
+      "source": "pkg_b.util",
+      "target": "pkg_a.core",
+      "source_namespace": "pkg_b",
+      "target_namespace": "pkg_a"
+    },
+    {
+      "source": "pkg_b.util",
+      "target": "pkg_a.services",
+      "source_namespace": "pkg_b",
+      "target_namespace": "pkg_a"
     }
   ],
   "node_metrics": {
     "pkg_a.core": {
       "depth": 2,
-      "fan_in": 0,
+      "fan_in": 1,
       "fan_out": 1,
-      "instability": 1.0
+      "instability": 0.5
     },
     "pkg_a.services": {
       "depth": 2,
-      "fan_in": 0,
+      "fan_in": 1,
       "fan_out": 1,
-      "instability": 1.0
+      "instability": 0.5
     },
     "pkg_b.util": {
       "depth": 2,
       "fan_in": 2,
-      "fan_out": 0,
-      "instability": 0.0
+      "fan_out": 2,
+      "instability": 0.5
     }
   },
   "link_metrics": [
     {
       "source": "pkg_a",
       "target": "pkg_b",
+      "values": {
+        "edge_weight": 2
+      }
+    },
+    {
+      "source": "pkg_b",
+      "target": "pkg_a",
       "values": {
         "edge_weight": 2
       }

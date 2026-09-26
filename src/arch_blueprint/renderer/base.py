@@ -5,8 +5,14 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import ClassVar, Final, Optional, final
 
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Group, MetricValue
-from arch_blueprint.domain.node import Node
+from arch_blueprint.domain.graph import (
+    BlueprintGraph,
+    Cycle,
+    Group,
+    MetricValue,
+    cycle_metric_values,
+)
+from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.metrics import RenderContext, RenderPlan
 
 # A distinct danger red for cycles; intentionally not one of DEFAULT_OPTIONS'
@@ -107,6 +113,48 @@ class LinkDecoration:
     styles: tuple[str, ...] = ()
 
 
+def metric_rows(
+    plan: RenderPlan,
+    kind: NodeKind,
+    values: Mapping[str, MetricValue],
+) -> list[str]:
+    """The node metrics ``plan`` shows, as rows for a node of ``kind``.
+
+    Shared by every renderer that draws nodes, diagram and diff alike: a diff
+    passes each value already written as its change.
+    """
+    ctx = RenderContext(fmt=plan.fmt)
+    rows: list[str] = []
+    for item in plan.node_items:
+        if kind not in item.applies_to or item.name not in values:
+            continue
+        fragment = item.plugin.render(ctx, item.name, values[item.name])
+        if fragment is not None and fragment.text:
+            rows.append(fragment.text)
+    return rows
+
+
+def decorate_link(
+    plan: RenderPlan,
+    values: Mapping[str, MetricValue],
+) -> LinkDecoration:
+    """The link metrics ``plan`` shows, as one connection's labels and styles."""
+    ctx = RenderContext(fmt=plan.fmt)
+    labels: list[str] = []
+    styles: list[str] = []
+    for item in plan.link_items:
+        if item.name not in values:
+            continue
+        fragment = item.plugin.render(ctx, item.name, values[item.name])
+        if fragment is None:
+            continue
+        if fragment.text:
+            labels.append(fragment.text)
+        if fragment.style:
+            styles.append(fragment.style)
+    return LinkDecoration(labels=tuple(labels), styles=tuple(styles))
+
+
 class BlueprintRenderer(ABC):
     """ABC using Template Method pattern for rendering architecture diagrams."""
 
@@ -158,15 +206,7 @@ class BlueprintRenderer(ABC):
         node: Node,
         metrics: Mapping[str, MetricValue],
     ) -> list[str]:
-        ctx = RenderContext(fmt=self.plan.fmt)
-        blocks: list[str] = []
-        for item in self.plan.node_items:
-            if node.kind not in item.applies_to or item.name not in metrics:
-                continue
-            fragment = item.plugin.render(ctx, item.name, metrics[item.name])
-            if fragment is not None and fragment.text:
-                blocks.append(fragment.text)
-        return blocks
+        return metric_rows(self.plan, node.kind, metrics)
 
     def _render_links(self, graph: BlueprintGraph) -> tuple[list[str], list[str]]:
         all_links = graph.links
@@ -217,43 +257,17 @@ class BlueprintRenderer(ABC):
         graph: BlueprintGraph,
         cycle: Cycle,
     ) -> LinkDecoration:
-        """Decorate a cycle with both directions' values, forward first.
-
-        A cycle is one drawn connection standing for two links, so a link metric
-        has two values. Showing one of them would make the golden freeze an
-        arbitrary choice; they are combined as ``forward/backward``, matching the
-        order the cycle's own detail block lists them in.
-        """
-        forward = graph.link_metrics.get((cycle.namespace_from, cycle.namespace_to), {})
-        backward = graph.link_metrics.get(
-            (cycle.namespace_to, cycle.namespace_from),
-            {},
+        """Both directions' values on one connection: ``cycle_metric_values``."""
+        return self._decorate(
+            cycle_metric_values(
+                graph.link_metrics,
+                cycle.namespace_from,
+                cycle.namespace_to,
+            ),
         )
-        combined: dict[str, MetricValue] = {}
-        for name in {*forward, *backward}:
-            if name in forward and name in backward:
-                combined[name] = f"{forward[name]}/{backward[name]}"
-            elif name in forward:
-                combined[name] = forward[name]
-            else:
-                combined[name] = backward[name]
-        return self._decorate(combined)
 
     def _decorate(self, values: Mapping[str, MetricValue]) -> LinkDecoration:
-        ctx = RenderContext(fmt=self.plan.fmt)
-        labels: list[str] = []
-        styles: list[str] = []
-        for item in self.plan.link_items:
-            if item.name not in values:
-                continue
-            fragment = item.plugin.render(ctx, item.name, values[item.name])
-            if fragment is None:
-                continue
-            if fragment.text:
-                labels.append(fragment.text)
-            if fragment.style:
-                styles.append(fragment.style)
-        return LinkDecoration(labels=tuple(labels), styles=tuple(styles))
+        return decorate_link(self.plan, values)
 
     def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
         """Wrap the nodes belonging to one namespace; by default, do not wrap.

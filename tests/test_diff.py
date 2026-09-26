@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from typing import Optional
 
 import pytest
 
@@ -11,12 +12,20 @@ from arch_blueprint.diff import (
     ChangeStatus,
     CycleChange,
     GraphDiff,
+    MetricChange,
     PlantUmlDiffRenderer,
     diff_graphs,
+    format_change,
 )
 from arch_blueprint.diff.render_base import ADDED_COLOR, REMOVED_COLOR, RESOLVED_COLOR
-from arch_blueprint.domain.graph import BlueprintGraph, Edge
-from arch_blueprint.metrics import default_registry
+from arch_blueprint.domain.graph import BlueprintGraph, Edge, MetricValue
+from arch_blueprint.metrics import (
+    MetricDisplay,
+    RenderPlan,
+    build_render_plan,
+    default_registry,
+    default_renders,
+)
 from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, DEFAULT_OPTIONS
 from arch_blueprint.snapshot import load
 from tests.conftest import SELECTIONS, Selection, make_edge, make_graph, snapshot_path
@@ -398,3 +407,264 @@ def _without_legend(text: str) -> list[str]:
         start = lines.index("diff_legend: Legend {")
         del lines[start : lines.index("}", start) + 1]
     return lines
+
+
+# --- metrics ------------------------------------------------------------------
+#
+# Node metric values are set by hand: what is tested is how a diff compares and
+# draws them, not how any one metric counts.
+
+A2_TO_B = make_edge("a.x", "b.v", "a", "b")  # a second import inside a -> b
+
+
+def _measured(
+    node_ids: Iterable[str],
+    edges: Iterable[Edge],
+    fan_in: Optional[dict[str, int]] = None,
+) -> BlueprintGraph:
+    graph = _graph(node_ids, edges)
+    default_registry().compute(graph, ["edge_weight"])
+    for node_id, value in (fan_in or {}).items():
+        graph.node_metrics.setdefault(node_id, {})["fan_in"] = value
+    return graph
+
+
+_SHOWN = ("fan_in", "edge_weight")
+
+
+def _plan(fmt: str, *names: str) -> RenderPlan:
+    return build_render_plan(
+        default_registry(),
+        default_renders(),
+        MetricDisplay(shown=names),
+        fmt,
+    )
+
+
+def test_without_metrics_a_diff_has_no_metric_changes() -> None:
+    old = _measured(NODES, [A_TO_B], {"b.y": 1})
+    new = _measured(NODES, [A_TO_B, A2_TO_B], {"b.y": 2})
+    diff = diff_graphs(old, new)
+    assert diff.is_empty
+    assert not diff.metrics_changed
+    assert (diff.node_metrics, diff.link_metrics, diff.cycle_metrics) == ({}, {}, {})
+
+
+def test_a_metric_change_is_a_change_but_not_a_structural_one() -> None:
+    old = _measured(NODES, [A_TO_B], {"b.y": 1, "a.x": 0})
+    new = _measured(NODES, [A_TO_B, A2_TO_B], {"b.y": 2, "a.x": 0})
+    diff = diff_graphs(old, new, metrics=_SHOWN)
+    assert diff.is_empty  # structure alone, as for a caller asking no metrics
+    assert diff.metrics_changed
+    assert diff.node_metrics["b.y"] == {"fan_in": MetricChange(1, 2)}
+    assert diff.node_metrics["a.x"] == {"fan_in": MetricChange(0, 0)}
+    assert diff.link_metrics == {("a", "b"): {"edge_weight": MetricChange(1, 2)}}
+
+
+def test_only_the_metrics_asked_for_are_compared() -> None:
+    old = _measured(NODES, [A_TO_B], {"b.y": 1})
+    new = _measured(NODES, [A_TO_B, A2_TO_B], {"b.y": 2})
+    diff = diff_graphs(old, new, metrics=["edge_weight"])
+    assert diff.node_metrics == {}
+    assert diff.metrics_changed
+
+
+def test_added_and_removed_have_one_side_and_are_no_metric_change() -> None:
+    old = _measured(NODES, [A_TO_C], {"c.z": 1})
+    new = _measured([*NODES, "e.v"], [A_TO_B], {"e.v": 0})
+    diff = diff_graphs(old, new, metrics=_SHOWN)
+    assert diff.node_metrics["c.z"] == {"fan_in": MetricChange(1, None)}
+    assert diff.node_metrics["e.v"] == {"fan_in": MetricChange(None, 0)}
+    assert diff.link_metrics == {
+        ("a", "b"): {"edge_weight": MetricChange(None, 1)},
+        ("a", "c"): {"edge_weight": MetricChange(1, None)},
+    }
+    assert not diff.metrics_changed
+
+
+def test_cycle_metrics_combine_both_directions_on_each_side() -> None:
+    both = [A_TO_B, B_TO_A]
+    key = frozenset({"a", "b"})
+    unchanged = diff_graphs(
+        _measured(NODES, both),
+        _measured(NODES, [*both, A2_TO_B]),
+        metrics=_SHOWN,
+    )
+    [cycle] = unchanged.context_cycles
+    forward = cycle.namespace_from == "a"
+    expected = MetricChange("1/1", "2/1" if forward else "1/2")
+    assert unchanged.cycle_metrics == {key: {"edge_weight": expected}}
+    assert unchanged.metrics_changed
+
+    # One direction before, both after: the cycle reads 1 → 1/1.
+    new = diff_graphs(
+        _measured(NODES, [A_TO_B]),
+        _measured(NODES, both),
+        metrics=_SHOWN,
+    )
+    assert new.cycle_metrics == {key: {"edge_weight": MetricChange(1, "1/1")}}
+    # And resolved, the direction that remains: 1/1 → 2.
+    resolved = diff_graphs(
+        _measured(NODES, both),
+        _measured(NODES, [A_TO_B, A2_TO_B]),
+        metrics=_SHOWN,
+    )
+    assert resolved.cycle_metrics == {key: {"edge_weight": MetricChange("1/1", 2)}}
+
+
+def test_changes_only_shows_what_a_metric_change_touches() -> None:
+    old = _measured(NODES, [A_TO_B, A_TO_C], {"d.w": 1, "c.z": 1})
+    new = _measured(NODES, [A_TO_B, A2_TO_B, A_TO_C], {"d.w": 2, "c.z": 1})
+    diff = diff_graphs(old, new, changes_only=True, metrics=_SHOWN)
+    # a -> b moved its weight, d.w its fan_in; a -> c and c.z did not change.
+    assert diff.link_status == {("a", "b"): ChangeStatus.CONTEXT}
+    assert _statuses(diff) == dict.fromkeys(["a.x", "b.y", "d.w"], ChangeStatus.CONTEXT)
+    # Without metrics there is nothing to show.
+    assert diff_graphs(old, new, changes_only=True).graph.nodes == []
+
+
+def test_changes_only_shows_an_unchanged_cycle_whose_metric_changed() -> None:
+    both = [A_TO_B, B_TO_A]
+    old, new = _measured(NODES, both), _measured(NODES, [*both, A2_TO_B])
+    assert _changes(old, new).context_cycles == ()
+    diff = diff_graphs(old, new, changes_only=True, metrics=_SHOWN)
+    assert len(diff.context_cycles) == 1
+    assert diff.link_status == {}  # drawn as the cycle, not as an arrow
+
+
+@pytest.mark.parametrize(
+    ("change", "written"),
+    [
+        (MetricChange(3, 5), "3 → 5 (+2)"),
+        (MetricChange(21, 4), "21 → 4 (-17)"),
+        (MetricChange(0.5, 0.67), "0.5 → 0.67 (+0.17)"),
+        (MetricChange(1.0, 0.5), "1.0 → 0.5 (-0.5)"),
+        (MetricChange("2/1", "2/2"), "2/1 → 2/2"),
+        (MetricChange(1, "1/1"), "1 → 1/1"),
+        # Unchanged, added and removed pass the value itself: drawn as plain.
+        (MetricChange(1.0, 1.0), 1.0),
+        (MetricChange(None, 3), 3),
+        (MetricChange(3, None), 3),
+    ],
+)
+def test_format_change(change: MetricChange, written: MetricValue) -> None:
+    assert format_change(change) == written
+    assert type(format_change(change)) is type(written)
+
+
+@pytest.mark.parametrize(
+    ("fmt", "node_row", "link", "cycle"),
+    [
+        (
+            "puml",
+            "    fan_in: 1 → 3 (+2)\n",
+            "a ---> c : edge_weight=1 → 2 (+1)",
+            "a <-[#C0392B,bold]-> b : edge_weight=1/1",
+        ),
+        (
+            "d2",
+            "  fan_in: 1 → 3 (+2)\n",
+            "a -> c: edge_weight=1 → 2 (+1)",
+            'a <-> b: CYCLE edge_weight=1/1 {style.stroke: "#C0392B"',
+        ),
+    ],
+)
+def test_changed_metrics_are_drawn_old_to_new(
+    fmt: str,
+    node_row: str,
+    link: str,
+    cycle: str,
+) -> None:
+    both = [A_TO_B, B_TO_A]
+    a_to_c2 = make_edge("a.x", "c.q", "a", "c")
+    diff = diff_graphs(
+        _measured(NODES, [*both, A_TO_C], {"c.z": 1, "d.w": 4}),
+        _measured(NODES, [*both, A_TO_C, a_to_c2], {"c.z": 3, "d.w": 4}),
+        metrics=_SHOWN,
+    )
+    text = DIFF_RENDERERS[fmt](plan=_plan(fmt, *_SHOWN)).render(diff)
+    assert node_row in text
+    assert "fan_in: 4\n" in text  # unchanged: as on a plain diagram
+    assert link in text
+    assert cycle in text
+    assert "metric: old → new (difference)" in text
+
+
+@pytest.mark.parametrize(
+    ("fmt", "added", "removed", "new_cycle"),
+    [
+        (
+            "puml",
+            "a -[#00C853,dashed,thickness=3]-> c : added edge_weight=1",
+            "b -[#FF1744,dashed,thickness=2]-> d : removed edge_weight=1",
+            ": NEW CYCLE edge_weight=1 → 1/1",
+        ),
+        (
+            "d2",
+            "a -> c: added edge_weight=1 {",
+            "b -> d: removed edge_weight=1 {",
+            ": NEW CYCLE edge_weight=1 → 1/1 {",
+        ),
+    ],
+)
+def test_changed_links_and_cycles_carry_their_metrics(
+    fmt: str,
+    added: str,
+    removed: str,
+    new_cycle: str,
+) -> None:
+    b_to_d = make_edge("b.y", "d.w", "b", "d")
+    diff = diff_graphs(
+        _measured(NODES, [A_TO_B, b_to_d]),
+        _measured(NODES, [A_TO_B, B_TO_A, A_TO_C]),
+        metrics=_SHOWN,
+    )
+    text = DIFF_RENDERERS[fmt](plan=_plan(fmt, *_SHOWN)).render(diff)
+    assert added in text
+    assert removed in text
+    assert new_cycle in text
+
+
+@pytest.mark.parametrize("fmt", sorted(DIFF_RENDERERS))
+def test_without_a_plan_no_metric_is_drawn(fmt: str) -> None:
+    diff = diff_graphs(
+        _measured(NODES, [A_TO_B], {"b.y": 1}),
+        _measured(NODES, [A_TO_B, A2_TO_B], {"b.y": 2}),
+        metrics=_SHOWN,
+    )
+    text = DIFF_RENDERERS[fmt]().render(diff)
+    assert "fan_in" not in text
+    assert "edge_weight" not in text
+    assert "metric:" not in text
+
+
+def test_a_plan_for_another_format_is_rejected() -> None:
+    with pytest.raises(ValueError, match="built for 'd2'"):
+        PlantUmlDiffRenderer(plan=_plan("d2"))
+
+
+_METRICS_SHOWN = ("fan_in", "fan_out", "instability", "edge_weight")
+
+
+@pytest.mark.parametrize("fmt", sorted(DIFF_RENDERERS))
+@pytest.mark.parametrize(
+    ("name", "build"),
+    _SAME_GRAPHS,
+    ids=[n for n, _ in _SAME_GRAPHS],
+)
+def test_diff_with_metrics_of_a_graph_with_itself_is_its_plain_diagram(
+    fmt: str,
+    name: str,
+    build: Callable[[], BlueprintGraph],
+) -> None:
+    """Metrics too: an album's frames draw every value as the plain one does."""
+    graph = build()
+    plain = _renderer(
+        fmt,
+        _METRICS_SHOWN,
+        cycle_details=False,
+        registry=default_registry(),
+    )
+    diff = DIFF_RENDERERS[fmt](plan=_plan(fmt, *_METRICS_SHOWN))
+    drawn = diff.render(diff_graphs(graph, graph, metrics=_METRICS_SHOWN))
+    assert _without_legend(drawn) == _without_legend(plain.render(graph))

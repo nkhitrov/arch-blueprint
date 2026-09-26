@@ -1,7 +1,13 @@
 {
   "format": "arch-blueprint-graph",
   "version": 1,
-  "metrics": [],
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
   "nodes": [
     {
       "id": "app1.models",
@@ -30,6 +36,40 @@
       "target_namespace": "app1"
     }
   ],
-  "node_metrics": {},
-  "link_metrics": []
+  "node_metrics": {
+    "app1.models": {
+      "depth": 2,
+      "fan_in": 2,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "app2.service": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "app3.api": {
+      "depth": 2,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "app2",
+      "target": "app1",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "app3",
+      "target": "app1",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
 }

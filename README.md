@@ -172,9 +172,13 @@ label of its own:
 - A package that exists on one side only is shown as added or removed; it doesn't fail the run.
 - When nothing changed, you still get a valid diagram, with "No architectural changes" in the
   legend.
+- `--metric NAME` draws a [metric](#metrics) as a plain diagram does, and shows how the changes
+  moved it (see [Metrics in a diff](#metrics-in-a-diff)).
 
 `diff` exits like `diff(1)`: **0** when nothing changed, **1** when something did, **2** on an
-error. The diagram is written either way. In CI, to fail on errors but not on changes:
+error. With `--metric`, a shown metric whose value changed counts as a change, even when the
+structure didn't; without it, only structure counts. The diagram is written either way. In CI, to
+fail on errors but not on changes:
 
 ```shell
 arch-blueprint diff --base origin/main src -o diff.png || test $? -eq 1
@@ -187,6 +191,11 @@ one picture per commit that changed the graph. The first frame is the plain diag
 frame is the same diagram with what changed since the previous frame marked on it, like `diff`
 (`--changes-only` for just the changes). Everything is declared in the plain diagram's order, so
 consecutive frames lay out alike. Commits that leave the graph alone are skipped.
+
+With `--metric`, every frame shows the metrics, each changed value as `old → new` like
+[`diff`](#metrics-in-a-diff). A commit that moves a shown metric is then a frame too, even with no
+structural change: one more import inside an existing arrow changes `edge_weight`, so the last
+frame's values are the ones at `--head`. Without `--metric`, only structure makes a frame.
 
 ```shell
 arch-blueprint history src                                         # every package in src/
@@ -243,6 +252,26 @@ arch-blueprint draw tests/fixtures/cyclic -m 'pkg_a.*' -m 'pkg_b.*' --cycle-deta
 
 `pkg_b.util` is depended on twice and depends on one module, so `instability: 0.33`. The arrow is a
 cycle, so `edge_weight` reads `2/1`: two imports one way and one the other.
+
+### Metrics in a diff
+
+`diff` and `history` take `--metric` too. A value that is the same on both sides is drawn as on a
+plain diagram. One that changed reads `old → new`, with the difference for a number:
+
+```
+class pkg_b.util <<(M, #2ECC71)>> {
+  fan_in: 2
+  fan_out: 1 → 2 (+1)
+  instability: 0.33 → 0.5 (+0.17)
+}
+pkg_a <-[#C0392B,bold]-> pkg_b : edge_weight=2/1 → 2/2
+```
+
+An added module or arrow shows its new value, a removed one its old value. A cycle that appeared
+reads, say, `NEW CYCLE edge_weight=2 → 2/1` (one direction before, both after); a resolved one is
+drawn as the direction that remains, `cycle resolved edge_weight=2/1 → 2`. With `--changes-only`,
+the modules and arrows whose shown values moved are drawn too. The legend adds
+`metric: old → new (difference)`.
 
 New metrics are self-contained plugins under `src/arch_blueprint/metrics/`. See `CLAUDE.md` for
 the protocols.

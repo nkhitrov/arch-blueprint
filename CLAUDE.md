@@ -46,11 +46,12 @@ This project uses `uv` for environment and dependency management.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
-    not a silent no-op.
+    not a silent no-op. `diff` and `history` take it too: a changed value reads `old → new (±d)`.
 - Snapshot / draw a snapshot / diff (see **Snapshot and diff** below):
   - `uv run arch-blueprint draw <project_dir> -m '<pattern>' -o graph.json` — graph snapshot.
   - `uv run arch-blueprint draw graph.json [-f FMT] [-o FILE] [--metric NAME]` — draw a snapshot.
-  - `uv run arch-blueprint diff OLD.json NEW.json [-f FMT] [-o FILE]` — draw what changed.
+  - `uv run arch-blueprint diff OLD.json NEW.json [-f FMT] [-o FILE] [--metric NAME]` — draw what
+    changed.
   - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> [-m '<pattern>']` — both sides
     built from git (`--head` defaults to the working tree).
   - `uv run arch-blueprint history <project_dir> [ROOT ...] [-m '<pattern>'] [--base REV]
@@ -102,7 +103,9 @@ Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tes
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
 `tests/fixtures/ancestor_dep` (an import of a package facade), `tests/fixtures/diff` (snapshot
-edits used as diff inputs — regenerate them if the snapshot format changes). Fixture projects are excluded from
+edits used as diff inputs, every metric computed into them like a `-o graph.json` snapshot;
+`cyclic_weighted.json` is `cyclic` plus one import inside an existing link — a metric-only change;
+regenerate them if the snapshot format or a metric's counting changes). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 
 ## Git conventions
@@ -179,7 +182,20 @@ renderer and no parser. `-f json` computes every registered metric so a snapshot
   filtered), and no unchanged link. `is_empty` ignores context either way.
 - `GraphDiff.graph` holds shown nodes + shown edges, with `groups` built but `cycles` left empty on
   purpose (cycle detection on a partial edge set would report a resolved cycle as present).
-- a change to the imports inside a link present on both sides is not a change (YAGNI).
+- a change to the imports inside a link present on both sides is not a structural change — but it
+  moves metrics, which is what `metrics=` is for.
+- `diff_graphs(..., metrics=names)` compares those metrics from each side's computed values (the
+  metric plugins stay compute-only; no registry is involved). Every shown node, link and cycle gets
+  a `MetricChange(old, new)` per metric it has a value for, in `node_metrics` (by drawn id),
+  `link_metrics` (by `link_status` pair) and `cycle_metrics` (by `frozenset` of the two
+  namespaces). A side without the node/link has `None`, so added/removed need no special case. A
+  cycle's value on each side is `domain.cycle_metric_values` — the same `forward/backward`
+  combination a plain renderer draws, oriented as the cycle; on a side where the pair is one arrow it
+  is that arrow's value, so a new cycle reads `2 → 2/1` and a resolved one `2/1 → 2`.
+  `metrics_changed` is true when some value is on both sides and differs. `is_empty` stays
+  structure only, for every caller; "something changed" is `not is_empty or metrics_changed`. With
+  `changes_only`, a node/link/cycle whose value changed is shown as context too (plus the modules
+  such a link's edges connect); without `metrics` nothing about the diff changes.
 - within one graph no node lies under another (the extractor keeps leaves), but a diff joins two:
   a module `pkg.py` removed and a package `pkg/` added are both shown. Such a node is drawn as
   `shadowed_id(pkg)` = `pkg.(module)` (not a possible module name), labelled via `display_name`, so
@@ -198,6 +214,16 @@ Connections are declared in the plain renderer's order (by first namespace pair,
 smaller pair), since the layout engine places things by declaration order: a diff of a graph with
 itself equals its plain diagram less the legend (`test_diff.py` checks), so album frames lay out
 alike.
+
+A diff renderer takes an optional `RenderPlan` (`plan=`; `None` draws no metric) and draws metrics
+through the same render plugins as a plain diagram, via the shared `metric_rows` / `decorate_link`
+(`renderer/base.py`). Rendering stays formatting-only: `format_change` (`render_base.py`) writes a
+`MetricChange` as the value handed to the plugin — the plain value when unchanged (same type, so
+it prints as a plain diagram prints it), the one side's value when added/removed, else
+`old → new (±difference)` (difference for numbers only). A changed link or cycle puts its status
+label first, then the metric labels (`added edge_weight=1`, `NEW CYCLE edge_weight=2 → 2/1`). With
+a plan that shows metrics the legend adds `metric: old → new (difference)`; the identity invariant
+above holds with metrics too.
 
 `git.py` (shared by `diff` and `history`): `checkout(project_dir, rev)` resolves the repo root,
 `git archive`s only the project's subtree for that commit into a temp dir, and yields the project
@@ -219,9 +245,12 @@ side goes to both, so a typo still fails.
   settings being d2's scale or PlantUML's size limit — drawn once for every run and album showing
   the same diagram. Both write atomically and share one root with a
   `.gitignore` of `*`.
-- `history/album.py` — pure: `collect(commits, snapshot_for)` keeps a commit only when
-  `diff_graphs` against the previous kept frame is non-empty (a leading empty graph — no root yet —
-  is skipped). `pages()` is the one place frames become named diagrams — one per frame: the first
+- `history/album.py` — pure: `collect(commits, snapshot_for, metrics=...)` keeps a commit only
+  when `diff_graphs` against the previous kept frame is non-empty, or — given `metrics` (the CLI
+  passes `--metric`) — when one of those metrics changed value (a leading empty graph — no root
+  yet — is skipped). Without `--metric` only structure makes a frame; with it, a commit that only
+  adds an import inside an existing link is a frame, so the last frame's values match `--head`.
+  The diff frames are drawn with the same metrics, so every frame shows them. `pages()` is the one place frames become named diagrams — one per frame: the first
   plain, the rest a full-context diff (a plain second picture would repeat it); `write()` writes either the
   sources or, given the drawn images, only the images (an album holds one kind of file), rewrites
   only files whose bytes change, and removes this extension's frame files the run did not produce.
@@ -332,7 +361,11 @@ Failures are one line on stderr with no
 traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
 matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
 for an analysis that could not finish (`history`: images that could not be drawn; `draw`: an image the tool refused). `diff` exits
-like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
+like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". A
+"change" is structural, or — only with `--metric` — a shown metric whose value moved; without
+`--metric` the exit code is exactly as before. `diff --metric` is validated by the same
+`build_render_plan` as `draw` (exit 2), a snapshot lacking the metric is exit 2, and `diff --base`
+computes the requested metrics on both git sides (nothing else). The diff
 diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
 details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all
 the work is done.

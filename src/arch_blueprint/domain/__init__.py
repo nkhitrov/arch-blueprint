@@ -6,6 +6,7 @@ from arch_blueprint.domain.graph import (
     Link,
     MetricValue,
     build_links,
+    cycle_metric_values,
 )
 from arch_blueprint.domain.node import Node, NodeKind
 
@@ -19,4 +20,5 @@ __all__ = [
     "Node",
     "NodeKind",
     "build_links",
+    "cycle_metric_values",
 ]
