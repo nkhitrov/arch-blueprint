@@ -75,6 +75,11 @@ pytest) and a `test` matrix running `pytest` across Python 3.9–3.14 on Linux p
 `windows-latest` leg — that console is not UTF-8, and diagram output contains arrows, so an encoding
 regression is invisible on Linux alone. Runs on push to `master` and on PRs.
 
+Releases (`.github/workflows/release.yml`, on a published GitHub release): `build` sets the version
+from the tag, builds once and smoke-tests the wheel's `--version`; then `testpypi` and, only after
+it, `pypi` upload that same `dist/` through trusted publishing (OIDC, no token secret) — one
+publisher per index, bound to the `testpypi` / `pypi` environments.
+
 ### Tests
 
 `tests/` holds the suite, one file per layer under test:
