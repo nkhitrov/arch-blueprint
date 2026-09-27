@@ -40,14 +40,9 @@ class GrimpSource:
         self,
         project_dir: str,
         target_names: Sequence[str],
-        *,
-        use_cache: bool = True,
     ) -> None:
         self.project_dir = project_dir
         self.target_names = target_names
-        # grimp keys its cache by module name and mtime, not by path: two
-        # checkouts of one project (a diff) must opt out or share one graph.
-        self.use_cache = use_cache
         self._graph: Optional[ImportGraph] = None
 
     @property
@@ -57,6 +52,14 @@ class GrimpSource:
         return self._graph
 
     def _build(self) -> ImportGraph:
+        """Build grimp's graph from source, never from grimp's cache.
+
+        That cache lives in the working directory and is keyed by module *name*
+        and mtime, not by path: another directory holding the same package —
+        a ``git archive`` checkout stamps every file with its commit's time —
+        or a concurrent run writing its two cache files in between would hand
+        this project someone else's imports, drawn without a word.
+        """
         with self._project_importable():
             packages = self._resolve_grimp_packages()
             if not packages:
@@ -64,8 +67,6 @@ class GrimpSource:
                     "None of the given --modules patterns resolve to an analyzable "
                     "source package.",
                 )
-            if self.use_cache:
-                return grimp.build_graph(*packages)
             return grimp.build_graph(*packages, cache_dir=None)
 
     @contextmanager

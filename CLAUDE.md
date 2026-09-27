@@ -145,9 +145,11 @@ happens, for a fresh extraction and a loaded snapshot alike.
    installed in the venv, and an older checkout of it (`diff --base`) must not resolve to the
    installed, current copy. `sys.path` and `sys.modules` are restored afterwards, which is what
    makes the library re-runnable in one process — restoring the path alone is not enough, since
-   `sys.modules` is consulted first. `use_cache=False` bypasses grimp's cache, which is keyed by
-   module **name** and mtime, not path: `git archive` stamps every file with the commit time, so two
-   revisions committed within a second would otherwise share one graph. Diff sides always opt out.
+   `sys.modules` is consulted first. grimp's own cache is never used (`cache_dir=None`): it sits in
+   the cwd and is keyed by module **name** and mtime, not path — `git archive` stamps every file
+   with the commit time, and concurrent runs interleave its separate meta/data files — so another
+   checkout's imports could be drawn silently (#39). Rebuilding is cheap; `history` has its own
+   `SnapshotCache`.
 2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`, no constructor
    dictated) turns the source into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected
    module, and an edge when a selected module imports another across a boundary of its link level.
