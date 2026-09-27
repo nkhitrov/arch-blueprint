@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 legend top left
   unchanged: drawn as on a plain diagram
@@ -12,13 +13,17 @@ legend top left
   <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
-package deep.api {
-  class deep.api.v1.handlers <<(M, #F39C12)>>
-  class deep.api.v1.schemas <<(M, #F39C12)>>
-}
-package deep.core {
-  class deep.core.models <<(M, #1ABC9C)>>
-  class deep.core.services <<(M, #1ABC9C)>>
+package "deep" as deep {
+  package "api" as deep.api {
+    package "v1" as deep.api.v1 {
+      class "handlers" as deep.api.v1.handlers <<(M, #F39C12)>>
+      class "schemas" as deep.api.v1.schemas <<(M, #F39C12)>>
+    }
+  }
+  package "core" as deep.core {
+    class "models" as deep.core.models <<(M, #1ABC9C)>>
+    class "services" as deep.core.services <<(M, #1ABC9C)>>
+  }
 }
 
 deep.api -[#00C853,dashed,thickness=3]-> deep.core : added

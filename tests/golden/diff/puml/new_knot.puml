@@ -5,6 +5,8 @@ top to bottom direction
 hide empty members
 set separator none
 
+title knot
+
 legend top left
   unchanged: drawn as on a plain diagram
   <color:#00C853>**+ added**</color> module / dependency (dashed)
@@ -13,9 +15,9 @@ legend top left
   <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
-class knot.a <<(M, #2ECC71)>>
-class knot.b <<(M, #2ECC71)>>
-class knot.c <<(M, #2ECC71)>>
+class "a" as knot.a <<(M, #2ECC71)>>
+class "b" as knot.b <<(M, #2ECC71)>>
+class "c" as knot.c <<(M, #2ECC71)>>
 
 knot.a <-[#C0392B,dashed,thickness=3]-> knot.b : NEW CYCLE
 knot.b -[#C0392B,dashed,thickness=3]-> knot.c : NEW CYCLE

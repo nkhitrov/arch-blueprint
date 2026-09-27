@@ -1,4 +1,5 @@
 direction: down
+title: app {near: top-center; shape: text}
 diff_legend: Legend {
   near: top-left
   unchanged: "unchanged: drawn as on a plain diagram"
@@ -9,6 +10,7 @@ diff_legend: Legend {
 }
 "app.other": {
   shape: class
+  label: "other"
   style: {
     fill: "#2ECC71"
   }
@@ -16,7 +18,7 @@ diff_legend: Legend {
 
 "app.pkg.(module)": {
   shape: class
-  label: "- app.pkg (module)"
+  label: "- pkg (module)"
   style: {
     fill: "#FF1744"
     stroke-dash: 5
@@ -25,7 +27,7 @@ diff_legend: Legend {
 
 "app.pkg.child": {
   shape: class
-  label: "+ app.pkg.child"
+  label: "+ pkg.child"
   style: {
     fill: "#00C853"
     stroke-dash: 5

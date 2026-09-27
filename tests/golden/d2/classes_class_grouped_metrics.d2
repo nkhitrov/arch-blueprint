@@ -1,0 +1,468 @@
+direction: down
+refs.Farm: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+
+refs.__init__.exported: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 0
+  fan_out: 1
+  instability: 1.0
+}
+
+refs.consumer.Consumer: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 0
+  fan_out: 22
+  instability: 1.0
+}
+
+refs.cycles.Chicken: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 2
+  fan_out: 1
+  instability: 0.33
+}
+
+refs.cycles.Egg: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+
+refs.cycles.Paper: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+
+refs.cycles.Rock: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+
+refs.cycles.Scissors: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+
+refs."exported.impl".ByReExport: {
+  shape: class
+  style: {
+    fill: "#F39C12"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.functions.Assembler: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 0
+  fan_out: 2
+  instability: 1.0
+}
+
+refs.functions.Widget: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 3
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.functions.build_widget: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 2
+  fan_out: 1
+  instability: 0.33
+}
+
+refs.functions.handle: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 0
+  fan_out: 3
+  instability: 1.0
+}
+
+refs.functions."label": {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 1
+  instability: 0.5
+}
+
+refs.functions.register: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByAlias: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByAnnotation: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByBase: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByBodyCall: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByCastString: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByDecorator: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByExcept: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByFactoryCall: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByInitParam: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByLocalImport: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByMatchPattern: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByMetaclass: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByModuleAlias: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByModuleVariable: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByNestedClass: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByParam: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByRegistry: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByRelativeImport: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByReturn: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByStringAnnotation: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.ByTypeVarBound: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 1
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.NotByMatchCapture: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 0
+  fan_out: 0
+  instability: 0.0
+}
+
+refs.targets.NotByShadowingParam: {
+  shape: class
+  style: {
+    fill: "#1ABC9C"
+  }
+  fan_in: 0
+  fan_out: 0
+  instability: 0.0
+}
+refs.Farm -> refs.cycles.Chicken: edge_weight=1
+refs.__init__.exported -> refs.Farm: edge_weight=1
+refs.consumer.Consumer -> refs."exported.impl".ByReExport: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByAlias: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByAnnotation: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByBase: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByBodyCall: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByCastString: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByDecorator: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByExcept: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByFactoryCall: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByInitParam: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByLocalImport: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByMatchPattern: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByMetaclass: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByModuleAlias: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByModuleVariable: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByNestedClass: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByParam: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByRegistry: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByRelativeImport: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByReturn: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByStringAnnotation: edge_weight=1
+refs.consumer.Consumer -> refs.targets.ByTypeVarBound: edge_weight=1
+refs.cycles.Chicken <-> refs.cycles.Egg: CYCLE edge_weight=1/1 {style.stroke: "#C0392B"; style.stroke-width: 4}
+refs.cycles.Paper -> refs.cycles.Rock: edge_weight=1 {style.stroke: "#C0392B"; style.stroke-width: 4}
+refs.cycles.Rock -> refs.cycles.Scissors: edge_weight=1 {style.stroke: "#C0392B"; style.stroke-width: 4}
+refs.cycles.Scissors -> refs.cycles.Paper: edge_weight=1 {style.stroke: "#C0392B"; style.stroke-width: 4}
+refs.functions.Assembler -> refs.functions.build_widget: edge_weight=1
+refs.functions.Assembler -> refs.functions."label": edge_weight=1
+refs.functions.build_widget -> refs.functions.Widget: edge_weight=1
+refs.functions.handle -> refs.functions.Widget: edge_weight=1
+refs.functions.handle -> refs.functions.build_widget: edge_weight=1
+refs.functions.handle -> refs.functions.register: edge_weight=1
+refs.functions."label" -> refs.functions.Widget: edge_weight=1
+"Cycle Details".grid.tangle_refs__cycles__Paper -- refs.cycles.Paper {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_refs__cycles__Paper -- refs.cycles.Rock {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details".grid.tangle_refs__cycles__Paper -- refs.cycles.Scissors {style.stroke: "#C0392B"; style.stroke-dash: 3}
+"Cycle Details": {
+  style.fill: "#FEF9E7"
+  style.stroke: "#F39C12"
+  style.stroke-width: 2
+  style.border-radius: 12
+
+  grid: {
+    label: ""
+    grid-rows: 1
+    grid-gap: 32
+    style.stroke: transparent
+    style.fill: transparent
+
+    "cycle refs.cycles.Chicken refs.cycles.Egg": |md
+      **refs.cycles.Chicken ↔ refs.cycles.Egg**
+
+      **refs.cycles.Chicken → refs.cycles.Egg:**
+
+      - Chicken → Egg
+
+      **refs.cycles.Egg → refs.cycles.Chicken:**
+
+      - Egg → Chicken
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+
+    tangle_refs__cycles__Paper: |md
+      **Cycle: refs.cycles.Paper, refs.cycles.Rock, refs.cycles.Scissors**
+
+      **refs.cycles.Paper -> refs.cycles.Rock:**
+
+      - Paper → Rock
+
+      **refs.cycles.Rock -> refs.cycles.Scissors:**
+
+      - Rock → Scissors
+
+      **refs.cycles.Scissors -> refs.cycles.Paper:**
+
+      - Scissors → Paper
+    | {
+      style.fill: "#FADBD8"
+      style.stroke: "#C0392B"
+      style.border-radius: 8
+    }
+  }
+}

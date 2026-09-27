@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 legend top left
   unchanged: drawn as on a plain diagram
@@ -12,10 +13,12 @@ legend top left
   <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
-class app.other <<(M, #2ECC71)>>
-package app.pkg {
-  class "pkg" as app.pkg.(module) <<(-, #FF1744) removed>> #FF1744;line.dashed
-  class app.pkg.child <<(+, #00C853) added>> #00C853;line.dashed
+package "app" as app {
+  class "other" as app.other <<(M, #2ECC71)>>
+  package "pkg" as app.pkg {
+    class "pkg" as app.pkg.(module) <<(-, #FF1744) removed>> #FF1744;line.dashed
+    class "child" as app.pkg.child <<(+, #00C853) added>> #00C853;line.dashed
+  }
 }
 
 app.other ---> app.pkg

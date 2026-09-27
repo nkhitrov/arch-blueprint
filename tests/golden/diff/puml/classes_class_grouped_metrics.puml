@@ -1,0 +1,225 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+legend top left
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
+  metric: old → new (difference)
+endlegend
+
+package "refs" as refs {
+  class "Farm" as refs.Farm <<(C, #2ECC71)>> {
+    fan_in: 1
+    fan_out: 1
+  }
+  package "~__init~__" as refs.__init__ {
+    class "exported" as refs.__init__.exported <<(F, #1ABC9C)>> {
+      fan_in: 0
+      fan_out: 1
+    }
+  }
+  package "consumer" as refs.consumer {
+    class "Consumer" as refs.consumer.Consumer <<(C, #1ABC9C)>> {
+      fan_in: 0
+      fan_out: 22
+    }
+  }
+  package "cycles" as refs.cycles {
+    class "Chicken" as refs.cycles.Chicken <<(C, #1ABC9C)>> {
+      fan_in: 2 → 1 (-1)
+      fan_out: 1
+    }
+    class "Egg" as refs.cycles.Egg <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 1 → 0 (-1)
+    }
+    class "Paper" as refs.cycles.Paper <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 1
+    }
+    class "Rock" as refs.cycles.Rock <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 1
+    }
+    class "Scissors" as refs.cycles.Scissors <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 1
+    }
+  }
+  package "exported.impl" as refs.exported.impl {
+    class "ByReExport" as refs.exported.impl.ByReExport <<(C, #F39C12)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+  }
+  package "functions" as refs.functions {
+    class "Assembler" as refs.functions.Assembler <<(C, #1ABC9C)>> {
+      fan_in: 0
+      fan_out: 2
+    }
+    class "Widget" as refs.functions.Widget <<(C, #1ABC9C)>> {
+      fan_in: 3
+      fan_out: 0
+    }
+    class "build_widget" as refs.functions.build_widget <<(F, #1ABC9C)>> {
+      fan_in: 2
+      fan_out: 1
+    }
+    class "handle" as refs.functions.handle <<(F, #1ABC9C)>> {
+      fan_in: 0
+      fan_out: 3
+    }
+    class "label" as refs.functions.label <<(F, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 1
+    }
+    class "register" as refs.functions.register <<(F, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+  }
+  package "targets" as refs.targets {
+    class "ByAlias" as refs.targets.ByAlias <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByAnnotation" as refs.targets.ByAnnotation <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByBase" as refs.targets.ByBase <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByBodyCall" as refs.targets.ByBodyCall <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByCastString" as refs.targets.ByCastString <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByDecorator" as refs.targets.ByDecorator <<(C, #1ABC9C)>> {
+      fan_in: 1 → 0 (-1)
+      fan_out: 0
+    }
+    class "ByExcept" as refs.targets.ByExcept <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByFactoryCall" as refs.targets.ByFactoryCall <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByInitParam" as refs.targets.ByInitParam <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByLocalImport" as refs.targets.ByLocalImport <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByMatchPattern" as refs.targets.ByMatchPattern <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByMetaclass" as refs.targets.ByMetaclass <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByModuleAlias" as refs.targets.ByModuleAlias <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByModuleVariable" as refs.targets.ByModuleVariable <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByNestedClass" as refs.targets.ByNestedClass <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByNewReference" as refs.targets.ByNewReference <<(+, #00C853) added>> #00C853;line.dashed {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByParam" as refs.targets.ByParam <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByRegistry" as refs.targets.ByRegistry <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByRelativeImport" as refs.targets.ByRelativeImport <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByReturn" as refs.targets.ByReturn <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByStringAnnotation" as refs.targets.ByStringAnnotation <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "ByTypeVarBound" as refs.targets.ByTypeVarBound <<(C, #1ABC9C)>> {
+      fan_in: 1
+      fan_out: 0
+    }
+    class "NotByMatchCapture" as refs.targets.NotByMatchCapture <<(C, #1ABC9C)>> {
+      fan_in: 0
+      fan_out: 0
+    }
+    class "NotByShadowingParam" as refs.targets.NotByShadowingParam <<(C, #1ABC9C)>> {
+      fan_in: 0
+      fan_out: 0
+    }
+  }
+}
+
+refs.Farm ---> refs.cycles.Chicken : edge_weight=1
+refs.__init__.exported ---> refs.Farm : edge_weight=1
+refs.consumer.Consumer ---> refs.exported.impl.ByReExport : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByAlias : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByAnnotation : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByBase : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByBodyCall : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByCastString : edge_weight=1
+refs.consumer.Consumer -[#FF1744,dashed,thickness=2]-> refs.targets.ByDecorator : removed edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByExcept : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByFactoryCall : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByInitParam : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByLocalImport : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByMatchPattern : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByMetaclass : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByModuleAlias : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByModuleVariable : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByNestedClass : edge_weight=1
+refs.consumer.Consumer -[#00C853,dashed,thickness=3]-> refs.targets.ByNewReference : added edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByParam : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByRegistry : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByRelativeImport : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByReturn : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByStringAnnotation : edge_weight=1
+refs.consumer.Consumer ---> refs.targets.ByTypeVarBound : edge_weight=1
+refs.cycles.Chicken -[#95A5A6,dashed]-> refs.cycles.Egg : cycle resolved edge_weight=1/1 → 1
+refs.cycles.Paper -[#C0392B,bold]-> refs.cycles.Rock : edge_weight=1
+refs.cycles.Rock -[#C0392B,bold]-> refs.cycles.Scissors : edge_weight=1
+refs.cycles.Scissors -[#C0392B,bold]-> refs.cycles.Paper : edge_weight=1
+refs.functions.Assembler ---> refs.functions.build_widget : edge_weight=1
+refs.functions.Assembler ---> refs.functions.label : edge_weight=1
+refs.functions.build_widget ---> refs.functions.Widget : edge_weight=1
+refs.functions.handle ---> refs.functions.Widget : edge_weight=1
+refs.functions.handle ---> refs.functions.build_widget : edge_weight=1
+refs.functions.handle ---> refs.functions.register : edge_weight=1
+refs.functions.label ---> refs.functions.Widget : edge_weight=1
+@enduml
+

@@ -113,7 +113,7 @@ def test_package_added_wholesale_is_a_diff_not_an_error(repo: Path) -> None:
     shutil.copytree(repo / "src" / "pkg_b", repo / "src" / "pkg_c")
     result = _diff(repo, "-m", "pkg_c.*")
     assert result.returncode == _DIFFERENT, result.stderr
-    assert "class pkg_c.util <<(+, #00C853) added>>" in result.stdout
+    assert 'class "util" as pkg_c.util <<(+, #00C853) added>>' in result.stdout
 
 
 def test_pattern_on_neither_side_is_still_an_error(repo: Path) -> None:

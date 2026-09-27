@@ -3,12 +3,13 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
-package api {
-  class api.handlers <<(M, #2ECC71)>>
+package "api" as api {
+  class "handlers" as api.handlers <<(M, #2ECC71)>>
 }
-package services {
-  class services.engine <<(M, #2ECC71)>>
+package "services" as services {
+  class "engine" as services.engine <<(M, #2ECC71)>>
 }
 
 api ---> services

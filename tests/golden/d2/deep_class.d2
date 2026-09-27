@@ -1,0 +1,37 @@
+direction: down
+title: deep {near: top-center; shape: text}
+"deep.api.v1.handlers.handle": {
+  shape: class
+  label: "api.v1.handlers.handle"
+  style: {
+    fill: "#9B59B6"
+  }
+}
+
+"deep.api.v1.schemas.dump": {
+  shape: class
+  label: "api.v1.schemas.dump"
+  style: {
+    fill: "#9B59B6"
+  }
+}
+
+"deep.core.models.Item": {
+  shape: class
+  label: "core.models.Item"
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+"deep.core.services.load": {
+  shape: class
+  label: "core.services.load"
+  style: {
+    fill: "#F39C12"
+  }
+}
+"deep.api.v1.handlers.handle" -> "deep.api.v1.schemas.dump"
+"deep.api.v1.handlers.handle" -> "deep.core.services.load"
+"deep.api.v1.schemas.dump" -> "deep.core.models.Item"
+"deep.core.services.load" -> "deep.core.models.Item"

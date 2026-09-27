@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
+from arch_blueprint.extract import LINK_LEVELS
 from tests.conftest import (
     CYCLIC_MODULES,
     CYCLIC_PROJECT,
@@ -94,6 +97,35 @@ def test_output_is_utf8_whatever_the_console_encoding() -> None:
     assert "→" in result.stdout
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="EPIPE is a POSIX pipe's")
+def test_a_reader_that_stops_early_is_not_an_error() -> None:
+    """``draw ... | head -1``: the reader closing the pipe ends the run quietly.
+
+    The read end is closed before the CLI writes anything, so the first write
+    meets a pipe with no reader whatever the output's size.
+    """
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "arch_blueprint",
+            "draw",
+            str(EXAMPLE_PROJECT),
+            *EXAMPLE_MODULES,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=REPO_ROOT,
+    )
+    assert process.stdout is not None
+    assert process.stderr is not None
+    process.stdout.close()
+    stderr = process.stderr.read().decode("utf-8")
+    returncode = process.wait()
+    assert stderr == ""
+    assert returncode == 1
+
+
 def test_errors_are_utf8_whatever_the_console_encoding() -> None:
     """A message can carry any path; a cp1252 stderr must not mangle it."""
     result = run_cli(
@@ -112,6 +144,14 @@ def test_help_is_utf8_whatever_the_console_encoding(args: tuple[str, ...]) -> No
     """The help text carries dashes; argparse would write them in cp1252."""
     result = run_command(*args, check=False, extra_env={"PYTHONIOENCODING": "cp1252"})
     assert "—" in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("command", ["draw", "diff", "history"])
+def test_every_link_level_is_offered(command: str) -> None:
+    result = run_command(command, "--help")
+    assert {"class", "class-grouped"} <= set(LINK_LEVELS)
+    for level in LINK_LEVELS:
+        assert f"'{level}'" in result.stdout.replace("\n", " ")
 
 
 def test_link_metrics_reach_cyclic_connections() -> None:
@@ -512,14 +552,24 @@ def test_png_without_the_tool_fails_before_any_work(tmp_path: Path) -> None:
 
 
 def test_unknown_link_level_is_a_usage_error() -> None:
-    result = run_cli(EXAMPLE_PROJECT, "-m", "app1.*", "--links", "class", check=False)
+    result = run_cli(EXAMPLE_PROJECT, "-m", "app1.*", "--links", "method", check=False)
     assert result.returncode == _USAGE_ERROR
-    assert "invalid choice: 'class'" in result.stderr
+    assert "invalid choice: 'method'" in result.stderr
     assert "Traceback" not in result.stderr
 
 
-@pytest.mark.parametrize("level", ["module", "namespace"])
-def test_drawing_a_snapshot_rejects_a_link_level(level: str) -> None:
-    result = run_command("draw", _CYCLIC_SNAPSHOT, "--links", level, check=False)
+@pytest.mark.parametrize(
+    ("snapshot", "level"),
+    [
+        (_CYCLIC_SNAPSHOT, "module"),
+        (_CYCLIC_SNAPSHOT, "namespace"),
+        (_CYCLIC_SNAPSHOT, "class"),
+        (_CYCLIC_SNAPSHOT, "class-grouped"),
+        # Even the level the snapshot was built at.
+        (str(snapshot_path("classes_class")), "class"),
+    ],
+)
+def test_drawing_a_snapshot_rejects_a_link_level(snapshot: str, level: str) -> None:
+    result = run_command("draw", snapshot, "--links", level, check=False)
     assert result.returncode == _USAGE_ERROR
     assert "a snapshot already records its link level" in result.stderr

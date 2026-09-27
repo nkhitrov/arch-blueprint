@@ -1,10 +1,10 @@
 """A graph snapshot: the one intermediate format every diagram is drawn from.
 
 A snapshot holds only *primary* data — nodes, edges, package facade edges and
-the metrics computed on them. ``links``, ``cycles``, ``tangles`` and ``groups``
-are derived from the edges and are
-re-derived on load, for the same reason ``BlueprintGraph.edges`` is a frozenset:
-a stored copy of derived data is a copy that can disagree with its source.
+the metrics computed on them. ``links``, ``cycles`` and ``tangles`` are derived
+from the edges and are re-derived on load, for the same reason
+``BlueprintGraph.edges`` is a frozenset: a stored copy of derived data is a copy
+that can disagree with its source.
 
 Rendering and diffing read snapshots, never rendered diagrams, so a new output
 format needs a renderer and nothing else.
@@ -20,7 +20,7 @@ from typing import Final, cast
 from arch_blueprint.analyze import analyze
 from arch_blueprint.domain.graph import BlueprintGraph, Edge, MetricValue
 from arch_blueprint.domain.node import Node, NodeKind
-from arch_blueprint.extract.levels import LINK_LEVELS
+from arch_blueprint.extract.registry import LINK_LEVELS
 
 SNAPSHOT_FORMAT: Final = "arch-blueprint-graph"
 SNAPSHOT_VERSION: Final = 2
@@ -77,7 +77,7 @@ def dump(graph: BlueprintGraph, metrics: Iterable[str], links: str) -> str:
 
 
 def load(text: str) -> Snapshot:
-    """Parse and validate a snapshot, then re-derive cycles and groups."""
+    """Parse and validate a snapshot, then re-derive links, cycles and tangles."""
     try:
         document = json.loads(text)
     except json.JSONDecodeError as error:
@@ -133,7 +133,7 @@ def _node(item: object) -> Node:
     entry = _mapping(item, "nodes[]")
     kind = _str(entry, "kind")
     try:
-        return Node(id=_str(entry, "id"), kind=NodeKind(kind))
+        return Node(id=_str(entry, "id"), kind=NodeKind.named(kind))
     except ValueError as error:
         msg = f"unknown node kind {kind!r}"
         raise SnapshotError(msg) from error

@@ -5,9 +5,11 @@ top to bottom direction
 hide empty members
 set separator none
 
-class knot.a <<(M, #2ECC71)>>
-class knot.b <<(M, #2ECC71)>>
-class knot.c <<(M, #2ECC71)>>
+title knot
+
+class "a" as knot.a <<(M, #2ECC71)>>
+class "b" as knot.b <<(M, #2ECC71)>>
+class "c" as knot.c <<(M, #2ECC71)>>
 
 knot.a <-[#C0392B,bold]-> knot.b
 knot.b -[#C0392B,bold]-> knot.c

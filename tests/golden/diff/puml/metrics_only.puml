@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 legend top left
   **No architectural changes**
@@ -14,20 +15,20 @@ legend top left
   metric: old → new (difference)
 endlegend
 
-package pkg_a {
-  class pkg_a.core <<(M, #2ECC71)>> {
+package "pkg_a" as pkg_a {
+  class "core" as pkg_a.core <<(M, #2ECC71)>> {
     fan_in: 1
     fan_out: 1
     instability: 0.5
   }
-  class pkg_a.services <<(M, #2ECC71)>> {
+  class "services" as pkg_a.services <<(M, #2ECC71)>> {
     fan_in: 0 → 1 (+1)
     fan_out: 1
     instability: 1.0 → 0.5 (-0.5)
   }
 }
-package pkg_b {
-  class pkg_b.util <<(M, #2ECC71)>> {
+package "pkg_b" as pkg_b {
+  class "util" as pkg_b.util <<(M, #2ECC71)>> {
     fan_in: 2
     fan_out: 1 → 2 (+1)
     instability: 0.33 → 0.5 (+0.17)

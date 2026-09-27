@@ -48,6 +48,17 @@ uv run arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plu
 Expected: `app2.service ---> app1.models` and `app2.service ---> plugins.auth.backend`, the boxes
 drawn flat under their full names.
 
+Classes and module-level functions instead of modules:
+
+```bash
+uv run arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**' --links class
+```
+
+Expected: `app2.service.make_user ---> app1.models.User` and
+`app2.service.make_user ---> plugins.auth.backend.AuthBackend` — the two classes are linked through
+the function that uses them. `--links class-grouped` frames each box in its module. A fuller class-level subject, one reference per construct, is `tests/fixtures/classes`
+(`-m 'refs.**' --links class`).
+
 ## Namespace package with no source
 
 If a namespace package contains **no** regular sub-package (no `__init__.py` anywhere underneath,

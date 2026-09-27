@@ -1,5 +1,4 @@
 import argparse
-import functools
 import os
 import shlex
 import shutil
@@ -18,7 +17,7 @@ from grimp.exceptions import GrimpException
 from arch_blueprint.blueprint import build_graph
 from arch_blueprint.diff import DIFF_RENDERERS, DiffRenderer, diff_graphs
 from arch_blueprint.domain.graph import BlueprintGraph
-from arch_blueprint.extract import DEFAULT_LINK_LEVEL, LINK_LEVELS, ModuleExtractor
+from arch_blueprint.extract import DEFAULT_LINK_LEVEL, LINK_LEVELS
 from arch_blueprint.extract.base import GraphExtractor
 from arch_blueprint.extract.layout import detect_roots, has_source, is_package
 from arch_blueprint.extract.source import GrimpSource, PackageNotFoundError
@@ -271,9 +270,15 @@ def _add_links_arg(parser: argparse.ArgumentParser) -> None:
         choices=list(LINK_LEVELS),
         metavar="LEVEL",
         help=(
-            "What an arrow connects. 'namespace': the packages where two "
-            "modules' paths part (a.b.c -> a.d.e is drawn a.b -> a.d). 'module': "
-            "the boxes themselves, drawn flat, each under its full name. "
+            "What a box is and what an arrow connects. 'namespace': modules, "
+            "arrows between the packages where two modules' paths part (a.b.c "
+            "-> a.d.e is drawn a.b -> a.d). 'module': modules, arrows box to "
+            "box, drawn flat, each under its full name. 'class': the classes "
+            "and module-level functions the modules define, arrows box to box "
+            "wherever one's code names another (bases, annotations, "
+            "signatures, bodies), drawn flat. The same framed by module: "
+            "'class-grouped'. The class levels parse every module's source, "
+            "some ten times slower than the module levels. "
             f"Default: {DEFAULT_LINK_LEVEL}."
         ),
     )
@@ -294,7 +299,7 @@ def _reject_links(given: Optional[str], what: str, code: int) -> None:
 
 
 def _extractor(links: str) -> Callable[[GrimpSource], GraphExtractor]:
-    return functools.partial(ModuleExtractor, level=LINK_LEVELS[links].endpoints)
+    return LINK_LEVELS[links].extractor
 
 
 def _add_changes_only_arg(parser: argparse.ArgumentParser) -> None:
@@ -621,7 +626,9 @@ def _add_draw(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
             "saved earlier with '-o graph.json'.\n\n"
             "Each box is a module. An arrow means some module on one side imports\n"
             "one on the other; arrows are drawn between the packages where the two\n"
-            "modules' paths part. A red double arrow is a dependency cycle."
+            "modules' paths part. A red double arrow is a dependency cycle.\n"
+            "--links class makes each box a class or a module-level function\n"
+            "instead, with arrows box to box."
         ),
         examples=(
             "  arch-blueprint draw src                      every package in src/\n"
@@ -633,6 +640,8 @@ def _add_draw(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
             "or diff later\n"
             "  arch-blueprint draw graph.json -o arch.png   draw the snapshot\n"
             "  arch-blueprint draw src --links module       arrows module to module\n"
+            "  arch-blueprint draw src --links class-grouped  classes and "
+            "functions, framed by module\n"
             "  arch-blueprint draw . -m 'app1.*' -m 'app2.*' --metric fan_in"
         ),
         handler=_draw,
@@ -1202,7 +1211,13 @@ def _history_graph(
 ) -> BlueprintGraph:
     if not patterns:
         return BlueprintGraph(nodes=[], edges=frozenset())
-    return build_graph(project_dir, patterns, _extractor(links), registry, None)
+    return build_graph(
+        project_dir,
+        patterns,
+        _extractor(links),
+        registry,
+        None,
+    )
 
 
 def _root_of(pattern: str) -> str:
@@ -1323,7 +1338,22 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             _EXIT_USAGE,
         )
     namespace = parser.parse_args(args)
-    namespace.handler(namespace)
+    try:
+        namespace.handler(namespace)
+    except BrokenPipeError:
+        _reader_gone()
+
+
+def _reader_gone() -> NoReturn:
+    """End quietly when the reader closed stdout early (``draw ... | head``).
+
+    Python ignores SIGPIPE, so the write raises instead; and the interpreter
+    flushes stdout once more at exit, which would raise again. Pointing stdout
+    at devnull first is the Python docs' recipe for this.
+    """
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, sys.stdout.fileno())
+    raise SystemExit(_EXIT_FAILURE)
 
 
 if __name__ == "__main__":

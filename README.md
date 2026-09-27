@@ -11,6 +11,9 @@ are drawn between packages, at the level where the two modules' paths part (`app
 `app1.models` is drawn as `app2 → app1`). A red double arrow is a **cycle**: two packages that
 import each other.
 
+Boxes can be classes and functions too, with arrows between them
+([`--links class`](#arrows-between-classes-and-functions)).
+
 - [Quick start](#quick-start)
 - [Choosing what to draw](#choosing-what-to-draw)
 - [Commands](#commands): [`draw`](#draw), [`diff`](#diff), [`history`](#history)
@@ -137,7 +140,8 @@ Packages without an `__init__.py` (PEP 420 namespace packages) work as well.
 #### Arrows between packages or between modules
 
 By default an arrow joins the packages where two modules' paths part: `app2.service` importing
-`app1.models` is drawn `app2 ---> app1`, with each module inside its package's frame. `--links
+`app1.models` is drawn `app2 ---> app1`, with each module inside its package's frame (a chain of
+frames that hold nothing but one frame is merged into one, `app.features.core`). `--links
 module` draws it module to module instead:
 
 ```shell
@@ -149,11 +153,42 @@ app2.service ---> app1.models
 app2.service ---> plugins.auth.backend
 ```
 
-Every arrow then ends on a box, so the boxes are drawn flat, each under its full name, without
-package frames. An import that lands inside a selected package ends on that package's box; an import
+Every arrow then ends on a box, so the boxes are drawn flat, without package frames, each labelled
+by its dotted name less the prefix all boxes share, which is shown once as the diagram title. An import that lands inside a selected package ends on that package's box; an import
 of a package itself (its `__init__.py`) gets a box of its own. Cycles, `edge_weight` and `diff` then
 work between modules. `--links` is given to the commands that build a graph: `draw PROJECT_DIR`,
 `diff --base` and `history`.
+
+#### Arrows between classes and functions
+
+`--links class` makes every top-level class and module-level function of the selected modules a box,
+and draws an arrow from each to every other one its code names, anywhere in it: bases, metaclass,
+decorators and class-level annotations, `__init__`, method signatures and method bodies, a
+function's parameters, their defaults, return annotation and body, string (forward) annotations and
+`cast("Foo", x)` included. Imports are followed through aliases, relative imports, imports inside a
+function and re-exports in a package's `__init__.py`, and a module-level variable through its value
+(`Alias = Foo | Bar`, `T = TypeVar("T", bound=Foo)`, `HANDLERS = {"a": Foo}`,
+`settings = Settings()`); a parameter, local or match capture that happens to share a class's name
+isn't that class. Functions are boxes of their own, so classes that only a function ties together
+are linked through it:
+
+```shell
+arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**' --links class
+```
+
+```puml
+app2.service.make_user ---> app1.models.User
+app2.service.make_user ---> plugins.auth.backend.AuthBackend
+```
+
+`class` draws the boxes flat under their dotted names, less the prefix every box shares (shown
+once, as the title); `--links class-grouped` draws each box inside the frame of its module
+instead, a chain of frames that hold nothing but one frame merged into one (`app.features.core`).
+Cycles, metrics, snapshots, `diff` and `history` work between classes and functions as they do
+between modules. A pair of boxes is one import however many times one names the other, so
+`edge_weight` is always 1. Nothing is imported or run — the source is read with
+[libcst](https://github.com/Instagram/LibCST), which takes some ten times longer than drawing
+modules.
 
 #### Snapshots
 
@@ -334,6 +369,7 @@ error, not an empty diagram. Common mistakes:
 | `unknown metric 'fanin'. Available: …` | See `arch-blueprint --list-metrics`. |
 | `--links applies when building a graph; a snapshot already records its link level` | Pass `--links` when saving the snapshot (`draw DIR --links module -o graph.json`), not when drawing it. |
 | `cannot diff a namespace-level snapshot against a module-level one` | Save both snapshots with the same `--links`. |
+| `warning: cannot parse '…/x.py' (…); its definitions are left out.` | With `--links class` / `class-grouped`, a file that isn't valid Python; the rest is drawn. |
 
 A pattern resolves against `PROJECT_DIR` first, then against the installed packages. Graphing
 `arch_blueprint` itself always resolves to the running copy.

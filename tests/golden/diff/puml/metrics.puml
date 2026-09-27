@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 legend top left
   unchanged: drawn as on a plain diagram
@@ -13,28 +14,30 @@ legend top left
   metric: old → new (difference)
 endlegend
 
-package app1 {
-  class app1.models <<(M, #2ECC71)>> {
+package "app1" as app1 {
+  class "models" as app1.models <<(M, #2ECC71)>> {
     fan_in: 1 → 2 (+1)
     fan_out: 0
   }
 }
-package app2 {
-  class app2.service <<(M, #2ECC71)>> {
+package "app2" as app2 {
+  class "service" as app2.service <<(M, #2ECC71)>> {
     fan_in: 0
     fan_out: 2 → 1 (-1)
   }
 }
-package app3 {
-  class app3.api <<(+, #00C853) added>> #00C853;line.dashed {
+package "app3" as app3 {
+  class "api" as app3.api <<(+, #00C853) added>> #00C853;line.dashed {
     fan_in: 0
     fan_out: 1
   }
 }
-package plugins {
-  class plugins.auth.backend <<(-, #FF1744) removed>> #FF1744;line.dashed {
-    fan_in: 1
-    fan_out: 0
+package "plugins" as plugins {
+  package "auth" as plugins.auth {
+    class "backend" as plugins.auth.backend <<(-, #FF1744) removed>> #FF1744;line.dashed {
+      fan_in: 1
+      fan_out: 0
+    }
   }
 }
 

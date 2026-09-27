@@ -1,0 +1,103 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+title refs
+
+class "Farm" as refs.Farm <<(C, #2ECC71)>>
+class "__init__.exported" as refs.__init__.exported <<(F, #1ABC9C)>>
+class "consumer.Consumer" as refs.consumer.Consumer <<(C, #1ABC9C)>>
+class "cycles.Chicken" as refs.cycles.Chicken <<(C, #1ABC9C)>>
+class "cycles.Egg" as refs.cycles.Egg <<(C, #1ABC9C)>>
+class "cycles.Paper" as refs.cycles.Paper <<(C, #1ABC9C)>>
+class "cycles.Rock" as refs.cycles.Rock <<(C, #1ABC9C)>>
+class "cycles.Scissors" as refs.cycles.Scissors <<(C, #1ABC9C)>>
+class "exported.impl.ByReExport" as refs.exported.impl.ByReExport <<(C, #F39C12)>>
+class "functions.Assembler" as refs.functions.Assembler <<(C, #1ABC9C)>>
+class "functions.Widget" as refs.functions.Widget <<(C, #1ABC9C)>>
+class "functions.build_widget" as refs.functions.build_widget <<(F, #1ABC9C)>>
+class "functions.handle" as refs.functions.handle <<(F, #1ABC9C)>>
+class "functions.label" as refs.functions.label <<(F, #1ABC9C)>>
+class "functions.register" as refs.functions.register <<(F, #1ABC9C)>>
+class "targets.ByAlias" as refs.targets.ByAlias <<(C, #1ABC9C)>>
+class "targets.ByAnnotation" as refs.targets.ByAnnotation <<(C, #1ABC9C)>>
+class "targets.ByBase" as refs.targets.ByBase <<(C, #1ABC9C)>>
+class "targets.ByBodyCall" as refs.targets.ByBodyCall <<(C, #1ABC9C)>>
+class "targets.ByCastString" as refs.targets.ByCastString <<(C, #1ABC9C)>>
+class "targets.ByDecorator" as refs.targets.ByDecorator <<(C, #1ABC9C)>>
+class "targets.ByExcept" as refs.targets.ByExcept <<(C, #1ABC9C)>>
+class "targets.ByFactoryCall" as refs.targets.ByFactoryCall <<(C, #1ABC9C)>>
+class "targets.ByInitParam" as refs.targets.ByInitParam <<(C, #1ABC9C)>>
+class "targets.ByLocalImport" as refs.targets.ByLocalImport <<(C, #1ABC9C)>>
+class "targets.ByMatchPattern" as refs.targets.ByMatchPattern <<(C, #1ABC9C)>>
+class "targets.ByMetaclass" as refs.targets.ByMetaclass <<(C, #1ABC9C)>>
+class "targets.ByModuleAlias" as refs.targets.ByModuleAlias <<(C, #1ABC9C)>>
+class "targets.ByModuleVariable" as refs.targets.ByModuleVariable <<(C, #1ABC9C)>>
+class "targets.ByNestedClass" as refs.targets.ByNestedClass <<(C, #1ABC9C)>>
+class "targets.ByParam" as refs.targets.ByParam <<(C, #1ABC9C)>>
+class "targets.ByRegistry" as refs.targets.ByRegistry <<(C, #1ABC9C)>>
+class "targets.ByRelativeImport" as refs.targets.ByRelativeImport <<(C, #1ABC9C)>>
+class "targets.ByReturn" as refs.targets.ByReturn <<(C, #1ABC9C)>>
+class "targets.ByStringAnnotation" as refs.targets.ByStringAnnotation <<(C, #1ABC9C)>>
+class "targets.ByTypeVarBound" as refs.targets.ByTypeVarBound <<(C, #1ABC9C)>>
+class "targets.NotByMatchCapture" as refs.targets.NotByMatchCapture <<(C, #1ABC9C)>>
+class "targets.NotByShadowingParam" as refs.targets.NotByShadowingParam <<(C, #1ABC9C)>>
+
+refs.Farm ---> refs.cycles.Chicken
+refs.__init__.exported ---> refs.Farm
+refs.consumer.Consumer ---> refs.exported.impl.ByReExport
+refs.consumer.Consumer ---> refs.targets.ByAlias
+refs.consumer.Consumer ---> refs.targets.ByAnnotation
+refs.consumer.Consumer ---> refs.targets.ByBase
+refs.consumer.Consumer ---> refs.targets.ByBodyCall
+refs.consumer.Consumer ---> refs.targets.ByCastString
+refs.consumer.Consumer ---> refs.targets.ByDecorator
+refs.consumer.Consumer ---> refs.targets.ByExcept
+refs.consumer.Consumer ---> refs.targets.ByFactoryCall
+refs.consumer.Consumer ---> refs.targets.ByInitParam
+refs.consumer.Consumer ---> refs.targets.ByLocalImport
+refs.consumer.Consumer ---> refs.targets.ByMatchPattern
+refs.consumer.Consumer ---> refs.targets.ByMetaclass
+refs.consumer.Consumer ---> refs.targets.ByModuleAlias
+refs.consumer.Consumer ---> refs.targets.ByModuleVariable
+refs.consumer.Consumer ---> refs.targets.ByNestedClass
+refs.consumer.Consumer ---> refs.targets.ByParam
+refs.consumer.Consumer ---> refs.targets.ByRegistry
+refs.consumer.Consumer ---> refs.targets.ByRelativeImport
+refs.consumer.Consumer ---> refs.targets.ByReturn
+refs.consumer.Consumer ---> refs.targets.ByStringAnnotation
+refs.consumer.Consumer ---> refs.targets.ByTypeVarBound
+refs.cycles.Chicken <-[#C0392B,bold]-> refs.cycles.Egg
+note on link
+  **refs.cycles.Chicken -> refs.cycles.Egg:**
+  - Chicken → Egg
+  **refs.cycles.Egg -> refs.cycles.Chicken:**
+  - Egg → Chicken
+end note
+refs.cycles.Paper -[#C0392B,bold]-> refs.cycles.Rock
+refs.cycles.Rock -[#C0392B,bold]-> refs.cycles.Scissors
+refs.cycles.Scissors -[#C0392B,bold]-> refs.cycles.Paper
+refs.functions.Assembler ---> refs.functions.build_widget
+refs.functions.Assembler ---> refs.functions.label
+refs.functions.build_widget ---> refs.functions.Widget
+refs.functions.handle ---> refs.functions.Widget
+refs.functions.handle ---> refs.functions.build_widget
+refs.functions.handle ---> refs.functions.register
+refs.functions.label ---> refs.functions.Widget
+note as tangle_refs__cycles__Paper
+  **Cycle: refs.cycles.Paper, refs.cycles.Rock, refs.cycles.Scissors**
+  **refs.cycles.Paper -> refs.cycles.Rock:**
+  - Paper → Rock
+  **refs.cycles.Rock -> refs.cycles.Scissors:**
+  - Rock → Scissors
+  **refs.cycles.Scissors -> refs.cycles.Paper:**
+  - Scissors → Paper
+end note
+tangle_refs__cycles__Paper .. refs.cycles.Paper
+tangle_refs__cycles__Paper .. refs.cycles.Rock
+tangle_refs__cycles__Paper .. refs.cycles.Scissors
+@enduml
+
