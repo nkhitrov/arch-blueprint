@@ -121,13 +121,17 @@ def test_project_dir_wins_over_a_same_named_package_already_on_the_path(
     assert selected == ["pkg_a.core", "pkg_a.services"]
 
 
-def test_uncached_source_is_not_fooled_by_an_equal_mtime(tmp_path: Path) -> None:
+def test_source_is_not_fooled_by_an_equal_mtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Grimp's cache is keyed by module *name* and mtime, not by path.
 
     ``git archive`` stamps every file with its commit's time, so two revisions
-    committed within one second look identical to it and the second diff side
-    is silently read from the first one's cache.
+    committed within one second look identical to it and the second one would
+    silently be read from the first one's cache — in ``draw`` as in a diff.
     """
+    monkeypatch.chdir(tmp_path)
     old, new = tmp_path / "old", tmp_path / "new"
     for root, body in ((old, ""), (new, "from pkg_a import core\n")):
         shutil.copytree(CYCLIC_PROJECT, root)
@@ -136,11 +140,12 @@ def test_uncached_source_is_not_fooled_by_an_equal_mtime(tmp_path: Path) -> None
             os.utime(path, (1_000_000_000, 1_000_000_000))
 
     def edges(root: Path) -> set[tuple[str, str]]:
-        source = GrimpSource(str(root), ["pkg_a.*", "pkg_b.*"], use_cache=False)
+        source = GrimpSource(str(root), ["pkg_a.*", "pkg_b.*"])
         return {(e.source, e.target) for e in ModuleExtractor(source).extract().edges}
 
     assert ("pkg_b.util", "pkg_a.core") not in edges(old)
     assert ("pkg_b.util", "pkg_a.core") in edges(new)
+    assert not (tmp_path / ".grimp_cache").exists()
 
 
 # --- package resolution ---------------------------------------------------

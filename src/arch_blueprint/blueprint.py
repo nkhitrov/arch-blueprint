@@ -18,17 +18,14 @@ def build_graph(
     extractor_factory: Callable[[GrimpSource], GraphExtractor] = ModuleExtractor,
     registry: Optional[MetricRegistry] = None,
     metric_names: Optional[Iterable[str]] = None,
-    *,
-    use_cache: bool = True,
 ) -> BlueprintGraph:
     """Everything up to rendering: extract, compute metrics, analyze.
 
     A function rather than only a method so a caller that never renders — a
     snapshot dump, either side of a diff — does not need a renderer to get here.
-    ``metric_names=None`` computes every registered metric. ``use_cache=False``
-    is for graphing several checkouts of one project (see ``GrimpSource``).
+    ``metric_names=None`` computes every registered metric.
     """
-    source = GrimpSource(project_dir, target_names, use_cache=use_cache)
+    source = GrimpSource(project_dir, target_names)
     graph = extractor_factory(source).extract()
     (registry or default_registry()).compute(graph, metric_names)
     return analyze(graph)

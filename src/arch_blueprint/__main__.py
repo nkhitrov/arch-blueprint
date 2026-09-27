@@ -514,7 +514,6 @@ def _build(
     *,
     links: str,
     failure_code: int,
-    use_cache: bool = True,
 ) -> BlueprintGraph:
     """Build a graph, turning every expected failure into one stderr line."""
     _check_project_dir(project_dir, _EXIT_USAGE)
@@ -525,7 +524,6 @@ def _build(
             _extractor(links),
             default_registry(),
             metric_names,
-            use_cache=use_cache,
         )
     except PackageNotFoundError as error:
         _abort(
@@ -914,15 +912,12 @@ def _side(
     if not modules:  # this side has none of the selected packages
         return BlueprintGraph(nodes=[], edges=frozenset())
     # Only the metrics to show: without --metric a diff compares structure only.
-    # No cache: grimp would take two checkouts whose files share an mtime (git
-    # archive stamps the commit time) for one and the same project.
     return _build(
         project_dir,
         modules,
         metrics,
         links=links,
         failure_code=_EXIT_DIFF_TROUBLE,
-        use_cache=False,
     )
 
 
@@ -1207,15 +1202,7 @@ def _history_graph(
 ) -> BlueprintGraph:
     if not patterns:
         return BlueprintGraph(nodes=[], edges=frozenset())
-    # No grimp cache: git archive stamps every file with the commit time.
-    return build_graph(
-        project_dir,
-        patterns,
-        _extractor(links),
-        registry,
-        None,
-        use_cache=False,
-    )
+    return build_graph(project_dir, patterns, _extractor(links), registry, None)
 
 
 def _root_of(pattern: str) -> str:
