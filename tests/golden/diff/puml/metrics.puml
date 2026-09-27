@@ -1,0 +1,45 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+legend top left
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
+  metric: old → new (difference)
+endlegend
+
+package app1 {
+  class app1.models <<(M, #2ECC71)>> {
+    fan_in: 1 → 2 (+1)
+    fan_out: 0
+  }
+}
+package app2 {
+  class app2.service <<(M, #2ECC71)>> {
+    fan_in: 0
+    fan_out: 2 → 1 (-1)
+  }
+}
+package app3 {
+  class app3.api <<(+, #00C853) added>> #00C853;line.dashed {
+    fan_in: 0
+    fan_out: 1
+  }
+}
+package plugins {
+  class plugins.auth.backend <<(-, #FF1744) removed>> #FF1744;line.dashed {
+    fan_in: 1
+    fan_out: 0
+  }
+}
+
+app2 ---> app1 : edge_weight=1
+app2 -[#FF1744,dashed,thickness=2]-> plugins : removed edge_weight=1
+app3 -[#00C853,dashed,thickness=3]-> app1 : added edge_weight=1
+@enduml
+

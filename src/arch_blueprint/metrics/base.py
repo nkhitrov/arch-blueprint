@@ -29,6 +29,8 @@ class NodeMetric(Protocol):
     """
 
     name: str
+    #: One line for ``--list-metrics``: what the number means.
+    description: str
     applies_to: frozenset[NodeKind]
     render: Optional[str]
 
@@ -45,6 +47,8 @@ class LinkMetric(Protocol):
     """
 
     name: str
+    #: One line for ``--list-metrics``: what the number means.
+    description: str
     render: Optional[str]
 
     def compute(
@@ -81,6 +85,16 @@ class MetricRegistry:
 
     def link_metric(self, name: str) -> Optional[LinkMetric]:
         return self._link.get(name)
+
+    def node_metrics(self) -> tuple[NodeMetric, ...]:
+        return tuple(self._node.values())
+
+    def link_metrics(self) -> tuple[LinkMetric, ...]:
+        return tuple(self._link.values())
+
+    def metrics(self) -> tuple[Metric, ...]:
+        """Every registered metric, node metrics first."""
+        return (*self._node.values(), *self._link.values())
 
     def names(self) -> frozenset[str]:
         return frozenset(self._node) | frozenset(self._link)

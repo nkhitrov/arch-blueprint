@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Final, Optional
 
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Tangle
+from arch_blueprint.domain.graph import BlueprintGraph, Cycle, MetricValue, Tangle
 
 #: Appended to a node id that another shown node lies under — a module ``pkg.py``
 #: replaced by a package ``pkg/`` puts both in one diff, and neither format can
@@ -75,6 +75,32 @@ class CycleDelta:
 
 
 @dataclass(frozen=True)
+class MetricChange:
+    """One metric's value on a drawn node or connection, on either side.
+
+    ``None`` on a side that does not have the node or connection: an added one
+    has no old value, a removed one no new value. A cycle connection's value is
+    both directions combined, as a plain diagram draws it (``forward/backward``).
+    """
+
+    old: Optional[MetricValue]
+    new: Optional[MetricValue]
+
+    @property
+    def changed(self) -> bool:
+        """True when both sides have a value and the values differ.
+
+        An added or removed node or link is a structural change already; its one
+        value is not a second change.
+        """
+        return self.old is not None and self.new is not None and self.old != self.new
+
+
+#: ``{metric name: change}`` for one drawn node or connection.
+MetricChanges = Mapping[str, MetricChange]
+
+
+@dataclass(frozen=True)
 class TangleDelta:
     """A longer cycle (a :class:`Tangle`) that appeared or disappeared.
 
@@ -109,6 +135,11 @@ class GraphDiff:
     ``link_status``: it is drawn as one cycle connection, not as two arrows. A
     cycle present on both sides is in ``context_cycles``, likewise.
 
+    The metrics asked for sit in three more side maps, one :class:`MetricChange`
+    per metric: ``node_metrics`` by drawn node id, ``link_metrics`` by the
+    endpoint pair of a ``link_status`` entry, ``cycle_metrics`` by the pair of
+    endpoints of a changed or unchanged cycle. All three are empty when no
+    metric was asked for.
     Longer cycles are drawn on their links rather than as one connection, so
     their links stay in ``link_status``; ``tangle_changes`` and
     ``context_tangles`` say which cycle each lies on. The links of a changed
@@ -121,6 +152,13 @@ class GraphDiff:
     link_status: Mapping[tuple[str, str], ChangeStatus]
     cycle_changes: tuple[CycleDelta, ...]
     context_cycles: tuple[Cycle, ...] = ()
+    node_metrics: Mapping[str, MetricChanges] = field(default_factory=dict)
+    link_metrics: Mapping[tuple[str, str], MetricChanges] = field(
+        default_factory=dict,
+    )
+    cycle_metrics: Mapping[frozenset[str], MetricChanges] = field(
+        default_factory=dict,
+    )
     tangle_changes: tuple[TangleDelta, ...] = ()
     context_tangles: tuple[Tangle, ...] = ()
 
@@ -130,6 +168,7 @@ class GraphDiff:
 
         A tangle can change with no drawn link changing — through a package
         facade's imports, which are not drawn — so it is checked on its own.
+        Structure only: a metric whose value changed is :attr:`metrics_changed`.
         """
         return (
             not self.cycle_changes
@@ -138,4 +177,20 @@ class GraphDiff:
                 status is ChangeStatus.CONTEXT
                 for status in (*self.node_status.values(), *self.link_status.values())
             )
+        )
+
+    @property
+    def metrics_changed(self) -> bool:
+        """True when a metric asked for has another value on a node or link.
+
+        Always false when no metric was asked for.
+        """
+        return any(
+            change.changed
+            for changes in (
+                *self.node_metrics.values(),
+                *self.link_metrics.values(),
+                *self.cycle_metrics.values(),
+            )
+            for change in changes.values()
         )

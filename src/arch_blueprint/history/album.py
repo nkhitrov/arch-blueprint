@@ -9,7 +9,7 @@ sha in the name are for the reader.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Optional
@@ -48,8 +48,15 @@ def collect(
     commits: Iterable[Commit],
     snapshot_for: SnapshotSource,
     report: Optional[CommitReport] = None,
+    *,
+    metrics: Collection[str] = (),
 ) -> list[Frame]:
-    """Keep the commits whose graph changed, compared by structure alone.
+    """Keep the commits whose graph changed: its structure, or a shown metric.
+
+    Without ``metrics`` only structure counts. With them, a commit where one of
+    those metrics has another value — say, an import added inside a link that
+    already existed, which moves ``edge_weight`` — is a frame too, so the
+    album's last frame shows the values at its last commit.
 
     ``snapshot_for`` returns ``None`` for a commit that cannot be graphed; it is
     skipped. Until the first frame, an empty graph (no selected root exists yet)
@@ -60,7 +67,7 @@ def collect(
     for commit in commits:
         snapshot = snapshot_for(commit)
         frame: Optional[Frame] = None
-        if snapshot is not None and _is_change(previous, snapshot):
+        if snapshot is not None and _is_change(previous, snapshot, metrics):
             frame = Frame(len(frames) + 1, commit, snapshot, previous)
             frames.append(frame)
             previous = snapshot
@@ -69,10 +76,20 @@ def collect(
     return frames
 
 
-def _is_change(previous: Optional[Snapshot], snapshot: Snapshot) -> bool:
+def _is_change(
+    previous: Optional[Snapshot],
+    snapshot: Snapshot,
+    metrics: Collection[str],
+) -> bool:
     if previous is None:
         return bool(snapshot.graph.nodes)
-    return not diff_graphs(previous.graph, snapshot.graph).is_empty
+    diff = diff_graphs(
+        previous.graph,
+        snapshot.graph,
+        changes_only=True,  # the smallest diff that says whether anything changed
+        metrics=metrics,
+    )
+    return not diff.is_empty or diff.metrics_changed
 
 
 @dataclass(frozen=True)

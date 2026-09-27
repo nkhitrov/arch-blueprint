@@ -10,6 +10,7 @@ import pytest
 from arch_blueprint.analyze.cycles import CycleAnalyzer
 from arch_blueprint.domain.node import NodeKind
 from arch_blueprint.extract.base import common_depth_namespaces
+from arch_blueprint.extract.layout import detect_roots
 from arch_blueprint.extract.levels import module_level, namespace_level
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
@@ -193,6 +194,31 @@ def test_import_of_package_facade_becomes_edge() -> None:
     """``api.handlers`` imports the ``services`` package, whose child is selected."""
     edges = _edges_of(ANCESTOR_DEP_PROJECT, ["api.*", "services.*"])
     assert ("api.handlers", "services") in edges
+
+
+@pytest.mark.parametrize(
+    ("layout", "expected"),
+    [
+        pytest.param(
+            {"b/__init__.py": "", "a/__init__.py": ""},
+            ["a", "b"],
+            id="sorted",
+        ),
+        pytest.param({"ns/inner/__init__.py": ""}, ["ns"], id="namespace_package"),
+        pytest.param({"docs/notes.txt": "", "tool.py": ""}, [], id="no_package"),
+        pytest.param({".venv/pkg/__init__.py": ""}, [], id="hidden_dir"),
+        pytest.param({"my-app/__init__.py": ""}, [], id="not_an_identifier"),
+    ],
+)
+def test_detect_roots(
+    tmp_path: Path,
+    layout: dict[str, str],
+    expected: list[str],
+) -> None:
+    for name, text in layout.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text)
+    assert detect_roots(str(tmp_path)) == expected
 
 
 def test_module_level_links_node_to_node() -> None:

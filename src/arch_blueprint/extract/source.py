@@ -12,6 +12,19 @@ import grimp
 from grimp import ImportGraph
 
 
+class PackageNotFoundError(ImportError):
+    """A pattern's top-level package is nowhere to be found.
+
+    Carries the pattern so the caller can say what to do about it; the wording
+    is the caller's, this layer knows nothing of command lines.
+    """
+
+    def __init__(self, pattern: str) -> None:
+        super().__init__(f"Can't import module '{pattern}'. Is it on the Python path?")
+        self.pattern = pattern
+        self.package = pattern.split(".", 1)[0]
+
+
 class GrimpSource:
     """Builds and exposes a grimp import graph for the selected target packages.
 
@@ -127,9 +140,7 @@ class GrimpSource:
                 spec.origin is not None or spec.submodule_search_locations is not None
             ):
                 return candidate_name
-        raise ImportError(
-            f"Can't import module '{module_name}'. Is it on the Python path?",
-        )
+        raise PackageNotFoundError(module_name)
 
     @classmethod
     def _expand_to_graphable(cls, package: str) -> list[str]:

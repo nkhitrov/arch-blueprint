@@ -17,39 +17,9 @@ class services.other <<(M, #2ECC71)>>
 
 api.handlers -[#C0392B,bold]-> services
 nest.a <-[#C0392B,bold]-> nest.b
-note on link
-  **nest.a -> nest.b:**
-  - a → x
-  **nest.b -> nest.a:**
-  - b → a
-end note
 ring.a -[#C0392B,bold]-> ring.b
 ring.b -[#C0392B,bold]-> ring.c
 ring.c -[#C0392B,bold]-> ring.a
 services.engine -[#C0392B,bold]-> api.handlers
-note as tangle_api__handlers
-  **Cycle: api.handlers, services, services.engine**
-  **api.handlers -> services:**
-  - handlers → services
-  **services.engine -> api.handlers:**
-  - engine → handlers
-  **services -> services.engine (package facade import, not drawn):**
-  - services → engine
-end note
-tangle_api__handlers .. api.handlers
-tangle_api__handlers .. services
-tangle_api__handlers .. services.engine
-note as tangle_ring__a
-  **Cycle: ring.a, ring.b, ring.c**
-  **ring.a -> ring.b:**
-  - a → b
-  **ring.b -> ring.c:**
-  - b → c
-  **ring.c -> ring.a:**
-  - c → a
-end note
-tangle_ring__a .. ring.a
-tangle_ring__a .. ring.b
-tangle_ring__a .. ring.c
 @enduml
 

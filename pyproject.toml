@@ -1,7 +1,7 @@
 [project]
 name = "arch-blueprint"
 version = "0.0.0"
-description = "Render your project components automatically"
+description = "Draw architecture diagrams (PlantUML / D2) from a Python project's import graph"
 authors = [{ name = "Nick Khitrov", email = "khitrov34@gmail.com" }]
 readme = "README.md"
 license = "MIT"

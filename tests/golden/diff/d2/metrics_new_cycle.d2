@@ -1,0 +1,37 @@
+direction: down
+diff_legend: Legend {
+  near: top-left
+  unchanged: "unchanged: drawn as on a plain diagram"
+  added: "+ added" {style.fill: "#00C853"; style.stroke-dash: 5}
+  removed: "- removed" {style.fill: "#FF1744"; style.stroke-dash: 5}
+  new_cycle: "NEW CYCLE" {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}
+  resolved: "cycle resolved" {style.stroke: "#95A5A6"; style.stroke-dash: 5}
+  metric: "metric: old → new (difference)" {shape: text}
+}
+pkg_a.core: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 0 → 1 (+1)
+  fan_out: 1
+}
+
+pkg_a.services: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 0
+  fan_out: 1
+}
+
+pkg_b.util: {
+  shape: class
+  style: {
+    fill: "#2ECC71"
+  }
+  fan_in: 2
+  fan_out: 0 → 1 (+1)
+}
+pkg_a <-> pkg_b: NEW CYCLE edge_weight=2 → 2/1 {style.stroke: "#C0392B"; style.stroke-width: 4; style.stroke-dash: 5}

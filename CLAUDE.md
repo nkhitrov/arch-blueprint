@@ -18,8 +18,19 @@ This project uses `uv` for environment and dependency management.
 - Format: `uv run ruff format`
 - Lint (with autofix): `uv run ruff check --fix src tests`
 - Type-check (strict mypy): `uv run mypy ./src ./tests`
-- Run the CLI against a project: `uv run arch-blueprint <project_dir> -m '<pattern>' [-f puml|d2]`
-  - Example: `uv run arch-blueprint src -m 'arch_blueprint.*'`
+- Run the CLI against a project: `uv run arch-blueprint draw <project_dir> [-m '<pattern>'] [-f FMT] [-o FILE]`
+  - Example: `uv run arch-blueprint draw src -m 'arch_blueprint.*'`
+  - Every command is explicit (`draw`, `diff`, `history`). The old implicit form
+    `arch-blueprint <dir> -m ...` and the old `render SNAPSHOT` are gone; each gets an exit-2 hint
+    naming the `draw` command to run instead. `draw` takes a project directory or a snapshot file
+    (an existing file, or any `*.json`).
+  - Without `-m`, `draw` and `diff --base` draw every package in `<project_dir>` whole
+    (`extract/layout.py:detect_roots` → `pkg.**`, noted on stderr); `history` without ROOTs does
+    the same at `--head`. A src-layout root (`src/` a namespace dir holding packages) is refused
+    with a hint rather than drawn as `src.myapp`.
+  - `-o FILE` writes to a file; without `-f` its extension picks the format (`.puml`, `.d2`,
+    `.json`, `.png` → `puml-png`). `-f puml-png` / `d2-png` draw an image through the
+    `IMAGE_RENDERERS` tool and require `-o`.
   - Graphing **this** project is a special case: `arch_blueprint` is already in `sys.modules`
     (the CLI *is* it), so `find_spec` resolves to the running copy whatever `<project_dir>` says.
     To graph a different checkout, put it first on `PYTHONPATH` so that copy is the one running.
@@ -29,14 +40,13 @@ This project uses `uv` for environment and dependency management.
     packages (e.g. `-m 'app1.*' -m 'app2.*'`). A cross-package link is drawn only when both
     endpoints belong to the selected set — which includes a dependency *on* a package whose
     children were selected, since `pkg.*` never selects `pkg` itself.
-  - `--format`/`-f` defaults to `puml`; `--no-cycle-details` hides per-module edges on cycles.
-    `diff` and `history` are quick looks and invert the default: the notes are off unless
-    `--cycle-details` is given. Both draw the diff over the whole graph; `--changes-only` draws
-    just the changes and the modules they touch.
+  - `--format`/`-f` defaults to `puml`. The notes listing a cycle's imports are opt-in in every
+    command (`--cycle-details`), for a pair and a longer cycle alike. `diff` and `history` draw the diff over the whole graph;
+    `--changes-only` draws just the changes and the modules they touch.
   - `--links namespace|module` (default `namespace`) chooses what an arrow connects: the
     namespaces where two modules' paths diverge, or the nodes themselves. Accepted by every command
-    that *builds* a graph (the main one, `diff --base`, `history`), not by `render` or a
-    snapshot-file `diff` — a snapshot records the level it was built at. Even an explicit
+    that *builds* a graph (`draw PROJECT_DIR`, `diff --base`, `history`), not by `draw SNAPSHOT`
+    or a snapshot-file `diff` (`_reject_links`) — a snapshot records the level it was built at. Even an explicit
     `--links namespace` is rejected there (the parser default is `None`, resolved by
     `_link_level`), and a diff of two snapshots of different levels is exit 2.
     A level also says how it is drawn (`Level.nested` → `RendererOptions.nested`): `module` is
@@ -46,17 +56,18 @@ This project uses `uv` for environment and dependency management.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
-    not a silent no-op.
-- Snapshot / render / diff (see **Snapshot and diff** below):
-  - `uv run arch-blueprint <project_dir> -m '<pattern>' -f json > graph.json` — graph snapshot.
-  - `uv run arch-blueprint render graph.json [-f puml|d2] [--metric NAME]` — draw a snapshot.
-  - `uv run arch-blueprint diff OLD.json NEW.json [-f puml|d2]` — draw what changed.
-  - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> -m '<pattern>'` — both sides
+    not a silent no-op. `diff` and `history` take it too: a changed value reads `old → new (±d)`.
+- Snapshot / draw a snapshot / diff (see **Snapshot and diff** below):
+  - `uv run arch-blueprint draw <project_dir> -m '<pattern>' -o graph.json` — graph snapshot.
+  - `uv run arch-blueprint draw graph.json [-f FMT] [-o FILE] [--metric NAME]` — draw a snapshot.
+  - `uv run arch-blueprint diff OLD.json NEW.json [-f FMT] [-o FILE] [--metric NAME]` — draw what
+    changed.
+  - `uv run arch-blueprint diff --base REV [--head REV] <project_dir> [-m '<pattern>']` — both sides
     built from git (`--head` defaults to the working tree).
-  - `uv run arch-blueprint history <project_dir> ROOT [ROOT ...] [-m '<pattern>'] [--base REV]
+  - `uv run arch-blueprint history <project_dir> [ROOT ...] [-m '<pattern>'] [--base REV]
     [--head REV] [-o DIR] [-f puml|d2|puml-png|d2-png]` — an album: a diagram and a diff per commit
     that changed the graph (see **History album** below).
-- Runnable example fixture: `uv run arch-blueprint examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
+- Runnable example fixture: `uv run arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
 CI (`.github/workflows/test.yml`) has two jobs: a single-version `lint` job (`pre-commit`, skipping
@@ -71,15 +82,16 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
 - `test_domain.py` — link aggregation, `CycleAnalyzer`, `GroupAnalyzer`.
 - `test_metrics.py` — metric computation, registry routing, render plugins, `RenderPlan` validation.
 - `test_renderers.py` — both renderers **in-process** (build a graph, render it, assert on the text).
-- `test_source.py` — `GrimpSource`, interpreter-state hygiene, extraction.
-- `test_cli.py` — exit codes, stderr messages, output encoding.
+- `test_source.py` — `GrimpSource`, interpreter-state hygiene, extraction, `detect_roots`.
+- `test_cli.py` — exit codes, stderr messages and hints, output encoding, `-o` / PNG (through a
+  stand-in tool from `conftest.stand_in_tool`), help / `--version` / `--list-metrics`.
 - `test_golden_puml.py` / `test_golden_d2.py` — run the CLI as a subprocess over every scenario in
   `tests/conftest.py:SCENARIOS` and assert byte-exact output against `tests/golden/<fmt>/`. When
   output changes *intentionally*, regenerate the affected golden.
 - `test_golden_structure.py` — invariants the goldens must satisfy, not just their bytes: every link
   endpoint is declared, and no package wraps a class of its own name. Covers diff goldens too.
 - `test_snapshot.py` — golden snapshots (`tests/golden/json/<selection>.json`, one per
-  `conftest.py:SELECTIONS`), and the key invariant: `render` of a snapshot equals every
+  `conftest.py:SELECTIONS`), and the key invariant: `draw` of a snapshot equals every
   `tests/golden/<fmt>/` diagram byte for byte. Plus validation errors.
 - `test_diff.py` — `diff_graphs` logic and the diff renderers in-process.
 - `test_golden_diff.py` — `diff` over `conftest.py:DIFF_CASES` against `tests/golden/diff/<fmt>/`,
@@ -91,8 +103,8 @@ regression is invisible on Linux alone. Runs on push to `master` and on PRs.
   in-process.
 
 A scenario is a `Selection` (project + `-m` patterns + `build_args` such as `--links module` — what
-the snapshot golden is keyed by) plus
-`render_args` (drawing-only options, passed unchanged to `render`).
+the snapshot golden is keyed by) plus `render_args` (drawing-only options, passed unchanged when
+drawing the snapshot). A golden holding cycle notes has `CYCLE_DETAILS` in its `render_args`.
 
 A hand-built `BlueprintGraph` has **empty `cycles` and `groups`** until the analyze step fills them.
 A renderer test that needs either must populate them explicitly, or it will silently assert against
@@ -102,8 +114,10 @@ Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tes
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
 `tests/fixtures/ancestor_dep` (an import of a package facade),
-`tests/fixtures/package_nodes` (nodes that are packages, so every edge targets a submodule), `tests/fixtures/diff` (snapshot
-edits used as diff inputs — regenerate them if the snapshot format changes). Fixture projects are excluded from
+`tests/fixtures/package_nodes` (nodes that are packages, so every edge targets a submodule),
+`tests/fixtures/diff` (snapshot edits used as diff inputs, every metric computed into them like a
+`-o graph.json` snapshot; `cyclic_weighted.json` is `cyclic` plus one import inside an existing link
+— a metric-only change; regenerate them if the snapshot format or a metric's counting changes). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 
 ## Git conventions
@@ -184,8 +198,8 @@ the same reason: endpoints alone cannot tell the levels apart). It holds **prima
 order, which renderers draw in), edges, node/link metrics — and `load` re-derives links, cycles and
 groups via `analyze()`. `format` + `version` (2) and the link level are checked; anything unexpected is `SnapshotError`.
 Rendering and diffing read snapshots, never rendered diagrams, so a new output format needs a
-renderer and no parser. `-f json` computes every registered metric so `render` can show any of them;
-`render` rejects a `--metric` the snapshot does not hold.
+renderer and no parser. `-f json` computes every registered metric so a snapshot can be drawn with any of them;
+`draw SNAPSHOT` rejects a `--metric` the snapshot does not hold.
 
 `diff/` compares two analyzed graphs. `diff_graphs(old, new) -> GraphDiff` (`compute.py`):
 
@@ -206,7 +220,20 @@ renderer and no parser. `-f json` computes every registered metric so `render` c
   as a plain diagram does, on a new/resolved one like a new/resolved pair. A changed tangle's links
   are shown even with `changes_only`, and `is_empty` counts tangle changes: a facade's imports can
   close a cycle with no drawn link changing.
-- a change to the imports inside a link present on both sides is not a change (YAGNI).
+- a change to the imports inside a link present on both sides is not a structural change — but it
+  moves metrics, which is what `metrics=` is for.
+- `diff_graphs(..., metrics=names)` compares those metrics from each side's computed values (the
+  metric plugins stay compute-only; no registry is involved). Every shown node, link and cycle gets
+  a `MetricChange(old, new)` per metric it has a value for, in `node_metrics` (by drawn id),
+  `link_metrics` (by `link_status` pair) and `cycle_metrics` (by `frozenset` of the two
+  endpoints); all keyed where drawn (a shadowed endpoint follows its node), read at each side's own endpoints. A side without the node/link has `None`, so added/removed need no special case. A
+  cycle's value on each side is `domain.cycle_metric_values` — the same `forward/backward`
+  combination a plain renderer draws, oriented as the cycle; on a side where the pair is one arrow it
+  is that arrow's value, so a new cycle reads `2 → 2/1` and a resolved one `2/1 → 2`.
+  `metrics_changed` is true when some value is on both sides and differs. `is_empty` stays
+  structure only (tangle changes included), for every caller; "something changed" is `not is_empty or metrics_changed`. With
+  `changes_only`, a node/link/cycle whose value changed is shown as context too (plus the modules
+  such a link's edges connect); without `metrics` nothing about the diff changes.
 - within one graph no node lies under another (the extractor keeps leaves), but a diff joins two:
   a module `pkg.py` removed and a package `pkg/` added are both shown. Such a node is drawn as
   `shadowed_id(pkg)` = `pkg.(module)` (not a possible module name), labelled via `display_name`, so
@@ -230,11 +257,22 @@ smaller pair), since the layout engine places things by declaration order: a dif
 itself equals its plain diagram less the legend (`test_diff.py` checks), so album frames lay out
 alike.
 
+A diff renderer takes an optional `RenderPlan` (`plan=`; `None` draws no metric) and draws metrics
+through the same render plugins as a plain diagram, via the shared `metric_rows` / `decorate_link`
+(`renderer/base.py`). Rendering stays formatting-only: `format_change` (`render_base.py`) writes a
+`MetricChange` as the value handed to the plugin — the plain value when unchanged (same type, so
+it prints as a plain diagram prints it), the one side's value when added/removed, else
+`old → new (±difference)` (difference for numbers only). A changed link or cycle puts its status
+label first, then the metric labels (`added edge_weight=1`, `NEW CYCLE edge_weight=2 → 2/1`); an
+unchanged link on a changed longer cycle likewise (`_format_link(..., on_cycle, decoration)`). With
+a plan that shows metrics the legend adds `metric: old → new (difference)`; the identity invariant
+above holds with metrics too.
+
 `git.py` (shared by `diff` and `history`): `checkout(project_dir, rev)` resolves the repo root,
 `git archive`s only the project's subtree for that commit into a temp dir, and yields the project
 path inside it.
 `split_patterns` gives each side only the `-m` patterns whose top-level package it has code for
-(`has_source`; a package added or removed wholesale is a diff, not an error); a pattern on neither
+(`extract/layout.has_source`; a package added or removed wholesale is a diff, not an error); a pattern on neither
 side goes to both, so a typo still fails.
 
 ### History album
@@ -250,9 +288,12 @@ side goes to both, so a typo still fails.
   settings being d2's scale or PlantUML's size limit — drawn once for every run and album showing
   the same diagram. Both write atomically and share one root with a
   `.gitignore` of `*`.
-- `history/album.py` — pure: `collect(commits, snapshot_for)` keeps a commit only when
-  `diff_graphs` against the previous kept frame is non-empty (a leading empty graph — no root yet —
-  is skipped). `pages()` is the one place frames become named diagrams — one per frame: the first
+- `history/album.py` — pure: `collect(commits, snapshot_for, metrics=...)` keeps a commit only
+  when `diff_graphs` against the previous kept frame is non-empty, or — given `metrics` (the CLI
+  passes `--metric`) — when one of those metrics changed value (a leading empty graph — no root
+  yet — is skipped). Without `--metric` only structure makes a frame; with it, a commit that only
+  adds an import inside an existing link is a frame, so the last frame's values match `--head`.
+  The diff frames are drawn with the same metrics, so every frame shows them. `pages()` is the one place frames become named diagrams — one per frame: the first
   plain, the rest a full-context diff (a plain second picture would repeat it); `write()` writes either the
   sources or, given the drawn images, only the images (an album holds one kind of file), rewrites
   only files whose bytes change, and removes this extension's frame files the run did not produce.
@@ -263,10 +304,11 @@ side goes to both, so a typo still fails.
   failed. A failed source never gets an image. d2 refuses to rasterize past a fixed amount of work
   (a large project's full diagram): `D2Images` retries at half the scale up to `HALVINGS` times,
   starting from `--scale` if given (`scalable` renderers only; `--scale` elsewhere is exit 2).
-- CLI (`_history`): `_HISTORY_FORMATS` maps `-f` to (diagram format, images?), built from
-  `_RENDERERS` and `IMAGE_RENDERERS` — a format with an image renderer gets `<fmt>-png`. Roots are
-  positional and required; `-m` defaults to `ROOT.**` and must lie under a root. A root is dropped
-  for a commit where `git.has_source` finds no analyzable code (mirroring what `GrimpSource` can
+- CLI (`_history`): `_DIAGRAM_FORMATS` (from `_formats()`, shared with `draw`; `diff`
+  has `_DIFF_FORMATS`) maps `-f` to (diagram format, images?), built from the renderers and
+  `IMAGE_RENDERERS` — a format with an image renderer gets `<fmt>-png`. Roots are positional and
+  optional (default: `detect_roots` of the `--head` tree); `-m` defaults to `ROOT.**` and must lie
+  under a root. A root is dropped for a commit where `extract/layout.has_source` finds no analyzable code (mirroring what `GrimpSource` can
   build, so grimp never warns); a commit with none is `no source yet`. A commit whose analysis fails
   is `skipped (reason)`. Exit 2 for bad input (including a missing image tool, checked before any
   work), 1 when images failed — caches keep everything else for the rerun.
@@ -348,12 +390,26 @@ Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer
 
 ### CLI behaviour
 
-`main()` dispatches on the first argument: `render` / `diff` / `history` select a subcommand, anything else is
-the original `<project_dir> -m ...` interface, unchanged. Failures are one line on stderr with no
+One `argparse` parser with required subcommands (`_COMMANDS`: `draw`, `diff`, `history`; each an `_add_*` builder that sets its handler). No arguments prints the help to stderr
+(exit 2); a first argument that is an existing directory is the retired implicit form and gets a
+hint naming `draw`. Top-level `--version` and `--list-metrics` (from each metric's `description`,
+displayable ones only). Every subcommand's help ends with examples — keep them runnable.
+
+Output is settled by `_output()` **before** any analysis: `-f` / `-o` agree or it is exit 2, an
+image needs `-o`, and a missing image tool fails in a second rather than after the build. The
+error hints (`_layout_hint`: a package passed instead of its parent, a src layout, the packages
+that do exist) are built in the CLI from `PackageNotFoundError` — `extract/source.py` carries the
+package name, not the wording.
+
+Failures are one line on stderr with no
 traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
 matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
-for an analysis that could not finish (`history`: images that could not be drawn). `diff` exits
-like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". The diff
+for an analysis that could not finish (`history`: images that could not be drawn; `draw`: an image the tool refused). `diff` exits
+like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". A
+"change" is structural, or — only with `--metric` — a shown metric whose value moved; without
+`--metric` the exit code is exactly as before. `diff --metric` is validated by the same
+`build_render_plan` as `draw` (exit 2), a snapshot lacking the metric is exit 2, and `diff --base`
+computes the requested metrics on both git sides (nothing else). The diff
 diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
 details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all
 the work is done.

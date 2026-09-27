@@ -1,0 +1,35 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+
+legend top left
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
+  metric: old → new (difference)
+endlegend
+
+package pkg_a {
+  class pkg_a.core <<(M, #2ECC71)>> {
+    fan_in: 1 → 0 (-1)
+    fan_out: 1
+  }
+  class pkg_a.services <<(M, #2ECC71)>> {
+    fan_in: 0
+    fan_out: 1
+  }
+}
+package pkg_b {
+  class pkg_b.util <<(M, #2ECC71)>> {
+    fan_in: 2
+    fan_out: 1 → 0 (-1)
+  }
+}
+
+pkg_a -[#95A5A6,dashed]-> pkg_b : cycle resolved edge_weight=2/1 → 2
+@enduml
+

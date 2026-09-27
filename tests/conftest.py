@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import pytest
+
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
 from arch_blueprint.domain.node import Node, NodeKind
 
@@ -35,6 +37,8 @@ DEEP_MODULES = ["-m", "deep.**"]
 # Deliberately not the order metrics are registered in ``default_registry`` — this pins
 # that metric blocks follow CLI argument order, which ``SHOW_METRICS`` cannot detect
 # because it happens to match registration order.
+#: The notes listing a cycle's imports are opt-in in every command.
+CYCLE_DETAILS = ["--cycle-details"]
 SHOW_METRICS_REORDERED = [
     "--metric",
     "instability",
@@ -154,7 +158,8 @@ class Scenario:
 
     The golden file for a scenario lives at ``golden/<fmt>/<name>.<fmt>`` and is
     produced by appending ``-f <fmt>`` to ``args``. ``render_args`` are the
-    options that apply to drawing only, so they apply unchanged to ``render``.
+    options that apply to drawing only, so they apply unchanged to drawing the
+    selection's snapshot.
     """
 
     name: str
@@ -173,24 +178,34 @@ class Scenario:
 SCENARIOS = [
     Scenario("example", EXAMPLE),
     Scenario("cyclic", CYCLIC),
-    Scenario("cyclic_nodetails", CYCLIC, ["--no-cycle-details"]),
-    Scenario("metrics", CYCLIC, SHOW_METRICS),
+    # The notes listing a cycle's imports are opt-in; the metric scenarios on the
+    # cyclic fixture keep them, pinning how the two share a connection.
+    Scenario("cyclic_details", CYCLIC, CYCLE_DETAILS),
+    Scenario("metrics", CYCLIC, [*SHOW_METRICS, *CYCLE_DETAILS]),
     Scenario("link_metrics", EXAMPLE, SHOW_LINK_METRIC),
-    Scenario("metrics_reordered", CYCLIC, SHOW_METRICS_REORDERED),
+    Scenario(
+        "metrics_reordered",
+        CYCLIC,
+        [*SHOW_METRICS_REORDERED, *CYCLE_DETAILS],
+    ),
     Scenario("deep", DEEP),
     # A link metric on a connection that is a cycle: two directions, two values.
-    Scenario("cyclic_link_metrics", CYCLIC, SHOW_LINK_METRIC),
+    Scenario("cyclic_link_metrics", CYCLIC, [*SHOW_LINK_METRIC, *CYCLE_DETAILS]),
     Scenario("init_imports", INIT_IMPORTS),
     Scenario("ancestor_dep", ANCESTOR_DEP),
     Scenario("example_module_links", EXAMPLE_MODULE_LINKS),
-    Scenario("cyclic_module_links", CYCLIC_MODULE_LINKS),
-    Scenario("cyclic_module_links_metrics", CYCLIC_MODULE_LINKS, SHOW_LINK_METRIC),
+    Scenario("cyclic_module_links", CYCLIC_MODULE_LINKS, CYCLE_DETAILS),
+    Scenario(
+        "cyclic_module_links_metrics",
+        CYCLIC_MODULE_LINKS,
+        [*SHOW_LINK_METRIC, *CYCLE_DETAILS],
+    ),
     Scenario("deep_module_links", DEEP_MODULE_LINKS),
     Scenario("ancestor_dep_module_links", ANCESTOR_DEP_MODULE_LINKS),
-    Scenario("tangle", TANGLE),
+    Scenario("tangle", TANGLE, CYCLE_DETAILS),
     Scenario("tangle_module_links", TANGLE_MODULE_LINKS),
-    Scenario("tangle_nodetails", TANGLE_MODULE_LINKS, ["--no-cycle-details"]),
-    Scenario("knot", KNOT),
+    Scenario("tangle_module_links_details", TANGLE_MODULE_LINKS, CYCLE_DETAILS),
+    Scenario("knot", KNOT, CYCLE_DETAILS),
     Scenario("deep_packages_module_links", DEEP_PACKAGES_MODULE_LINKS),
     Scenario("package_nodes_metrics", PACKAGE_NODES, SHOW_METRICS),
 ]
@@ -211,7 +226,11 @@ class DiffCase:
     old: Path
     new: Path
     args: tuple[str, ...] = ()
+    #: 0 nothing changed, 1 something did — structure, or a shown metric.
+    exit_code: int = 1
 
+
+SHOW_DIFF_METRICS = ("--metric", "fan_in", "--metric", "fan_out", *SHOW_LINK_METRIC)
 
 DIFF_CASES = [
     # Removed module with its link, added module with its link, drawn over the
@@ -306,6 +325,51 @@ DIFF_CASES = [
         "no_changes",
         GOLDEN_DIR / "json" / "example.json",
         GOLDEN_DIR / "json" / "example.json",
+        exit_code=0,
+    ),
+    # Metrics on added, removed and unchanged modules and links: a changed
+    # value reads old → new, an added one its new value, a removed one its old.
+    DiffCase(
+        "metrics",
+        GOLDEN_DIR / "json" / "example.json",
+        _DIFF_FIXTURES / "example_changed.json",
+        SHOW_DIFF_METRICS,
+    ),
+    # A link metric on a new cycle: one direction before, both after.
+    DiffCase(
+        "metrics_new_cycle",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        SHOW_DIFF_METRICS,
+    ),
+    # ... and on a resolved one, drawn as the direction that remains.
+    DiffCase(
+        "metrics_resolved_cycle",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_one_way.json",
+        SHOW_DIFF_METRICS,
+    ),
+    # One more import inside a link that exists: no structural change, but the
+    # metrics shown move — the cycle's forward/backward among them. Exit 1.
+    DiffCase(
+        "metrics_only",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_weighted.json",
+        (*SHOW_DIFF_METRICS, "--metric", "instability"),
+    ),
+    # With --changes-only the modules and connections whose value moved.
+    DiffCase(
+        "metrics_only_changes_only",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_weighted.json",
+        (*SHOW_DIFF_METRICS, "--changes-only"),
+    ),
+    # The same change without --metric is no change at all: structure only.
+    DiffCase(
+        "metrics_only_unshown",
+        GOLDEN_DIR / "json" / "cyclic.json",
+        _DIFF_FIXTURES / "cyclic_weighted.json",
+        exit_code=0,
     ),
 ]
 
@@ -341,7 +405,13 @@ def run_cli(
     extra_env: Optional[dict[str, str]] = None,
 ) -> CliResult:
     """Run the arch-blueprint CLI end-to-end on a project directory."""
-    return run_command(str(project_dir), *args, check=check, extra_env=extra_env)
+    return run_command(
+        "draw",
+        str(project_dir),
+        *args,
+        check=check,
+        extra_env=extra_env,
+    )
 
 
 def run_command(
@@ -405,3 +475,27 @@ def make_graph(node_ids: Iterable[str], edges: Iterable[Edge]) -> BlueprintGraph
         nodes=[Node(id=node_id, kind=NodeKind.MODULE) for node_id in node_ids],
         edges=frozenset(edges),
     )
+
+
+# --- an image tool stood in for by a shell script on PATH ------------------
+
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="the stand-in tool is a shell script",
+)
+
+#: Every stand-in logs its arguments, one call per line.
+_LOG_CALL = 'echo "$@" >> "$(dirname "$0")/calls"'
+
+
+def stand_in_tool(tmp_path: Path, body: str, name: str = "plantuml") -> dict[str, str]:
+    """Put a shell script named ``name`` first on PATH; return that environment.
+
+    It logs each call to ``tmp_path/bin/calls``, then runs ``body``.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    tool = bin_dir / name
+    tool.write_text(f"#!/bin/sh\n{_LOG_CALL}\n{body}\n")
+    tool.chmod(0o755)
+    return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}

@@ -13,6 +13,7 @@ class EdgeWeightMetric:
     """
 
     name = "edge_weight"
+    description = "how many module imports a connection stands for"
     render: Optional[str] = "edge_label"
 
     def compute(

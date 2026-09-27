@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Union
 
@@ -56,6 +57,31 @@ class Cycle:
     endpoint_to: str
     forward_edges: frozenset[Edge]
     backward_edges: frozenset[Edge]
+
+
+def cycle_metric_values(
+    link_metrics: Mapping[tuple[str, str], Mapping[str, MetricValue]],
+    endpoint_from: str,
+    endpoint_to: str,
+) -> dict[str, MetricValue]:
+    """A cycle connection's link-metric values: both directions, forward first.
+
+    A cycle is one drawn connection standing for two links, so a link metric has
+    two values there. Showing one of them would freeze an arbitrary choice; they
+    are combined as ``forward/backward``, matching the order the cycle's own
+    detail block lists them in. A direction without a value leaves the other.
+    """
+    forward = link_metrics.get((endpoint_from, endpoint_to), {})
+    backward = link_metrics.get((endpoint_to, endpoint_from), {})
+    combined: dict[str, MetricValue] = {}
+    for name in sorted({*forward, *backward}):
+        if name in forward and name in backward:
+            combined[name] = f"{forward[name]}/{backward[name]}"
+        elif name in forward:
+            combined[name] = forward[name]
+        else:
+            combined[name] = backward[name]
+    return combined
 
 
 @dataclass(frozen=True)

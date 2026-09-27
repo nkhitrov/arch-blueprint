@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import replace
+from typing import TypeVar
 
 from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.diff.model import (
@@ -9,10 +10,20 @@ from arch_blueprint.diff.model import (
     CycleChange,
     CycleDelta,
     GraphDiff,
+    MetricChange,
+    MetricChanges,
     TangleDelta,
     shadowed_id,
 )
-from arch_blueprint.domain.graph import BlueprintGraph, Cycle, Edge, Link, Tangle
+from arch_blueprint.domain.graph import (
+    BlueprintGraph,
+    Cycle,
+    Edge,
+    Link,
+    MetricValue,
+    Tangle,
+    cycle_metric_values,
+)
 from arch_blueprint.domain.node import Node
 
 
@@ -21,6 +32,7 @@ def diff_graphs(
     new: BlueprintGraph,
     *,
     changes_only: bool = False,
+    metrics: Collection[str] = (),
 ) -> GraphDiff:
     """Compare two analyzed graphs at the level a diagram shows them.
 
@@ -32,35 +44,48 @@ def diff_graphs(
     cycle that did not change is context. With ``changes_only`` the context is
     exact rather than "everything": the unchanged nodes the changed links'
     imports actually connect, and no unchanged link.
+
+    ``metrics`` names the metrics to compare, read from each side's computed
+    values: every shown node and connection gets a :class:`MetricChange` per
+    metric it has a value for. A value that differs is a change too — with
+    ``changes_only``, a node, link or cycle whose value changed is shown as
+    context, as are the nodes such a link connects. Without ``metrics`` the
+    diff is structure only.
     """
     old_links = _links_by_pair(old)
     new_links = _links_by_pair(new)
     cycle_changes = _cycle_changes(old, new, new_links.keys())
     old_cycles, new_cycles = _cycles_by_key(old), _cycles_by_key(new)
-    context_cycles = (
-        ()
-        if changes_only
-        else tuple(
-            sorted(
-                (new_cycles[key] for key in new_cycles.keys() & old_cycles.keys()),
-                key=lambda c: (c.endpoint_from, c.endpoint_to),
-            ),
-        )
+    both_cycles = sorted(
+        (new_cycles[key] for key in new_cycles.keys() & old_cycles.keys()),
+        key=lambda c: (c.endpoint_from, c.endpoint_to),
+    )
+    context_cycles = tuple(
+        cycle
+        for cycle in both_cycles
+        if not changes_only or _changed(_cycle_values(old, new, cycle, metrics))
     )
     # Every pair a cycle connection stands for, changed or not.
     cycle_keys = {_key(delta.cycle) for delta in cycle_changes}
-    cycle_keys |= {_key(cycle) for cycle in context_cycles}
+    cycle_keys |= {_key(cycle) for cycle in both_cycles}
 
+    both_links = new_links.keys() & old_links.keys()
     link_status: dict[tuple[str, str], ChangeStatus] = {}
     edges: set[Edge] = set()
     groups = [
         (new_links.keys() - old_links.keys(), new_links, ChangeStatus.ADDED),
         (old_links.keys() - new_links.keys(), old_links, ChangeStatus.REMOVED),
+        (
+            {
+                pair
+                for pair in both_links
+                if not changes_only
+                or _changed(_values(old.link_metrics, new.link_metrics, pair, metrics))
+            },
+            new_links,
+            ChangeStatus.CONTEXT,
+        ),
     ]
-    if not changes_only:
-        groups.append(
-            (new_links.keys() & old_links.keys(), new_links, ChangeStatus.CONTEXT),
-        )
     for pairs, links, status in groups:
         for pair in pairs:
             if frozenset(pair) not in cycle_keys:
@@ -79,7 +104,13 @@ def diff_graphs(
         edges |= new_links[pair].edges
 
     kinds = {node.id: node.kind for node in (*old.nodes, *new.nodes)}
-    shown = _node_status(old, new, edges, everything=not changes_only)
+    shown = _node_status(
+        old,
+        new,
+        edges,
+        everything=not changes_only,
+        metrics=metrics,
+    )
     drawn = {node_id: _drawn_id(node_id, shown) for node_id in shown}
     on_old = _Redraw(old, drawn)
     on_new = _Redraw(new, drawn)
@@ -102,6 +133,12 @@ def diff_graphs(
         drawn_edges |= delta_edges
     for cycle in context_cycles:
         drawn_edges |= on_new.cycle_edges(cycle)
+    drawn_context_cycles = tuple(on_new.cycle(cycle) for cycle in context_cycles)
+    # Metric values are read at a side's own endpoints and keyed where drawn.
+    cycles = zip(
+        (*(delta.cycle for delta in cycle_changes), *context_cycles),
+        (*(delta.cycle for delta in drawn_deltas), *drawn_context_cycles),
+    )
 
     graph = BlueprintGraph(
         nodes=[
@@ -118,7 +155,7 @@ def diff_graphs(
         node_status={drawn[node_id]: st for node_id, st in shown.items()},
         link_status=dict(sorted(drawn_links.items())),
         cycle_changes=tuple(drawn_deltas),
-        context_cycles=tuple(on_new.cycle(cycle) for cycle in context_cycles),
+        context_cycles=drawn_context_cycles,
         tangle_changes=tuple(
             TangleDelta(
                 delta.change,
@@ -129,7 +166,75 @@ def diff_graphs(
             for delta in tangle_changes
         ),
         context_tangles=tuple(on_new.tangle(tangle) for tangle in context_tangles),
+        node_metrics=_non_empty(
+            (
+                drawn[node_id],
+                _values(old.node_metrics, new.node_metrics, node_id, metrics),
+            )
+            for node_id in shown
+        ),
+        link_metrics=_non_empty(
+            (
+                side[status][0].pair(pair),
+                _values(old.link_metrics, new.link_metrics, pair, metrics),
+            )
+            for pair, status in link_status.items()
+        ),
+        cycle_metrics=_non_empty(
+            (_key(drawn_cycle), _cycle_values(old, new, cycle, metrics))
+            for cycle, drawn_cycle in cycles
+        ),
     )
+
+
+_Key = TypeVar("_Key", str, tuple[str, str], frozenset[str])
+
+
+def _values(
+    old: Mapping[_Key, Mapping[str, MetricValue]],
+    new: Mapping[_Key, Mapping[str, MetricValue]],
+    key: _Key,
+    metrics: Collection[str],
+) -> dict[str, MetricChange]:
+    """Each named metric's value for ``key`` on both sides, where either has one."""
+    old_values, new_values = old.get(key, {}), new.get(key, {})
+    return {
+        name: MetricChange(old_values.get(name), new_values.get(name))
+        for name in metrics
+        if name in old_values or name in new_values
+    }
+
+
+def _cycle_values(
+    old: BlueprintGraph,
+    new: BlueprintGraph,
+    cycle: Cycle,
+    metrics: Collection[str],
+) -> dict[str, MetricChange]:
+    """A cycle connection's values on both sides, directions combined.
+
+    Oriented as ``cycle`` is, on both sides; on a side where the pair is not a
+    cycle the one direction there is its value, as a plain arrow's would be. So
+    a new cycle reads ``2 → 2/1`` and a resolved one ``3/1 → 4``.
+    """
+    pair = (cycle.endpoint_from, cycle.endpoint_to)
+    key = _key(cycle)
+    return _values(
+        {key: cycle_metric_values(old.link_metrics, *pair)},
+        {key: cycle_metric_values(new.link_metrics, *pair)},
+        key,
+        metrics,
+    )
+
+
+def _changed(values: Mapping[str, MetricChange]) -> bool:
+    return any(change.changed for change in values.values())
+
+
+def _non_empty(
+    items: Iterable[tuple[_Key, dict[str, MetricChange]]],
+) -> dict[_Key, MetricChanges]:
+    return {key: values for key, values in items if values}
 
 
 def _unchanged_tangle_links(
@@ -337,6 +442,7 @@ def _node_status(
     edges: set[Edge],
     *,
     everything: bool,
+    metrics: Collection[str],
 ) -> dict[str, ChangeStatus]:
     old_ids = {node.id for node in old.nodes}
     new_ids = {node.id for node in new.nodes}
@@ -346,6 +452,10 @@ def _node_status(
     if everything:
         status.update(dict.fromkeys(unchanged, ChangeStatus.CONTEXT))
         return dict(sorted(status.items()))
+    for node_id in unchanged:
+        values = _values(old.node_metrics, new.node_metrics, node_id, metrics)
+        if _changed(values):
+            status[node_id] = ChangeStatus.CONTEXT
     for endpoint in {edge.source for edge in edges} | {edge.target for edge in edges}:
         for node_id in _nodes_for(endpoint, unchanged):
             status[node_id] = ChangeStatus.CONTEXT

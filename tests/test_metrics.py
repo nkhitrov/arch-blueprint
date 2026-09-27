@@ -47,6 +47,7 @@ class _MisdirectedMetric:
     """A node metric pointing at a plugin that draws on links."""
 
     name = "misdirected"
+    description = "points at a link plugin"
     applies_to = ALL_KINDS
     render: Optional[str] = "edge_label"
 
@@ -249,3 +250,9 @@ def test_plan_rejects_plugin_attached_to_the_wrong_side() -> None:
             fmt="puml",
             color_metric="misdirected",
         )
+
+
+def test_every_metric_says_what_it_means() -> None:
+    """``--list-metrics`` prints it: an empty one leaves the user guessing."""
+    for metric in default_registry().metrics():
+        assert metric.description.strip(), metric.name

@@ -13,5 +13,12 @@ package pkg_b {
 }
 
 pkg_a <-[#C0392B,bold]-> pkg_b
+note on link
+  **pkg_a -> pkg_b:**
+  - core → util
+  - services → util
+  **pkg_b -> pkg_a:**
+  - util → core
+end note
 @enduml
 
