@@ -44,6 +44,10 @@ class GrimpSource:
         self.project_dir = project_dir
         self.target_names = target_names
         self._graph: Optional[ImportGraph] = None
+        # Per run, like the graph: module names, located files, top-level specs.
+        self._modules: Optional[frozenset[str]] = None
+        self._module_files: dict[str, Optional[Path]] = {}
+        self._top_level_specs: dict[str, Optional[ModuleSpec]] = {}
 
     @property
     def graph(self) -> ImportGraph:
@@ -95,10 +99,33 @@ class GrimpSource:
 
     def selected_modules(self) -> list[str]:
         """Modules matching the target patterns, with parents of others removed."""
+        return sorted(self._exclude_sub_modules(set(self.matching_modules())))
+
+    def matching_modules(self) -> list[str]:
+        """Every module a target pattern matches, sorted — parents of others too.
+
+        ``pkg.**`` matches ``pkg.sub`` as well as ``pkg.sub.x``: a module node
+        stands for its whole subtree, so :meth:`selected_modules` keeps only the
+        leaves, but the classes in ``pkg/sub/__init__.py`` are nodes of their own.
+        """
         module_names: set[str] = set()
         for name in self.target_names:
             module_names.update(self.graph.find_matching_modules(name))
-        return sorted(self._exclude_sub_modules(module_names))
+        return sorted(module_names)
+
+    def pattern_stems(self) -> list[str]:
+        """The packages a ``pkg.*`` or ``pkg.**`` pattern selects the insides of.
+
+        Neither pattern matches ``pkg`` itself. A module node does not need it —
+        ``pkg`` stands for its subtree — but the classes and functions in
+        ``pkg/__init__.py`` are nodes of their own.
+        """
+        stems: set[str] = set()
+        for name in self.target_names:
+            stem, dot, last = name.rpartition(".")
+            if dot and last in {"*", "**"}:
+                stems.update(self.graph.find_matching_modules(stem))
+        return sorted(stems)
 
     def own_imports_of(self, module: str) -> set[str]:
         """What ``module`` itself imports — for a package, its ``__init__.py``.
@@ -121,6 +148,65 @@ class GrimpSource:
         for descendant in self.graph.find_descendants(module):
             result.update(self.graph.find_modules_directly_imported_by(descendant))
         return result
+
+    def modules_under(self, name: str) -> list[str]:
+        """``name`` and every module below it that the graph holds, sorted.
+
+        Read off the graph's module names rather than ``find_descendants``,
+        which refuses a name the graph does not hold — a PEP 420 namespace
+        package above the packages grimp built.
+        """
+        prefix = f"{name}."
+        return sorted(
+            module
+            for module in self._known_modules()
+            if module == name or module.startswith(prefix)
+        )
+
+    def module_file(self, name: str) -> Optional[Path]:
+        """The file holding module ``name`` — ``x.py`` or ``x/__init__.py``.
+
+        None for a module the graph does not hold (the standard library, a
+        third-party package) and for a namespace package, which has no file.
+        Only the top-level package goes through ``find_spec``: on a dotted name
+        it imports every parent package, i.e. runs the project's code. Below
+        it, the files are looked up across the package's search locations,
+        several of them for a namespace package.
+        """
+        if name not in self._module_files:
+            self._module_files[name] = self._locate(name)
+        return self._module_files[name]
+
+    def _known_modules(self) -> frozenset[str]:
+        """The graph's module names, copied once: grimp builds a new set per call."""
+        if self._modules is None:
+            self._modules = frozenset(self.graph.modules)
+        return self._modules
+
+    def _top_level_spec(self, name: str) -> Optional[ModuleSpec]:
+        if name not in self._top_level_specs:
+            with self._project_importable():
+                self._top_level_specs[name] = self._find_spec(name)
+        return self._top_level_specs[name]
+
+    def _locate(self, name: str) -> Optional[Path]:
+        if name not in self._known_modules():
+            return None
+        top, *rest = name.split(".")
+        spec = self._top_level_spec(top)
+        if spec is None:
+            return None
+        if spec.submodule_search_locations is None:
+            return Path(spec.origin) if spec.origin and not rest else None
+        for location in spec.submodule_search_locations:
+            directory = Path(location).joinpath(*rest)
+            candidates = [directory / "__init__.py"]
+            if rest:
+                candidates.append(directory.with_name(f"{directory.name}.py"))
+            for candidate in candidates:
+                if candidate.is_file():
+                    return candidate
+        return None
 
     def _resolve_grimp_packages(self) -> list[str]:
         packages: list[str] = []

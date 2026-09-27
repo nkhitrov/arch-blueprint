@@ -1,0 +1,12 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+class storage.backend.Backend <<(C, #1ABC9C)>>
+class writer.formatter.format_line <<(F, #1ABC9C)>>
+
+@enduml
+

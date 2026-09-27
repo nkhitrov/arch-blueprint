@@ -5,6 +5,8 @@ top to bottom direction
 hide empty members
 set separator none
 
+title app
+
 legend top left
   unchanged: drawn as on a plain diagram
   <color:#00C853>**+ added**</color> module / dependency (dashed)
@@ -13,9 +15,9 @@ legend top left
   <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
-class app.other <<(M, #2ECC71)>>
-class "app.pkg (module)" as app.pkg.(module) <<(-, #FF1744) removed>> #FF1744;line.dashed
-class app.pkg.child <<(+, #00C853) added>> #00C853;line.dashed
+class "other" as app.other <<(M, #2ECC71)>>
+class "pkg (module)" as app.pkg.(module) <<(-, #FF1744) removed>> #FF1744;line.dashed
+class "pkg.child" as app.pkg.child <<(+, #00C853) added>> #00C853;line.dashed
 
 app.other -[#FF1744,dashed,thickness=2]-> "app.pkg.(module)" : removed
 app.other -[#00C853,dashed,thickness=3]-> app.pkg.child : added

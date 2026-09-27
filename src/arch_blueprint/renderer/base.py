@@ -1,20 +1,21 @@
 from __future__ import annotations
 
+import copy
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import ClassVar, Final, Optional, final
+from typing import Any, ClassVar, Final, Optional, TypeVar, final
 
 from arch_blueprint.domain.graph import (
     BlueprintGraph,
     Cycle,
-    Group,
     MetricValue,
     Tangle,
     cycle_metric_values,
 )
 from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.metrics import RenderContext, RenderPlan
+from arch_blueprint.renderer.layout import Frame, Layout, LayoutItem
 
 # A distinct danger red for cycles; intentionally not one of DEFAULT_OPTIONS'
 # depth_colors so a cycle never visually collides with a node's depth color.
@@ -32,8 +33,10 @@ class RendererOptions:
 
     depth_colors: Sequence[str]
     show_cycle_details: bool = False
-    #: Draw nodes inside the namespaces of their dotted names; off, each node is
-    #: a flat box under its full name (the link level decides, ``Level.nested``).
+    #: Draw nodes inside frames of their dotted names, chains of empty frames
+    #: merged; off, each node is a flat box labelled by its full name less the
+    #: prefix all share, shown as the title (the link level decides,
+    #: ``Level.nested``; ``renderer/layout.py``).
     nested: bool = True
 
     def __post_init__(self) -> None:
@@ -62,60 +65,87 @@ DEFAULT_OPTIONS: Final = RendererOptions(
 )
 
 
-def wrap_groups(
-    groups: Iterable[Group],
+def placed_nodes(
+    layout: Layout,
     rendered: Sequence[tuple[str, str]],
-    format_group: Callable[[str, list[str]], list[str]],
-) -> list[str]:
-    """Wrap rendered ``(node_id, text)`` pairs in their groups' containers.
-
-    A group's block takes the position of its first member, so nodes keep
-    appearing in the order given. Shared by every renderer that draws nodes,
-    diagram and diff alike.
-    """
-    group_of = {member: group.namespace for group in groups for member in group.members}
-    members: dict[str, list[str]] = {}
-    for node_id, text in rendered:
-        namespace = group_of.get(node_id)
-        if namespace is not None:
-            members.setdefault(namespace, []).append(text)
-
-    result: list[str] = []
-    emitted: set[str] = set()
-    for node_id, text in rendered:
-        namespace = group_of.get(node_id)
-        if namespace is None:
-            result.append(text)
-        elif namespace not in emitted:
-            emitted.add(namespace)
-            result.extend(format_group(namespace, members[namespace]))
-    return result
-
-
-def flat_nodes(
-    rendered: Sequence[tuple[str, str]],
-    endpoints: Iterable[str],
+    format_frame: Callable[[Frame, list[str]], list[str]],
     format_facade: Callable[[str], str],
 ) -> list[str]:
-    """Rendered ``(node_id, text)`` pairs, plus every endpoint no node carries.
+    """Rendered ``(node_id, text)`` pairs, placed as ``layout`` says.
 
-    Flat, nothing contains anything, so a package an arrow ends on (its facade,
-    ``__init__.py``) is declared as a node of its own. It goes before the first
-    node under it, shallower first — where its container would have been — and
-    last when no drawn node lies under it. From the endpoints, not the groups: a
-    group needs members of its own, which a facade above another facade lacks.
+    Each frame is written around what it holds; a name no node carries (a flat
+    drawing's package facade) through ``format_facade``. Shared by every
+    renderer that draws nodes, diagram and diff alike.
     """
-    facades = sorted(set(endpoints) - {node_id for node_id, _ in rendered})
-    result: list[str] = []
-    emitted: set[str] = set()
-    for node_id, text in rendered:
-        for facade in facades:  # sorted: a prefix before the names under it
-            if facade not in emitted and node_id.startswith(f"{facade}."):
-                emitted.add(facade)
-                result.append(format_facade(facade))
-        result.append(text)
-    result += [format_facade(facade) for facade in facades if facade not in emitted]
-    return result
+    text = dict(rendered)
+
+    def written(items: tuple[LayoutItem, ...]) -> list[str]:
+        result: list[str] = []
+        for item in items:
+            if isinstance(item, Frame):
+                result.extend(format_frame(item, written(item.items)))
+            else:
+                result.append(text[item] if item in text else format_facade(item))
+        return result
+
+    return written(layout.items)
+
+
+class LaidOut:
+    """What a renderer's hooks spell names through: the drawing's layout.
+
+    A name's key and label in every hook depend on the layout of the drawing
+    at hand, which only ``render`` knows. It draws through a copy carrying it
+    (:func:`laid_out`), so the renderer a caller holds is never changed: it
+    stays stateless and reusable. Read anywhere else — a hook called directly,
+    a ``render`` overridden to call the steps on ``self`` — :attr:`layout`
+    raises rather than drawing every name flat and unlabelled.
+
+    Shared by ``BlueprintRenderer`` and ``DiffRenderer``, and so is the guard
+    against a hook renamed under a subclass (:meth:`__init_subclass__`).
+    """
+
+    _drawing: Optional[Layout] = None
+
+    #: Hooks renamed since; a subclass still overriding one would silently
+    #: stop being called. Old name → what replaced it.
+    _RENAMED_HOOKS: ClassVar[Mapping[str, str]] = {
+        "_format_group": "_format_frame(frame, items)",
+    }
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        for old, new in LaidOut._RENAMED_HOOKS.items():
+            if old in vars(cls):
+                msg = (
+                    f"{cls.__name__} overrides '{old}', which is never called any "
+                    f"more: override '{new}' instead"
+                )
+                raise TypeError(msg)
+
+    @property
+    def layout(self) -> Layout:
+        """How the drawing at hand places and labels names; only inside ``render``.
+
+        A hook spells a name through it: :meth:`Layout.path`, :meth:`Layout.label`.
+        """
+        if self._drawing is None:
+            msg = (
+                f"{type(self).__name__}.layout is read outside render(): only the "
+                f"copy render() draws through carries the drawing's layout"
+            )
+            raise RuntimeError(msg)
+        return self._drawing
+
+
+_R = TypeVar("_R", bound=LaidOut)
+
+
+def laid_out(renderer: _R, layout: Layout) -> _R:
+    """A copy of ``renderer`` that draws through ``layout``."""
+    bound = copy.copy(renderer)
+    bound._drawing = layout  # noqa: SLF001 - the one place it is set
+    return bound
 
 
 @dataclass(frozen=True)
@@ -185,7 +215,7 @@ def decorate_link(
     return LinkDecoration(labels=tuple(labels), styles=tuple(styles))
 
 
-class BlueprintRenderer(ABC):
+class BlueprintRenderer(LaidOut, ABC):
     """ABC using Template Method pattern for rendering architecture diagrams."""
 
     #: Output format id (``"puml"`` / ``"d2"``) passed to render plugins.
@@ -211,17 +241,39 @@ class BlueprintRenderer(ABC):
         self.plan = plan
         self.options = options or DEFAULT_OPTIONS
 
+    @final
     def render(self, graph: BlueprintGraph) -> str:
-        """Template method: orchestrates the rendering algorithm."""
+        """Template method: orchestrates the rendering algorithm.
+
+        Drawn by a copy laid out for ``graph`` (:func:`laid_out`), so this
+        renderer itself is never changed. Final: the hooks read the layout,
+        which only this sets.
+        """
+        # The same class: its own template, on the copy that carries the layout.
+        return laid_out(self, self._layout(graph))._draw(graph)  # noqa: SLF001
+
+    def _draw(self, graph: BlueprintGraph) -> str:
         nodes_output = self._render_nodes(graph)
         links_output, deferred = self._render_links(graph)
         return self._combine_output(nodes_output, links_output, deferred)
 
-    def _render_nodes(self, graph: BlueprintGraph) -> list[str]:
-        """Render every node, wrapping those the analyzer assigned to a group.
+    def _layout(self, graph: BlueprintGraph) -> Layout:
+        """Frames (nested) or the shared prefix (flat) of what ``graph`` draws."""
+        endpoints = {end for link in graph.links for end in (link.source, link.target)}
+        endpoints.update(
+            member for tangle in graph.tangles for member in tangle.members
+        )
+        return Layout.build(
+            [node.id for node in graph.nodes],
+            endpoints,
+            nested=self.options.nested,
+        )
 
-        A group's block takes the position of its first member, so nodes keep
-        appearing in the order the extractor produced them.
+    def _render_nodes(self, graph: BlueprintGraph) -> list[str]:
+        """Render every node, placed in its frame, in the order the extractor made.
+
+        A frame takes the position of its first node, so nodes keep appearing
+        in the order the extractor produced them.
         """
         rendered: list[tuple[str, str]] = []
         for node in graph.nodes:
@@ -234,13 +286,12 @@ class BlueprintRenderer(ABC):
                 self._render_metric_blocks(node, metrics),
             )
             rendered.append((node.id, text))
-        if self.options.nested:
-            return wrap_groups(graph.groups, rendered, self._format_group)
-        endpoints = {end for link in graph.links for end in (link.source, link.target)}
-        endpoints.update(
-            member for tangle in graph.tangles for member in tangle.members
+        return placed_nodes(
+            self.layout,
+            rendered,
+            self._format_frame,
+            self._format_facade,
         )
-        return flat_nodes(rendered, endpoints, self._format_facade)
 
     def _format_facade(self, namespace: str) -> str:
         """A package an arrow ends on, drawn flat: a node like any other.
@@ -358,20 +409,20 @@ class BlueprintRenderer(ABC):
     def _decorate(self, values: Mapping[str, MetricValue]) -> LinkDecoration:
         return decorate_link(self.plan, values)
 
-    def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
-        """Wrap the nodes belonging to one namespace; by default, do not wrap.
+    def _format_frame(self, frame: Frame, items: list[str]) -> list[str]:
+        """Wrap what one frame holds (nested); by default, do not wrap.
 
         Deliberately concrete rather than abstract: a format whose own syntax
-        already nests by dotted name (D2 does) needs no container, and adding an
-        abstract method would break every renderer outside this package — the
-        extension point the docs advertise.
+        already nests by key (D2 does, a key spelled through ``self.layout``)
+        needs no container, and adding an abstract method would break every
+        renderer outside this package — the extension point the docs advertise.
         """
-        return nodes
+        return items
 
     def _format_tangle(self, tangle: Tangle) -> Optional[CycleRender]:
         """The note listing a longer cycle's imports; by default, none.
 
-        Concrete for the same reason as ``_format_group``: the cycle is still
+        Concrete for the same reason as ``_format_frame``: the cycle is still
         marked on its links through ``cyclic_link_styles``.
         """
         return None

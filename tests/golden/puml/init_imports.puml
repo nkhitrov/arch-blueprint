@@ -3,9 +3,10 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
-package storage {
-  class storage.backend <<(M, #2ECC71)>>
+package "storage" as storage {
+  class "backend" as storage.backend <<(M, #2ECC71)>>
 }
 class writer <<(M, #3498DB)>>
 

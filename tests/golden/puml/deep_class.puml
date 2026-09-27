@@ -1,0 +1,20 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+title deep
+
+class "api.v1.handlers.handle" as deep.api.v1.handlers.handle <<(F, #9B59B6)>>
+class "api.v1.schemas.dump" as deep.api.v1.schemas.dump <<(F, #9B59B6)>>
+class "core.models.Item" as deep.core.models.Item <<(C, #F39C12)>>
+class "core.services.load" as deep.core.services.load <<(F, #F39C12)>>
+
+deep.api.v1.handlers.handle ---> deep.api.v1.schemas.dump
+deep.api.v1.handlers.handle ---> deep.core.services.load
+deep.api.v1.schemas.dump ---> deep.core.models.Item
+deep.core.services.load ---> deep.core.models.Item
+@enduml
+

@@ -1,0 +1,113 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 2,
+  "links": "class",
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "deep.api.v1.handlers.handle",
+      "kind": "function"
+    },
+    {
+      "id": "deep.api.v1.schemas.dump",
+      "kind": "function"
+    },
+    {
+      "id": "deep.core.models.Item",
+      "kind": "class"
+    },
+    {
+      "id": "deep.core.services.load",
+      "kind": "function"
+    }
+  ],
+  "edges": [
+    {
+      "source": "deep.api.v1.handlers.handle",
+      "target": "deep.api.v1.schemas.dump",
+      "source_endpoint": "deep.api.v1.handlers.handle",
+      "target_endpoint": "deep.api.v1.schemas.dump"
+    },
+    {
+      "source": "deep.api.v1.handlers.handle",
+      "target": "deep.core.services.load",
+      "source_endpoint": "deep.api.v1.handlers.handle",
+      "target_endpoint": "deep.core.services.load"
+    },
+    {
+      "source": "deep.api.v1.schemas.dump",
+      "target": "deep.core.models.Item",
+      "source_endpoint": "deep.api.v1.schemas.dump",
+      "target_endpoint": "deep.core.models.Item"
+    },
+    {
+      "source": "deep.core.services.load",
+      "target": "deep.core.models.Item",
+      "source_endpoint": "deep.core.services.load",
+      "target_endpoint": "deep.core.models.Item"
+    }
+  ],
+  "facade_edges": [],
+  "node_metrics": {
+    "deep.api.v1.handlers.handle": {
+      "depth": 5,
+      "fan_in": 0,
+      "fan_out": 2,
+      "instability": 1.0
+    },
+    "deep.api.v1.schemas.dump": {
+      "depth": 5,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "deep.core.models.Item": {
+      "depth": 4,
+      "fan_in": 2,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "deep.core.services.load": {
+      "depth": 4,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "deep.api.v1.handlers.handle",
+      "target": "deep.api.v1.schemas.dump",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "deep.api.v1.handlers.handle",
+      "target": "deep.core.services.load",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "deep.api.v1.schemas.dump",
+      "target": "deep.core.models.Item",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "deep.core.services.load",
+      "target": "deep.core.models.Item",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

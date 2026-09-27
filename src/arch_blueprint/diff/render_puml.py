@@ -21,16 +21,20 @@ from arch_blueprint.diff.render_base import (
     DiffRenderer,
 )
 from arch_blueprint.domain.graph import Cycle, Tangle
+from arch_blueprint.domain.node import Node
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
     CycleRender,
     LinkDecoration,
 )
+from arch_blueprint.renderer.layout import Frame
 from arch_blueprint.renderer.puml import (
+    class_head,
     format_cycle_note,
-    format_package,
+    format_frame,
     format_tangle_note,
     puml_header,
+    spot_letter,
 )
 
 # A changed node: spot letter, stereotype text, fill and a dashed border. The
@@ -79,19 +83,20 @@ class PlantUmlDiffRenderer(DiffRenderer):
 
     fmt = "puml"
 
-    def _format_node(self, node_id: str, status: ChangeStatus, rows: list[str]) -> str:
-        marker = _CHANGED_NODE.get(status) or f"<<(M, {self._depth_color(node_id)})>>"
-        if is_shadowed(node_id):  # quoted: the id's last part is not a name
-            head = f'class "{self._name_of(node_id)}" as {node_id} {marker}'
-        else:
-            head = f"class {node_id} {marker}"
+    def _format_node(self, node: Node, status: ChangeStatus, rows: list[str]) -> str:
+        node_id = node.id
+        marker = (
+            _CHANGED_NODE.get(status)
+            or f"<<({spot_letter(node.kind)}, {self._depth_color(node_id)})>>"
+        )
+        head = class_head(self._name_of(node_id), node_id, marker)
         if not rows:
             return head
         body = "\n".join(f"  {row}" for row in rows)
         return f"{head} {{\n{body}\n}}"
 
-    def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
-        return format_package(namespace, nodes)
+    def _format_frame(self, frame: Frame, items: list[str]) -> list[str]:
+        return format_frame(frame, items)
 
     def _format_link(
         self,
@@ -164,8 +169,7 @@ class PlantUmlDiffRenderer(DiffRenderer):
         return f"legend top left\n{body}\nendlegend"
 
     def _format_empty(self) -> str:
-        header = puml_header(nested=self.options.nested)
-        return f'{header}note "{NO_CHANGES_LABEL}" as no_changes\n@enduml\n'
+        return f'{puml_header()}note "{NO_CHANGES_LABEL}" as no_changes\n@enduml\n'
 
     def _combine_output(
         self,
@@ -176,7 +180,7 @@ class PlantUmlDiffRenderer(DiffRenderer):
     ) -> str:
         nodes_section = "\n".join(nodes)
         links_section = "\n".join(links) + "\n" if links else ""
-        header = puml_header(nested=self.options.nested)
+        header = puml_header(self.layout.title)
         return f"{header}{legend}\n\n{nodes_section}\n\n{links_section}@enduml\n"
 
 

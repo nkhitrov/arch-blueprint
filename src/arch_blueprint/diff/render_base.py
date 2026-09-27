@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import ClassVar, Final, Optional
+from typing import ClassVar, Final, Optional, final
 
 from arch_blueprint.diff.model import (
     SHADOWED_SUFFIX,
@@ -18,18 +18,20 @@ from arch_blueprint.diff.model import (
     is_shadowed,
 )
 from arch_blueprint.domain.graph import Cycle, MetricValue, Tangle
-from arch_blueprint.domain.node import Node
+from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.metrics import RenderPlan
 from arch_blueprint.renderer.base import (
     DEFAULT_OPTIONS,
     CycleRender,
+    LaidOut,
     LinkDecoration,
     RendererOptions,
     decorate_link,
-    flat_nodes,
+    laid_out,
     metric_rows,
-    wrap_groups,
+    placed_nodes,
 )
+from arch_blueprint.renderer.layout import Frame, Layout
 
 # One palette for every format, so a puml and a d2 diff read the same. What did
 # not change looks as on a plain diagram, so these stay clear of every depth
@@ -75,10 +77,10 @@ def _difference(old: MetricValue, new: MetricValue) -> Optional[str]:
     return f"{round(new - old, 6):+g}"
 
 
-class DiffRenderer(ABC):
+class DiffRenderer(LaidOut, ABC):
     """Template Method for drawing a :class:`GraphDiff`, like ``BlueprintRenderer``.
 
-    Stateless: the fixed algorithm is legend, nodes (wrapped in their groups),
+    Stateless: the fixed algorithm is legend, nodes (placed in their frames),
     links, unchanged cycles, then changed cycles. What did not change is drawn
     as on a plain diagram — node fill by depth from ``options`` — so the changes
     read against the picture the reader knows. An empty diff is still a valid
@@ -109,25 +111,47 @@ class DiffRenderer(ABC):
         self.options = options
         self.plan = plan
 
+    @final
     def render(self, diff: GraphDiff) -> str:
-        """Template method: orchestrates the diff rendering algorithm."""
+        """Template method: orchestrates the diff rendering algorithm.
+
+        Drawn by a copy laid out for ``diff``, as ``BlueprintRenderer.render``.
+        """
+        # The same class: its own template, on the copy that carries the layout.
+        return laid_out(self, self._layout(diff))._render(diff)  # noqa: SLF001
+
+    def _layout(self, diff: GraphDiff) -> Layout:
+        """The layout a plain diagram of the shown nodes and connections has.
+
+        Flat, the prefix is worked out on the modules shadowed nodes stand for.
+        """
+        return Layout.build(
+            [node.id for node in diff.graph.nodes],
+            _drawn_endpoints(diff),
+            nested=self.options.nested,
+            base=_unshadowed,
+        )
+
+    def _render(self, diff: GraphDiff) -> str:
         if diff.is_empty and not diff.graph.nodes:
             return self._format_empty()
         rendered = [
             (
                 node.id,
                 self._format_node(
-                    node.id,
+                    node,
                     diff.node_status[node.id],
                     self._metric_rows(node, diff.node_metrics.get(node.id, {})),
                 ),
             )
             for node in diff.graph.nodes
         ]
-        if self.options.nested:
-            nodes = wrap_groups(diff.graph.groups, rendered, self._format_group)
-        else:
-            nodes = flat_nodes(rendered, _drawn_endpoints(diff), self._format_facade)
+        nodes = placed_nodes(
+            self.layout,
+            rendered,
+            self._format_frame,
+            self._format_facade,
+        )
         # Every connection at the place a plain diagram declares it — by its
         # first endpoint pair — so the layout matches the plain diagram's: the
         # layout engine places things by declaration order.
@@ -218,27 +242,32 @@ class DiffRenderer(ABC):
         return self.options.get_color_for_depth(depth_of(node_id))
 
     def _name_of(self, node_id: str) -> str:
-        """What a node is labelled: its own name, or its full name when flat.
+        """What a node is labelled: as in its frame, or less the prefix when flat.
 
-        Flat, a shadowed module sits beside the package that replaced it under
+        Nested, a shadowed module is labelled by its own name inside the frame
+        of the package that replaced it. Flat, it sits beside that package under
         the same name, so it says which one it is.
         """
+        if not is_shadowed(node_id):
+            return self.layout.label(node_id)
         if self.options.nested:
             return display_name(node_id)
-        if is_shadowed(node_id):
-            return f"{node_id.removesuffix(f'.{SHADOWED_SUFFIX}')} {SHADOWED_SUFFIX}"
-        return node_id
+        return f"{self.layout.label(_unshadowed(node_id))} {SHADOWED_SUFFIX}"
 
-    def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
-        """Wrap one namespace's nodes; by default, do not wrap (D2 nests itself)."""
-        return nodes
+    def _format_frame(self, frame: Frame, items: list[str]) -> list[str]:
+        """Wrap what one frame holds; by default, do not wrap (D2 nests itself)."""
+        return items
 
     def _format_facade(self, namespace: str) -> str:
         """A package an arrow ends on, drawn flat: as an unchanged node."""
-        return self._format_node(namespace, ChangeStatus.CONTEXT, [])
+        return self._format_node(
+            Node(namespace, NodeKind.MODULE),
+            ChangeStatus.CONTEXT,
+            [],
+        )
 
     @abstractmethod
-    def _format_node(self, node_id: str, status: ChangeStatus, rows: list[str]) -> str:
+    def _format_node(self, node: Node, status: ChangeStatus, rows: list[str]) -> str:
         """Format a node marked as added, removed or context, with metric rows."""
         ...
 
@@ -351,6 +380,11 @@ def _first_pair(cycle: Cycle) -> tuple[str, str]:
 
 def _ends(cycle: Cycle) -> frozenset[str]:
     return frozenset({cycle.endpoint_from, cycle.endpoint_to})
+
+
+def _unshadowed(node_id: str) -> str:
+    """The module a drawn id stands for: a shadowed one's, or itself."""
+    return node_id.removesuffix(f".{SHADOWED_SUFFIX}")
 
 
 def _drawn_endpoints(diff: GraphDiff) -> set[str]:

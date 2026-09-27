@@ -4,7 +4,6 @@ from collections.abc import Collection, Iterable, Mapping
 from dataclasses import replace
 from typing import TypeVar
 
-from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.diff.model import (
     ChangeStatus,
     CycleChange,
@@ -146,10 +145,9 @@ def diff_graphs(
         ],
         edges=frozenset(drawn_edges),
     )
-    # Groups only: cycle detection over this partial edge set would report a
+    # Not analyzed: cycle detection over this partial edge set would report a
     # resolved cycle as present. Cycles live in ``cycle_changes`` and
-    # ``context_cycles``.
-    graph.groups = GroupAnalyzer.build(graph)
+    # ``context_cycles``; the frames are the renderer's.
     return GraphDiff(
         graph=graph,
         node_status={drawn[node_id]: st for node_id, st in shown.items()},
@@ -295,7 +293,7 @@ def _draw_delta(
     on_new: _Redraw,
     new_links: Mapping[tuple[str, str], Link],
 ) -> tuple[CycleDelta, set[Edge]]:
-    """A changed cycle at its drawn endpoints, with the edges its groups need."""
+    """A changed cycle at its drawn endpoints, with the edges it stands for."""
     if delta.change is CycleChange.NEW:
         return (
             CycleDelta(delta.change, on_new.cycle(delta.cycle)),

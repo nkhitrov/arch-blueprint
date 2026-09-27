@@ -3,18 +3,23 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
-package api {
-  class api.handlers <<(M, #2ECC71)>>
+package "api" as api {
+  class "handlers" as api.handlers <<(M, #2ECC71)>>
 }
-class nest.a <<(M, #2ECC71)>>
-class nest.b <<(M, #2ECC71)>>
-class ring.a <<(M, #2ECC71)>>
-class ring.b <<(M, #2ECC71)>>
-class ring.c <<(M, #2ECC71)>>
-package services {
-  class services.engine <<(M, #2ECC71)>>
-  class services.other <<(M, #2ECC71)>>
+package "nest" as nest {
+  class "a" as nest.a <<(M, #2ECC71)>>
+  class "b" as nest.b <<(M, #2ECC71)>>
+}
+package "ring" as ring {
+  class "a" as ring.a <<(M, #2ECC71)>>
+  class "b" as ring.b <<(M, #2ECC71)>>
+  class "c" as ring.c <<(M, #2ECC71)>>
+}
+package "services" as services {
+  class "engine" as services.engine <<(M, #2ECC71)>>
+  class "other" as services.other <<(M, #2ECC71)>>
 }
 
 api <-[#C0392B,bold]-> services

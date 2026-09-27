@@ -3,6 +3,7 @@
 
 top to bottom direction
 hide empty members
+set separator none
 
 legend top left
   **No architectural changes**
@@ -13,14 +14,16 @@ legend top left
   <color:#95A5A6>**cycle resolved**</color> dependency that remains
 endlegend
 
-package app1 {
-  class app1.models <<(M, #2ECC71)>>
+package "app1" as app1 {
+  class "models" as app1.models <<(M, #2ECC71)>>
 }
-package app2 {
-  class app2.service <<(M, #2ECC71)>>
+package "app2" as app2 {
+  class "service" as app2.service <<(M, #2ECC71)>>
 }
-package plugins {
-  class plugins.auth.backend <<(M, #1ABC9C)>>
+package "plugins" as plugins {
+  package "auth" as plugins.auth {
+    class "backend" as plugins.auth.backend <<(M, #1ABC9C)>>
+  }
 }
 
 app2 ---> app1

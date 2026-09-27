@@ -5,8 +5,10 @@ top to bottom direction
 hide empty members
 set separator none
 
-class deep.api <<(M, #2ECC71)>>
-class deep.core <<(M, #2ECC71)>>
+title deep
+
+class "api" as deep.api <<(M, #2ECC71)>>
+class "core" as deep.core <<(M, #2ECC71)>>
 
 deep.api ---> deep.core
 @enduml

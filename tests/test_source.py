@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
 from arch_blueprint.analyze.cycles import CycleAnalyzer
+from arch_blueprint.domain.graph import BlueprintGraph
 from arch_blueprint.domain.node import NodeKind
 from arch_blueprint.extract.base import common_depth_namespaces
 from arch_blueprint.extract.layout import detect_roots
 from arch_blueprint.extract.levels import module_level, namespace_level
 from arch_blueprint.extract.module_extractor import ModuleExtractor
+from arch_blueprint.extract.registry import LINK_LEVELS
 from arch_blueprint.extract.source import GrimpSource
 from tests.conftest import (
     ANCESTOR_DEP_PROJECT,
@@ -234,3 +237,212 @@ def test_module_level_links_node_to_node() -> None:
         ("app2.service", "app1.models"),
         ("app2.service", "plugins.auth.backend"),
     }
+
+
+# --- definition extraction ------------------------------------------------
+
+#: A shop whose classes and functions reference each other across modules, a
+#: package facade re-export and a package ``__init__.py`` that defines a class.
+_SHOP = {
+    "shop/__init__.py": "from shop.models import User\n",
+    "shop/models.py": (
+        "class User:\n"
+        "    @classmethod\n"
+        "    def create(cls) -> 'User':\n"
+        "        return cls()\n"
+        "\n"
+        "class Order:\n"
+        "    owner: User\n"
+        "\n"
+        "def make_user() -> User:\n"
+        "    return User.create()\n"
+    ),
+    "shop/service.py": (
+        "from shop import User\n"
+        "from shop.models import Order, make_user\n"
+        "\n"
+        "class Service:\n"
+        "    def run(self) -> None:\n"
+        "        make_user()\n"
+        "\n"
+        "class Checkout:\n"
+        "    def __init__(self, user: User) -> None:\n"
+        "        self.order = Order()\n"
+        "\n"
+        "def report():\n"
+        "    return Checkout\n"
+    ),
+    "shop/sub/__init__.py": "class Base:\n    pass\n",
+    "shop/sub/worker.py": (
+        "from shop.sub import Base\n"
+        "import json\n"
+        "\n"
+        "class Worker(Base):\n"
+        "    def dump(self) -> str:\n"
+        "        return json.dumps({})\n"
+    ),
+}
+
+
+def _shop(root: Path) -> GrimpSource:
+    for name, text in _SHOP.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    return GrimpSource(str(root), ["shop.**"])
+
+
+def _extract(root: Path) -> BlueprintGraph:
+    """The shop at the class level: classes and module-level functions."""
+    return LINK_LEVELS["class"].extractor(_shop(root)).extract()
+
+
+def test_class_extractor_nodes_are_the_definitions_sorted_by_id(
+    tmp_path: Path,
+) -> None:
+    """Sorted, as module nodes are: a diff declares its nodes in id order."""
+    graph = _extract(tmp_path)
+    assert [(node.id, node.kind) for node in graph.nodes] == [
+        ("shop.models.Order", NodeKind.CLASS),
+        ("shop.models.User", NodeKind.CLASS),
+        ("shop.models.make_user", NodeKind.FUNCTION),
+        ("shop.service.Checkout", NodeKind.CLASS),
+        ("shop.service.Service", NodeKind.CLASS),
+        ("shop.service.report", NodeKind.FUNCTION),
+        # a package `pkg.**` matches holds definitions of its own
+        ("shop.sub.Base", NodeKind.CLASS),
+        ("shop.sub.worker.Worker", NodeKind.CLASS),
+    ]
+
+
+def test_class_extractor_links_definition_to_definition(tmp_path: Path) -> None:
+    """Resolved through the facade; no self-reference, nothing outside the project.
+
+    ``Service`` only calls ``make_user``, a function that uses ``User``: the
+    function is a node, so the chain is two arrows through it.
+    """
+    graph = _extract(tmp_path)
+    assert {(edge.source, edge.target) for edge in graph.edges} == {
+        ("shop.models.Order", "shop.models.User"),
+        ("shop.models.make_user", "shop.models.User"),
+        ("shop.service.Service", "shop.models.make_user"),
+        ("shop.service.Checkout", "shop.models.User"),
+        ("shop.service.Checkout", "shop.models.Order"),
+        ("shop.service.report", "shop.service.Checkout"),
+        ("shop.sub.worker.Worker", "shop.sub.Base"),
+    }
+    assert all(
+        (edge.source_endpoint, edge.target_endpoint) == (edge.source, edge.target)
+        for edge in graph.edges
+    )
+    assert graph.facade_edges == frozenset()
+
+
+def test_definition_extractor_leaves_no_modules_behind(tmp_path: Path) -> None:
+    (tmp_path / "shop").mkdir()
+    (tmp_path / "shop" / "boom.py").write_text("raise RuntimeError\n")
+    before = set(sys.modules)
+    _extract(tmp_path)
+    assert not any(name.startswith("shop") for name in set(sys.modules) - before)
+
+
+@pytest.mark.parametrize("pattern", ["app.*", "app.**"])
+def test_definitions_of_the_root_facade_are_nodes(tmp_path: Path, pattern: str) -> None:
+    """``app.*`` never matches ``app``, but ``app/__init__.py`` defines things."""
+    (tmp_path / "app" / "config").mkdir(parents=True)
+    (tmp_path / "app" / "__init__.py").write_text(
+        "from app.config.core import Config\ndef settings() -> Config:\n    pass\n",
+    )
+    (tmp_path / "app" / "config" / "__init__.py").write_text("")
+    (tmp_path / "app" / "config" / "core.py").write_text("class Config:\n    pass\n")
+    source = GrimpSource(str(tmp_path), [pattern])
+    graph = LINK_LEVELS["class"].extractor(source).extract()
+    assert [node.id for node in graph.nodes] == [
+        "app.config.core.Config",
+        "app.settings",
+    ]
+    assert {(e.source, e.target) for e in graph.edges} == {
+        ("app.settings", "app.config.core.Config"),
+    }
+
+
+def test_definition_named_like_a_submodule_is_no_frame(tmp_path: Path) -> None:
+    """``pkg.mod`` cannot be a box and the frame of ``pkg/mod.py``'s classes."""
+    (tmp_path / "pkg" / "sub").mkdir(parents=True)
+    (tmp_path / "pkg" / "__init__.py").write_text(
+        "from pkg.mod import X\n"
+        "class mod:\n"
+        "    def f(self) -> X:\n"
+        "        pass\n"
+        "def sub() -> 'mod':\n"
+        "    pass\n",
+    )
+    (tmp_path / "pkg" / "mod.py").write_text(
+        "import pkg\nclass X:\n    pass\nclass Y(X):\n    x: pkg.mod\n",
+    )
+    (tmp_path / "pkg" / "sub" / "__init__.py").write_text("")
+    source = GrimpSource(str(tmp_path), ["pkg"])
+    graph = LINK_LEVELS["class"].extractor(source).extract()
+    assert [node.id for node in graph.nodes] == [
+        "pkg.__init__.mod",
+        "pkg.__init__.sub",  # a package without a definition is still a module
+        "pkg.mod.X",
+        "pkg.mod.Y",
+    ]
+    assert {(e.source, e.target) for e in graph.edges} == {
+        ("pkg.__init__.mod", "pkg.mod.X"),
+        ("pkg.__init__.sub", "pkg.__init__.mod"),
+        ("pkg.mod.Y", "pkg.mod.X"),
+        ("pkg.mod.Y", "pkg.__init__.mod"),
+    }
+
+
+def test_libcst_is_loaded_only_at_a_definition_level() -> None:
+    """A module in ``sys.modules`` is what ``find_spec`` finds first.
+
+    Loading libcst at startup would draw the installed copy for a project named
+    ``libcst`` at every level, as the running ``arch_blueprint`` is (CLAUDE.md).
+    """
+    code = "import sys, arch_blueprint.__main__; print('libcst' in sys.modules)"
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "False"
+
+
+# --- registered levels ----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("level", "kinds", "nested"),
+    [
+        ("class", {NodeKind.CLASS, NodeKind.FUNCTION}, False),
+        ("class-grouped", {NodeKind.CLASS, NodeKind.FUNCTION}, True),
+    ],
+)
+def test_definition_levels(
+    tmp_path: Path,
+    level: str,
+    kinds: set[NodeKind],
+    *,
+    nested: bool,
+) -> None:
+    registered = LINK_LEVELS[level]
+    graph = registered.extractor(_shop(tmp_path)).extract()
+    assert {node.kind for node in graph.nodes} == kinds
+    assert registered.nested == nested
+
+
+@pytest.mark.parametrize(
+    ("level", "nested"),
+    [("namespace", True), ("module", False)],
+)
+def test_module_levels_are_unchanged(level: str, *, nested: bool) -> None:
+    registered = LINK_LEVELS[level]
+    source = GrimpSource(str(EXAMPLE_PROJECT), ["app1.*", "app2.*"])
+    graph = registered.extractor(source).extract()
+    assert {node.kind for node in graph.nodes} == {NodeKind.MODULE}
+    assert registered.nested == nested

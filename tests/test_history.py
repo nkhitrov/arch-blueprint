@@ -111,7 +111,7 @@ def test_album_has_a_frame_per_graph_change(repo: Path) -> None:
     assert "legend" not in first.read_text(encoding="utf-8")
     # The others: the whole graph, with the change marked on it.
     assert "NEW CYCLE" in cycle.read_text(encoding="utf-8")
-    assert "class pkg_a.core " in cycle.read_text(encoding="utf-8")
+    assert "as pkg_a.core " in cycle.read_text(encoding="utf-8")
     # A quick look: the cycle's imports are not listed.
     assert "note " not in cycle.read_text(encoding="utf-8")
     index = (repo / "album" / "index.md").read_text(encoding="utf-8")
@@ -193,7 +193,7 @@ def test_diff_frame_shows_the_whole_graph(
     [diff] = (repo / "album").glob("0002_*.puml")
     text = diff.read_text(encoding="utf-8")
     assert "pkg_b.util <<(+" in text
-    assert ("class pkg_a.idle " in text) is shown
+    assert ("as pkg_a.idle " in text) is shown
 
 
 def test_every_frame_shows_the_metrics(repo: Path) -> None:

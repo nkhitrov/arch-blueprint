@@ -12,6 +12,7 @@ classifiers = ["Topic :: Multimedia :: Graphics", "Topic :: Utilities"]
 requires-python = ">=3.9"
 dependencies = [
     "grimp>=3.13",
+    "libcst>=1.8.4",
     "networkx>=3.2",
 ]
 
@@ -126,6 +127,10 @@ line-length = 88
 	"D101",   # Missing docstring in public class
 	"D102",   # Missing docstring in public method
 ]
+
+[tool.ruff.lint.pep8-naming]
+# libcst dispatches on the node class name: `visit_ClassDef`, `leave_ClassDef`.
+extend-ignore-names = ["visit_*", "leave_*"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"

@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Final, Optional
 
 from arch_blueprint.diff.model import (
-    SHADOWED_SUFFIX,
     ChangeStatus,
     CycleChange,
     CycleDelta,
@@ -22,6 +21,7 @@ from arch_blueprint.diff.render_base import (
     DiffRenderer,
 )
 from arch_blueprint.domain.graph import Cycle, Tangle
+from arch_blueprint.domain.node import Node
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
     CycleRender,
@@ -30,11 +30,13 @@ from arch_blueprint.renderer.base import (
 from arch_blueprint.renderer.d2 import (
     CYCLE_CONNECTION_TEMPLATE,
     DIRECTION,
-    flat_key,
     format_cycle_note,
     format_cycle_notes_container,
     format_tangle_note,
     format_tangle_ties,
+    format_title,
+    label_line,
+    layout_key,
     quote_label,
 )
 
@@ -98,14 +100,17 @@ class D2LangDiffRenderer(DiffRenderer):
     fmt = "d2"
 
     def _key_of(self, node_id: str) -> str:
-        """A node's D2 key: quoted whole when flat, as a plain diagram's."""
-        return _nested_key(node_id) if self.options.nested else flat_key(node_id)
+        """A node's D2 key, spelled through the layout as a plain diagram's."""
+        return layout_key(self.layout, node_id)
 
-    def _format_node(self, node_id: str, status: ChangeStatus, rows: list[str]) -> str:
+    def _format_node(self, node: Node, status: ChangeStatus, rows: list[str]) -> str:
+        node_id = node.id
         prefix, fill = _CHANGED_NODE.get(status, ("", self._depth_color(node_id)))
         lines = [f"{self._key_of(node_id)}: {{", "  shape: class"]
         if prefix or is_shadowed(node_id):
             lines.append(f'  label: "{prefix}{self._name_of(node_id)}"')
+        else:
+            lines += label_line(self.layout, node_id)
         lines += ["  style: {", f'    fill: "{fill}"']
         if prefix:
             lines.append("    stroke-dash: 5")
@@ -199,7 +204,12 @@ class D2LangDiffRenderer(DiffRenderer):
         links: list[str],
         deferred: list[str],
     ) -> str:
-        sections = [DIRECTION, legend, "\n\n".join(nodes)]
+        sections = [
+            DIRECTION,
+            *format_title(self.layout.title),
+            legend,
+            "\n\n".join(nodes),
+        ]
         if links:
             sections.append("\n".join(links))
         if deferred:
@@ -210,10 +220,3 @@ class D2LangDiffRenderer(DiffRenderer):
 def _cycle_label(label: str, decoration: LinkDecoration) -> str:
     """A cycle's label, then its metric labels, as a plain diagram writes them."""
     return " ".join((label, *decoration.labels))
-
-
-def _nested_key(node_id: str) -> str:
-    """A node's D2 key: a shadowed id's last part is quoted, it is not a name."""
-    if is_shadowed(node_id):
-        return f'{node_id.removesuffix(SHADOWED_SUFFIX)}"{SHADOWED_SUFFIX}"'
-    return node_id

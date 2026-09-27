@@ -19,7 +19,11 @@ from arch_blueprint.renderer.cycles import (
     tangle_note_id,
     tangle_title,
 )
+from arch_blueprint.renderer.layout import Frame
 
+# PlantUML reads the dots of ``class a.b.c`` as packages and nests the class in
+# them. With no separator an id is one opaque name: every frame is declared
+# (``package "label" as id``) and every box labelled, from the drawing's layout.
 PUML_HEADER: Final = textwrap.dedent(
     """\
     @startuml
@@ -27,21 +31,27 @@ PUML_HEADER: Final = textwrap.dedent(
 
     top to bottom direction
     hide empty members
+    set separator none
 
     """,
 )
 
-# PlantUML reads the dots of ``class a.b.c`` as packages and nests the class in
-# them; with no separator the class is one box under its full name.
-_FLAT_HEADER: Final = PUML_HEADER.replace(
-    "hide empty members\n",
-    "hide empty members\nset separator none\n",
-)
+
+def escape_creole(text: str) -> str:
+    """``text`` shown literally where PlantUML reads creole markup.
+
+    A title, a package's label and a note are creole: ``__init__`` there is
+    ``init`` underlined. ``~`` escapes the markup; a quoted class label is not
+    creole and needs none.
+    """
+    return text.replace("__", "~__")
 
 
-def puml_header(*, nested: bool) -> str:
-    """The diagram preamble; ``nested=False`` keeps dotted names flat."""
-    return PUML_HEADER if nested else _FLAT_HEADER
+def puml_header(title: str = "") -> str:
+    """The diagram preamble, with a ``title`` line when the drawing has one."""
+    if not title:
+        return PUML_HEADER
+    return f"{PUML_HEADER}title {escape_creole(title)}\n\n"
 
 
 _CYCLE_NOTE_TEMPLATE: Final = Template(
@@ -57,25 +67,40 @@ _CYCLE_NOTE_TEMPLATE: Final = Template(
     ).rstrip(),
 )
 
-# PlantUML stereotype spot letter per node kind.
-_SPOT_LETTER: Final = {NodeKind.MODULE: "M"}
-_DEFAULT_SPOT: Final = "M"
+
+def spot_letter(kind: NodeKind) -> str:
+    """The letter in a node's spot: what kind of thing the box is."""
+    return kind.letter
 
 
-def format_package(namespace: str, nodes: list[str]) -> list[str]:
-    """Declare ``namespace`` as a package holding the already-rendered ``nodes``."""
-    body = "\n".join(f"  {line}" for node in nodes for line in node.splitlines())
-    return [f"package {namespace} {{\n{body}\n}}"]
+def format_frame(frame: Frame, items: list[str]) -> list[str]:
+    """Declare ``frame`` as a package under its label, holding rendered ``items``.
+
+    Aliased by the full name, so an arrow ending on the frame names it as it
+    names any node: with no separator, the dots in the alias are just letters.
+    No stereotype: on a package PlantUML draws one as literal text inside the
+    frame rather than as a colored spot, which is noise on every container.
+    """
+    body = "\n".join(f"  {line}" for item in items for line in item.splitlines())
+    label = escape_creole(frame.label)
+    return [f'package "{label}" as {frame.namespace} {{\n{body}\n}}']
+
+
+def class_head(label: str, node_id: str, marker: str) -> str:
+    """``class`` declaring ``node_id``, labelled ``label`` where the two differ."""
+    if label == node_id:
+        return f"class {node_id} {marker}"
+    return f'class "{label}" as {node_id} {marker}'
 
 
 def format_cycle_note(cycle: Cycle) -> str:
     """The ``note on link`` listing both directions' imports of a cycle."""
     forward_details, backward_details = cycle_detail_sections(cycle)
     return _CYCLE_NOTE_TEMPLATE.substitute(
-        a=cycle.endpoint_from,
-        b=cycle.endpoint_to,
-        forward_details=forward_details,
-        backward_details=backward_details,
+        a=escape_creole(cycle.endpoint_from),
+        b=escape_creole(cycle.endpoint_to),
+        forward_details=escape_creole(forward_details),
+        backward_details=escape_creole(backward_details),
     )
 
 
@@ -90,10 +115,10 @@ def format_tangle_note(
     imports are listed. ``ref`` spells a member as an arrow endpoint.
     """
     note_id = tangle_note_id(tangle)
-    lines = [f"note as {note_id}", f"  **{tangle_title(tangle)}**"]
+    lines = [f"note as {note_id}", f"  **{escape_creole(tangle_title(tangle))}**"]
     for heading, imports in tangle_detail_sections(tangle):
-        lines.append(f"  **{heading}:**")
-        lines.extend(f"  {line}" for line in imports)
+        lines.append(f"  **{escape_creole(heading)}:**")
+        lines.extend(f"  {escape_creole(line)}" for line in imports)
     lines.append("end note")
     lines.extend(f"{note_id} .. {ref(member)}" for member in tangle.members)
     return "\n".join(lines)
@@ -106,25 +131,16 @@ class PlantUmlRenderer(BlueprintRenderer):
     cyclic_link_styles = (CYCLE_HIGHLIGHT_COLOR, "bold")
 
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
-        spot = _SPOT_LETTER.get(node.kind, _DEFAULT_SPOT)
-        head = f"class {node.id} <<({spot}, {color})>>"
+        marker = f"<<({spot_letter(node.kind)}, {color})>>"
+        head = class_head(self.layout.label(node.id), node.id, marker)
         if not blocks:
             return head
         body = "\n".join(f"  {block}" for block in blocks)
         return f"{head} {{\n{body}\n}}"
 
-    def _format_group(self, namespace: str, nodes: list[str]) -> list[str]:
-        """Declare the namespace as a package so links point at a real element.
-
-        PlantUML would otherwise infer the container from the dotted class names
-        and resolve the arrow to it, which happens to render the same — but only
-        because every endpoint is a prefix of some declared class. Declaring it
-        makes the emitted source say what it means.
-
-        No stereotype: on a package PlantUML draws one as literal text inside the
-        frame rather than as a colored spot, which is noise on every container.
-        """
-        return format_package(namespace, nodes)
+    def _format_frame(self, frame: Frame, items: list[str]) -> list[str]:
+        """Declare the frame as a package, so links point at a real element."""
+        return format_frame(frame, items)
 
     def _format_link(
         self,
@@ -166,5 +182,5 @@ class PlantUmlRenderer(BlueprintRenderer):
     ) -> str:
         nodes_section = "\n".join(nodes)
         links_section = "\n".join(links) + "\n" if links else ""
-        header = puml_header(nested=self.options.nested)
+        header = puml_header(self.layout.title)
         return f"{header}{nodes_section}\n\n{links_section}@enduml\n"

@@ -19,6 +19,7 @@ from arch_blueprint.diff import (
 )
 from arch_blueprint.diff.render_base import ADDED_COLOR, REMOVED_COLOR, RESOLVED_COLOR
 from arch_blueprint.domain.graph import BlueprintGraph, Edge, MetricValue
+from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.extract import DEFAULT_LINK_LEVEL
 from arch_blueprint.metrics import (
     MetricDisplay,
@@ -27,7 +28,11 @@ from arch_blueprint.metrics import (
     default_registry,
     default_renders,
 )
-from arch_blueprint.renderer.base import CYCLE_HIGHLIGHT_COLOR, DEFAULT_OPTIONS
+from arch_blueprint.renderer.base import (
+    CYCLE_HIGHLIGHT_COLOR,
+    DEFAULT_OPTIONS,
+    RendererOptions,
+)
 from arch_blueprint.snapshot import load
 from tests.conftest import (
     _DIFF_FIXTURES,
@@ -233,12 +238,11 @@ def test_import_inside_an_existing_link_is_not_a_link_change() -> None:
     assert _statuses(diff) == {"a.x2": ChangeStatus.ADDED}
 
 
-def test_diff_graph_groups_nodes_under_the_changed_link_endpoints() -> None:
+def test_diff_frames_nodes_under_the_changed_link_endpoints() -> None:
     diff = _changes(_graph(NODES, []), _graph(NODES, [A_TO_B]))
-    assert {group.namespace: group.members for group in diff.graph.groups} == {
-        "a": ("a.x",),
-        "b": ("b.y",),
-    }
+    puml = DIFF_RENDERERS["puml"]().render(diff)
+    assert 'package "a" as a {\n  class "x" as a.x' in puml
+    assert 'package "b" as b {\n  class "y" as b.y' in puml
 
 
 def test_empty_side_is_a_valid_input() -> None:
@@ -289,7 +293,7 @@ def test_module_replaced_by_a_package_is_drawn_inside_it() -> None:
     assert 'class "x" as a.x.(module) <<(-, #FF1744) removed>>' in puml
     assert "class a.x " not in puml
     d2 = DIFF_RENDERERS["d2"]().render(diff)
-    assert 'a.x."(module)": {' in d2
+    assert '"a.x"."(module)": {' in d2
     assert 'label: "- x"' in d2
 
 
@@ -312,7 +316,7 @@ def test_link_to_a_shadowed_module_follows_it_into_the_container() -> None:
     puml = DIFF_RENDERERS["puml"]().render(diff)
     assert 'b.y -[#FF1744,dashed,thickness=2]-> "a.x.(module)" : removed' in puml
     d2 = DIFF_RENDERERS["d2"]().render(diff)
-    assert 'b.y -> a.x."(module)": removed' in d2
+    assert 'b.y -> "a.x"."(module)": removed' in d2
 
 
 def test_link_to_the_package_that_shadows_a_module_stays_on_the_container() -> None:
@@ -327,7 +331,7 @@ def test_link_to_the_package_that_shadows_a_module_stays_on_the_container() -> N
         _graph(["a.x.y", "b.y"], [make_edge("b.y", "a.x.y", "b", "a.x")]),
     )
     assert diff.link_status == {("b", "a.x"): ChangeStatus.CONTEXT}
-    assert "a.x" in {group.namespace for group in diff.graph.groups}
+    assert 'package "a.x" as a.x {' in DIFF_RENDERERS["puml"]().render(diff)
 
 
 def test_resolved_cycle_with_a_shadowed_module_remains_on_the_container() -> None:
@@ -349,7 +353,7 @@ def test_resolved_cycle_with_a_shadowed_module_remains_on_the_container() -> Non
         "b.y",
     }
     assert delta.remaining == ("b.y", "a.x")
-    assert "a.x" in {group.namespace for group in diff.graph.groups}
+    assert 'package "a.x" as a.x {' in DIFF_RENDERERS["puml"]().render(diff)
 
 
 def test_change_colors_stand_apart_from_a_plain_diagram() -> None:
@@ -363,7 +367,7 @@ def test_change_colors_stand_apart_from_a_plain_diagram() -> None:
     [
         (
             "puml",
-            f"class d.w <<(M, {DEFAULT_OPTIONS.get_color_for_depth(2)})>>",
+            f'class "w" as d.w <<(M, {DEFAULT_OPTIONS.get_color_for_depth(2)})>>',
             "<<(+, #00C853) added>> #00C853;line.dashed",
             "a -[#00C853,dashed,thickness=3]-> c : added",
             "a <-[#C0392B,bold]-> b\n",
@@ -441,7 +445,28 @@ _SAME_GRAPHS = [
             DEFAULT_LINK_LEVEL,
         ),
     ),
+    *(
+        (level, lambda level=level: (_class_graph(level), level))
+        for level in ("class", "class-grouped")
+    ),
 ]
+
+
+def _class_graph(links: str) -> BlueprintGraph:
+    """Classes and a cycle among them, drawn at the class level ``links``.
+
+    Nodes sorted by id, as ``DefinitionExtractor`` emits them.
+    """
+    user, order, service = "shop.models.User", "shop.models.Order", "shop.api.Service"
+    graph = BlueprintGraph(
+        nodes=[Node(name, NodeKind.CLASS) for name in sorted((user, order, service))],
+        edges=frozenset(
+            make_edge(source, target, source, target)
+            for source, target in ((service, user), (order, user), (user, order))
+        ),
+    )
+    default_registry().compute_all(graph)
+    return analyze(graph)
 
 
 def _with_metrics(graph: BlueprintGraph) -> BlueprintGraph:
@@ -761,7 +786,13 @@ def test_diff_with_metrics_of_a_graph_with_itself_is_its_plain_diagram(
         links=links,
         code=2,
     )
-    drawn = diff.render(diff_graphs(graph, graph, metrics=_METRICS_SHOWN))
+    drawn = diff.render(
+        diff_graphs(
+            graph,
+            graph,
+            metrics=_METRICS_SHOWN,
+        ),
+    )
     assert _without_legend(drawn) == _without_legend(plain.render(graph))
 
 
@@ -786,3 +817,80 @@ def test_metrics_label_the_links_of_a_new_longer_cycle() -> None:
         " : NEW CYCLE edge_weight=1"
     ) in drawn
     assert ": added edge_weight=1" in drawn
+
+
+# --- frames and prefixes: drawn as a plain diagram of the shown nodes -------
+
+_EP = "app.features.core.ep"
+_RUN, _TASK = f"{_EP}.usecases.Run", f"{_EP}.models.Task"
+_FLAT_DIFF = RendererOptions(depth_colors=DEFAULT_OPTIONS.depth_colors, nested=False)
+
+
+def _added(nodes: list[str], edges: list[Edge], *, nested: bool = True) -> str:
+    """Both diff formats of ``nodes``/``edges`` added to an empty side."""
+    diff = diff_graphs(_graph([], []), _graph(nodes, edges))
+    options = DEFAULT_OPTIONS if nested else _FLAT_DIFF
+    return "\n".join(
+        DIFF_RENDERERS[fmt](options=options).render(diff) for fmt in ("puml", "d2")
+    )
+
+
+def test_diff_merges_a_chain_of_empty_frames() -> None:
+    edge = make_edge(_RUN, _TASK, f"{_EP}.usecases", f"{_EP}.models")
+    output = _added([_RUN, _TASK], [edge])
+    assert f'package "{_EP}" as {_EP} {{\n  package "models"' in output
+    assert 'package "app"' not in output
+    assert f'"{_EP}".models.Task: {{' in output
+    assert f'"{_EP}".usecases -> "{_EP}".models: added' in output
+
+
+def test_diff_keeps_a_frame_an_arrow_ends_on() -> None:
+    edge = make_edge("outside.X", _TASK, "outside", "app.features")
+    output = _added([_TASK, "outside.X"], [edge])
+    assert 'package "app.features" as app.features {' in output
+    assert 'package "core.ep.models" as app.features.core.ep.models {' in output
+    assert '"app.features"."core.ep.models".Task: {' in output
+
+
+def test_diff_keeps_frames_holding_a_node_or_two_frames() -> None:
+    output = _added(["a.X", "a.b.c.Y", "a.d.Z"], [])
+    assert 'package "a" as a {\n  class "X" as a.X' in output
+    assert 'package "b.c" as a.b.c {' in output
+    assert 'a."b.c".Y: {' in output
+
+
+def test_flat_diff_strips_the_shared_prefix_into_the_title() -> None:
+    edge = make_edge("app.x.core.A", "app.x.util.B", "app.x.core.A", "app.x.util.B")
+    output = _added(["app.x.core.A", "app.x.util.B"], [edge], nested=False)
+    assert "set separator none\n\ntitle app.x\n\n" in output
+    assert 'class "core.A" as app.x.core.A <<(+' in output
+    assert "title: app.x {near: top-center; shape: text}" in output
+    assert 'label: "+ core.A"' in output
+    assert '"app.x.core.A" -> "app.x.util.B": added' in output
+
+
+def test_flat_diff_of_a_single_node_keeps_its_own_name() -> None:
+    output = _added(["app.x.A"], [], nested=False)
+    assert "title app.x\n" in output
+    assert 'class "A" as app.x.A' in output
+    assert 'label: "+ A"' in output
+
+
+def test_flat_diff_of_names_differing_at_the_first_part_has_no_title() -> None:
+    output = _added(["a.x.A", "b.x.B"], [], nested=False)
+    assert "title" not in output
+    assert "class a.x.A <<(+" in output
+    assert 'label: "+ a.x.A"' in output
+
+
+def test_flat_diff_labels_a_shadowed_module_less_the_prefix() -> None:
+    diff = diff_graphs(
+        _graph(["r.a.x", "r.b.y"], [make_edge("r.b.y", "r.a.x", "r.b.y", "r.a.x")]),
+        _graph(
+            ["r.a.x.y", "r.b.y"],
+            [make_edge("r.b.y", "r.a.x.y", "r.b.y", "r.a.x.y")],
+        ),
+    )
+    puml = DIFF_RENDERERS["puml"](options=_FLAT_DIFF).render(diff)
+    assert "title r\n" in puml
+    assert 'class "a.x (module)" as r.a.x.(module)' in puml

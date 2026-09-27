@@ -1,17 +1,18 @@
 """Link levels: which pair of names an import edge aggregates on.
 
 An :class:`~arch_blueprint.domain.graph.Edge` keeps the real importer and the
-real imported module; its endpoints are only the key links, cycles, groups and
-link metrics are built on. A level chooses that key, so switching between
+real imported module; its endpoints are only the key links, cycles and link
+metrics are built on. A level chooses that key, so switching between
 namespace arrows and module-to-module arrows changes nothing downstream.
+
+These are the keys of the module extractor; the registered levels, extractor
+and drawing included, are in ``extract/registry.py``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
-from types import MappingProxyType
-from typing import Final, Optional
+from typing import Optional
 
 from arch_blueprint.extract.base import common_depth_namespaces
 
@@ -58,27 +59,3 @@ def module_level(
     if resolved == source or source.startswith(f"{resolved}."):
         return None
     return source, resolved
-
-
-@dataclass(frozen=True)
-class Level:
-    """A registered link level: its endpoints, and how a diagram draws them.
-
-    ``nested`` draws nodes inside the namespaces their dotted names spell, so an
-    arrow can end on a container. Off, every node is a flat box under its full
-    name: node-to-node arrows need no container, and routing them through the
-    frames makes them long.
-    """
-
-    endpoints: LinkLevel
-    nested: bool
-
-
-LINK_LEVELS: Final[MappingProxyType[str, Level]] = MappingProxyType(
-    {
-        "namespace": Level(namespace_level, nested=True),
-        "module": Level(module_level, nested=False),
-    },
-)
-
-DEFAULT_LINK_LEVEL: Final = "namespace"

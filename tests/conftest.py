@@ -23,10 +23,12 @@ INIT_IMPORTS_PROJECT = _FIXTURES / "init_imports"
 ANCESTOR_DEP_PROJECT = _FIXTURES / "ancestor_dep"
 PACKAGE_NODES_PROJECT = _FIXTURES / "package_nodes"
 TANGLE_PROJECT = _FIXTURES / "tangle"
+CLASSES_PROJECT = _FIXTURES / "classes"
 
 INIT_IMPORTS_MODULES = ["-m", "writer", "-m", "storage.*"]
 ANCESTOR_DEP_MODULES = ["-m", "api.*", "-m", "services.*"]
 PACKAGE_NODES_MODULES = ["-m", "shop.*"]
+CLASSES_MODULES = ["-m", "refs.**"]
 TANGLE_MODULES = ["-m", "api.*", "-m", "services.*", "-m", "ring.*", "-m", "nest.*"]
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
@@ -134,6 +136,36 @@ DEEP_PACKAGES_MODULE_LINKS = Selection(
 # node id itself -- degree metrics are right only if they count owning nodes.
 PACKAGE_NODES = Selection("package_nodes", PACKAGE_NODES_PROJECT, PACKAGE_NODES_MODULES)
 
+# Classes and functions as nodes: one arrow per way a class can refer to
+# another (``fixtures/classes/refs/targets.py`` names each after its way),
+# a pair and a ring of classes, and module-level functions between classes.
+CLASSES_CLASS = Selection(
+    "classes_class",
+    CLASSES_PROJECT,
+    CLASSES_MODULES,
+    ["--links", "class"],
+)
+CLASSES_CLASS_GROUPED = Selection(
+    "classes_class_grouped",
+    CLASSES_PROJECT,
+    CLASSES_MODULES,
+    ["--links", "class-grouped"],
+)
+# Older fixtures at the class level: a class re-exported by a package facade
+# nothing uses, and functions deep in nested namespaces leading to a class.
+INIT_IMPORTS_CLASS = Selection(
+    "init_imports_class",
+    INIT_IMPORTS_PROJECT,
+    INIT_IMPORTS_MODULES,
+    ["--links", "class"],
+)
+DEEP_CLASS = Selection(
+    "deep_class",
+    DEEP_PROJECT,
+    DEEP_MODULES,
+    ["--links", "class"],
+)
+
 SELECTIONS = [
     EXAMPLE,
     CYCLIC,
@@ -149,6 +181,10 @@ SELECTIONS = [
     KNOT,
     DEEP_PACKAGES_MODULE_LINKS,
     PACKAGE_NODES,
+    CLASSES_CLASS,
+    CLASSES_CLASS_GROUPED,
+    INIT_IMPORTS_CLASS,
+    DEEP_CLASS,
 ]
 
 
@@ -208,6 +244,21 @@ SCENARIOS = [
     Scenario("knot", KNOT, CYCLE_DETAILS),
     Scenario("deep_packages_module_links", DEEP_PACKAGES_MODULE_LINKS),
     Scenario("package_nodes_metrics", PACKAGE_NODES, SHOW_METRICS),
+    Scenario("classes_class", CLASSES_CLASS),
+    Scenario("classes_class_details", CLASSES_CLASS, CYCLE_DETAILS),
+    Scenario(
+        "classes_class_metrics",
+        CLASSES_CLASS,
+        [*SHOW_METRICS, *SHOW_LINK_METRIC],
+    ),
+    Scenario("classes_class_grouped", CLASSES_CLASS_GROUPED, CYCLE_DETAILS),
+    Scenario(
+        "classes_class_grouped_metrics",
+        CLASSES_CLASS_GROUPED,
+        [*SHOW_METRICS, *SHOW_LINK_METRIC, *CYCLE_DETAILS],
+    ),
+    Scenario("init_imports_class", INIT_IMPORTS_CLASS),
+    Scenario("deep_class", DEEP_CLASS),
 ]
 
 
@@ -363,6 +414,20 @@ DIFF_CASES = [
         GOLDEN_DIR / "json" / "cyclic.json",
         _DIFF_FIXTURES / "cyclic_weighted.json",
         (*SHOW_DIFF_METRICS, "--changes-only"),
+    ),
+    # Classes as nodes: a class added with the arrow to it, an arrow removed
+    # (the decorator dropped), and a pair of classes resolved to one direction.
+    DiffCase(
+        "classes_class",
+        GOLDEN_DIR / "json" / "classes_class.json",
+        _DIFF_FIXTURES / "classes_class_edited.json",
+    ),
+    # The same drawn in module frames, with the metrics that moved.
+    DiffCase(
+        "classes_class_grouped_metrics",
+        GOLDEN_DIR / "json" / "classes_class_grouped.json",
+        _DIFF_FIXTURES / "classes_class_grouped_edited.json",
+        SHOW_DIFF_METRICS,
     ),
     # The same change without --metric is no change at all: structure only.
     DiffCase(

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from arch_blueprint.analyze.cycles import CycleAnalyzer
-from arch_blueprint.analyze.groups import GroupAnalyzer
 from arch_blueprint.domain.graph import build_links
+from arch_blueprint.domain.node import NodeKind
 from tests.conftest import make_edge, make_graph
 
 
@@ -61,60 +63,6 @@ def test_graph_derives_links_on_construction() -> None:
     assert graph.cycles == []
 
 
-# --- grouping -------------------------------------------------------------
-
-
-def test_groups_wrap_endpoints_no_node_is_named_after() -> None:
-    graph = make_graph(
-        ["a.core", "b.util"],
-        [make_edge("a.core", "b.util", "a", "b")],
-    )
-    groups = GroupAnalyzer.build(graph)
-    assert [(g.namespace, g.members) for g in groups] == [
-        ("a", ("a.core",)),
-        ("b", ("b.util",)),
-    ]
-
-
-def test_no_group_for_a_namespace_that_is_a_node() -> None:
-    """``package a.b { class a.b }`` is a syntax error, so it is never built."""
-    graph = make_graph(
-        ["writer", "storage.backend"],
-        [make_edge("writer", "storage.backend", "writer", "storage")],
-    )
-    assert [g.namespace for g in GroupAnalyzer.build(graph)] == ["storage"]
-
-
-def test_nested_namespaces_pick_the_deepest() -> None:
-    """Declaring a node in two containers would silently drop it."""
-    graph = make_graph(
-        ["a.b.c.one", "a.z.two"],
-        [
-            make_edge("a.b.c.one", "a.z.two", "a.b", "a.z"),
-            make_edge("a.b.c.one", "a.z.two", "a.b.c", "a.z"),
-        ],
-    )
-    owners = {
-        member: group.namespace
-        for group in GroupAnalyzer.build(graph)
-        for member in group.members
-    }
-    assert owners["a.b.c.one"] == "a.b.c"
-
-
-def test_nodes_outside_every_endpoint_namespace_stay_ungrouped() -> None:
-    graph = make_graph(
-        ["a.core", "b.util", "lonely"],
-        [make_edge("a.core", "b.util", "a", "b")],
-    )
-    grouped = {m for group in GroupAnalyzer.build(graph) for m in group.members}
-    assert "lonely" not in grouped
-
-
-def test_no_links_means_no_groups() -> None:
-    assert GroupAnalyzer.build(make_graph(["a.core"], [])) == []
-
-
 def _tangles(
     edges: list[tuple[str, str]],
     hidden: tuple[tuple[str, str], ...] = (),
@@ -161,3 +109,16 @@ def test_facade_imports_close_a_cycle_without_being_drawn() -> None:
     assert _tangles(edges, hidden=(("pkg", "pkg.e"),)) == [
         (("h", "pkg", "pkg.e"), [("h", "pkg"), ("pkg.e", "h")], {("pkg", "pkg.e")}),
     ]
+
+
+def test_every_node_kind_has_its_own_letter() -> None:
+    """Declared with the kind: a new one cannot borrow another kind's mark."""
+    letters = [kind.letter for kind in NodeKind]
+    assert all(len(letter) == 1 for letter in letters)
+    assert len(set(letters)) == len(letters)
+
+
+def test_node_kind_is_named_by_its_snapshot_value() -> None:
+    assert all(NodeKind.named(kind.value) is kind for kind in NodeKind)
+    with pytest.raises(ValueError, match="'widget'"):
+        NodeKind.named("widget")

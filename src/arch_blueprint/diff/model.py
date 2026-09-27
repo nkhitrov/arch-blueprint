@@ -125,8 +125,8 @@ class OnCycle(Enum):
 class GraphDiff:
     """What changed between two graphs, with the context it is drawn against.
 
-    ``graph`` holds the shown nodes and the edges of the shown links, so its
-    ``groups`` are the containers those links need. Statuses sit in side maps
+    ``graph`` holds the shown nodes and the edges of the shown links; a
+    renderer frames them as a plain diagram of them. Statuses sit in side maps
     keyed by node id / endpoint pair, as metrics do on a plain graph. Unchanged
     nodes and links are :attr:`ChangeStatus.CONTEXT` — all of them, or with
     ``changes_only`` just the nodes a change touches and no links.

@@ -19,6 +19,7 @@ from arch_blueprint.renderer.cycles import (
     tangle_note_id,
     tangle_title,
 )
+from arch_blueprint.renderer.layout import Layout
 
 #: Top to bottom, as the PlantUML diagrams are drawn: the layers of a project
 #: read downwards, and an album leafs through both formats alike.
@@ -160,9 +161,86 @@ def format_tangle_note(tangle: Tangle) -> str:
     )
 
 
-def flat_key(name: str) -> str:
-    """``name`` as one D2 key, its dots literal: labelled by its full name."""
-    return f'"{name}"'
+#: Names D2 reads as its own keywords wherever they sit in a key — a module or
+#: a function called ``label`` or ``style`` — so they are quoted there. Matched
+#: ignoring case, which covers every spelling D2 0.9 rejects and quotes a few
+#: it would not mind. Only the ones a Python name can spell.
+_D2_KEYWORDS: Final = frozenset(
+    {
+        "_",
+        "animated",
+        "bold",
+        "class",
+        "classes",
+        "constraint",
+        "direction",
+        "fill",
+        "filled",
+        "font",
+        "height",
+        "icon",
+        "italic",
+        "label",
+        "layers",
+        "left",
+        "link",
+        "multiple",
+        "near",
+        "opacity",
+        "scenarios",
+        "shadow",
+        "shape",
+        "steps",
+        "stroke",
+        "style",
+        "tooltip",
+        "top",
+        "underline",
+        "vars",
+        "width",
+    },
+)
+
+
+def key_part(part: str) -> str:
+    """One part of a D2 key, quoted where D2 would misread it bare.
+
+    Quoted when D2 would split it (a merged frame ``app.features.core``, a flat
+    node's full name), read it as a keyword, or reject it bare (a shadowed
+    ``(module)``).
+    """
+    if "." in part or not part.isidentifier() or part.lower() in _D2_KEYWORDS:
+        escaped = part.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return part
+
+
+def layout_key(layout: Layout, name: str) -> str:
+    """``name`` as a D2 key: nested by its frames, a merged chain one part.
+
+    Flat, a drawing has no frames, so the key is the whole name, quoted: one
+    box, its dots literal.
+    """
+    return ".".join(key_part(part) for part in layout.path(name))
+
+
+def format_title(title: str) -> list[str]:
+    """The diagram's title, above everything: the prefix its labels dropped."""
+    if not title:
+        return []
+    return [f"title: {quote_label(title)} {{near: top-center; shape: text}}"]
+
+
+def label_line(layout: Layout, node_id: str, marker: str = "") -> list[str]:
+    """A node's ``label:`` line, only where its key does not already say it.
+
+    D2 labels a node by its last key part; a flat drawing's key is the full
+    name, and the label drops the shared prefix.
+    """
+    label = f"{marker}{layout.label(node_id)}"
+    if label == layout.path(node_id)[-1]:
+        return []
+    return [f'  label: "{label}"']
 
 
 def format_cycle_notes_container(notes: list[str]) -> str:
@@ -186,13 +264,14 @@ class D2LangRenderer(BlueprintRenderer):
     )
 
     def _key(self, endpoint: str) -> str:
-        """A node's key: D2 nests a bare dotted key, a quoted one is one flat box."""
-        return endpoint if self.options.nested else flat_key(endpoint)
+        """A name's key, spelled through the drawing's layout."""
+        return layout_key(self.layout, endpoint)
 
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
         lines = [
             f"{self._key(node.id)}: {{",
             "  shape: class",
+            *label_line(self.layout, node.id),
             "  style: {",
             f'    fill: "{color}"',
             "  }",
@@ -246,7 +325,12 @@ class D2LangRenderer(BlueprintRenderer):
         links: list[str],
         deferred: list[str],
     ) -> str:
-        sections = [DIRECTION, "\n\n".join(nodes), "\n".join(links)]
+        sections = [
+            DIRECTION,
+            *format_title(self.layout.title),
+            "\n\n".join(nodes),
+            "\n".join(links),
+        ]
         if deferred:
             sections.append(format_cycle_notes_container(deferred))
         return "\n".join(sections)

@@ -4,6 +4,8 @@ import json
 
 import pytest
 
+from arch_blueprint.domain.graph import BlueprintGraph
+from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.snapshot import SNAPSHOT_VERSION, SnapshotError, dump, load
 from tests.conftest import (
     SCENARIOS,
@@ -48,11 +50,24 @@ def test_dump_of_a_load_is_the_same_bytes(selection: Selection) -> None:
     assert dump(snapshot.graph, snapshot.metrics, snapshot.links) == text
 
 
-def test_load_re_derives_cycles_and_groups() -> None:
+def test_load_re_derives_cycles() -> None:
     snapshot = load(snapshot_path("cyclic").read_text(encoding="utf-8"))
     [cycle] = snapshot.graph.cycles
     assert {cycle.endpoint_from, cycle.endpoint_to} == {"pkg_a", "pkg_b"}
-    assert {group.namespace for group in snapshot.graph.groups} == {"pkg_a", "pkg_b"}
+
+
+@pytest.mark.parametrize("links", ["class", "class-grouped"])
+def test_load_keeps_the_link_level_and_node_kinds(links: str) -> None:
+    graph = BlueprintGraph(
+        nodes=[
+            Node("shop.api.Service", NodeKind.CLASS),
+            Node("shop.models.User", NodeKind.CLASS),
+        ],
+        edges=frozenset(),
+    )
+    snapshot = load(dump(graph, (), links))
+    assert snapshot.links == links
+    assert {node.kind for node in snapshot.graph.nodes} == {NodeKind.CLASS}
 
 
 def _valid() -> dict[str, object]:
@@ -93,8 +108,8 @@ def _without(key: str) -> dict[str, object]:
             id="links",
         ),
         pytest.param(
-            json.dumps({**_valid(), "links": "class"}),
-            "unknown link level 'class'",
+            json.dumps({**_valid(), "links": "method"}),
+            "unknown link level 'method'",
             id="link_level",
         ),
         pytest.param(

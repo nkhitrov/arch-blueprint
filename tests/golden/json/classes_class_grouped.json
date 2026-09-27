@@ -1,0 +1,869 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 2,
+  "links": "class-grouped",
+  "metrics": [
+    "depth",
+    "edge_weight",
+    "fan_in",
+    "fan_out",
+    "instability"
+  ],
+  "nodes": [
+    {
+      "id": "refs.Farm",
+      "kind": "class"
+    },
+    {
+      "id": "refs.__init__.exported",
+      "kind": "function"
+    },
+    {
+      "id": "refs.consumer.Consumer",
+      "kind": "class"
+    },
+    {
+      "id": "refs.cycles.Chicken",
+      "kind": "class"
+    },
+    {
+      "id": "refs.cycles.Egg",
+      "kind": "class"
+    },
+    {
+      "id": "refs.cycles.Paper",
+      "kind": "class"
+    },
+    {
+      "id": "refs.cycles.Rock",
+      "kind": "class"
+    },
+    {
+      "id": "refs.cycles.Scissors",
+      "kind": "class"
+    },
+    {
+      "id": "refs.exported.impl.ByReExport",
+      "kind": "class"
+    },
+    {
+      "id": "refs.functions.Assembler",
+      "kind": "class"
+    },
+    {
+      "id": "refs.functions.Widget",
+      "kind": "class"
+    },
+    {
+      "id": "refs.functions.build_widget",
+      "kind": "function"
+    },
+    {
+      "id": "refs.functions.handle",
+      "kind": "function"
+    },
+    {
+      "id": "refs.functions.label",
+      "kind": "function"
+    },
+    {
+      "id": "refs.functions.register",
+      "kind": "function"
+    },
+    {
+      "id": "refs.targets.ByAlias",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByAnnotation",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByBase",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByBodyCall",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByCastString",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByDecorator",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByExcept",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByFactoryCall",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByInitParam",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByLocalImport",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByMatchPattern",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByMetaclass",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByModuleAlias",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByModuleVariable",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByNestedClass",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByParam",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByRegistry",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByRelativeImport",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByReturn",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByStringAnnotation",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.ByTypeVarBound",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.NotByMatchCapture",
+      "kind": "class"
+    },
+    {
+      "id": "refs.targets.NotByShadowingParam",
+      "kind": "class"
+    }
+  ],
+  "edges": [
+    {
+      "source": "refs.Farm",
+      "target": "refs.cycles.Chicken",
+      "source_endpoint": "refs.Farm",
+      "target_endpoint": "refs.cycles.Chicken"
+    },
+    {
+      "source": "refs.__init__.exported",
+      "target": "refs.Farm",
+      "source_endpoint": "refs.__init__.exported",
+      "target_endpoint": "refs.Farm"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.exported.impl.ByReExport",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.exported.impl.ByReExport"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByAlias",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByAlias"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByAnnotation",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByAnnotation"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByBase",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByBase"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByBodyCall",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByBodyCall"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByCastString",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByCastString"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByDecorator",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByDecorator"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByExcept",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByExcept"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByFactoryCall",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByFactoryCall"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByInitParam",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByInitParam"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByLocalImport",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByLocalImport"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByMatchPattern",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByMatchPattern"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByMetaclass",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByMetaclass"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByModuleAlias",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByModuleAlias"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByModuleVariable",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByModuleVariable"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByNestedClass",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByNestedClass"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByParam",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByParam"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByRegistry",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByRegistry"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByRelativeImport",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByRelativeImport"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByReturn",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByReturn"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByStringAnnotation",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByStringAnnotation"
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByTypeVarBound",
+      "source_endpoint": "refs.consumer.Consumer",
+      "target_endpoint": "refs.targets.ByTypeVarBound"
+    },
+    {
+      "source": "refs.cycles.Chicken",
+      "target": "refs.cycles.Egg",
+      "source_endpoint": "refs.cycles.Chicken",
+      "target_endpoint": "refs.cycles.Egg"
+    },
+    {
+      "source": "refs.cycles.Egg",
+      "target": "refs.cycles.Chicken",
+      "source_endpoint": "refs.cycles.Egg",
+      "target_endpoint": "refs.cycles.Chicken"
+    },
+    {
+      "source": "refs.cycles.Paper",
+      "target": "refs.cycles.Rock",
+      "source_endpoint": "refs.cycles.Paper",
+      "target_endpoint": "refs.cycles.Rock"
+    },
+    {
+      "source": "refs.cycles.Rock",
+      "target": "refs.cycles.Scissors",
+      "source_endpoint": "refs.cycles.Rock",
+      "target_endpoint": "refs.cycles.Scissors"
+    },
+    {
+      "source": "refs.cycles.Scissors",
+      "target": "refs.cycles.Paper",
+      "source_endpoint": "refs.cycles.Scissors",
+      "target_endpoint": "refs.cycles.Paper"
+    },
+    {
+      "source": "refs.functions.Assembler",
+      "target": "refs.functions.build_widget",
+      "source_endpoint": "refs.functions.Assembler",
+      "target_endpoint": "refs.functions.build_widget"
+    },
+    {
+      "source": "refs.functions.Assembler",
+      "target": "refs.functions.label",
+      "source_endpoint": "refs.functions.Assembler",
+      "target_endpoint": "refs.functions.label"
+    },
+    {
+      "source": "refs.functions.build_widget",
+      "target": "refs.functions.Widget",
+      "source_endpoint": "refs.functions.build_widget",
+      "target_endpoint": "refs.functions.Widget"
+    },
+    {
+      "source": "refs.functions.handle",
+      "target": "refs.functions.Widget",
+      "source_endpoint": "refs.functions.handle",
+      "target_endpoint": "refs.functions.Widget"
+    },
+    {
+      "source": "refs.functions.handle",
+      "target": "refs.functions.build_widget",
+      "source_endpoint": "refs.functions.handle",
+      "target_endpoint": "refs.functions.build_widget"
+    },
+    {
+      "source": "refs.functions.handle",
+      "target": "refs.functions.register",
+      "source_endpoint": "refs.functions.handle",
+      "target_endpoint": "refs.functions.register"
+    },
+    {
+      "source": "refs.functions.label",
+      "target": "refs.functions.Widget",
+      "source_endpoint": "refs.functions.label",
+      "target_endpoint": "refs.functions.Widget"
+    }
+  ],
+  "facade_edges": [],
+  "node_metrics": {
+    "refs.Farm": {
+      "depth": 2,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "refs.__init__.exported": {
+      "depth": 3,
+      "fan_in": 0,
+      "fan_out": 1,
+      "instability": 1.0
+    },
+    "refs.consumer.Consumer": {
+      "depth": 3,
+      "fan_in": 0,
+      "fan_out": 22,
+      "instability": 1.0
+    },
+    "refs.cycles.Chicken": {
+      "depth": 3,
+      "fan_in": 2,
+      "fan_out": 1,
+      "instability": 0.33
+    },
+    "refs.cycles.Egg": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "refs.cycles.Paper": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "refs.cycles.Rock": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "refs.cycles.Scissors": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "refs.exported.impl.ByReExport": {
+      "depth": 4,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.functions.Assembler": {
+      "depth": 3,
+      "fan_in": 0,
+      "fan_out": 2,
+      "instability": 1.0
+    },
+    "refs.functions.Widget": {
+      "depth": 3,
+      "fan_in": 3,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.functions.build_widget": {
+      "depth": 3,
+      "fan_in": 2,
+      "fan_out": 1,
+      "instability": 0.33
+    },
+    "refs.functions.handle": {
+      "depth": 3,
+      "fan_in": 0,
+      "fan_out": 3,
+      "instability": 1.0
+    },
+    "refs.functions.label": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 1,
+      "instability": 0.5
+    },
+    "refs.functions.register": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByAlias": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByAnnotation": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByBase": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByBodyCall": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByCastString": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByDecorator": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByExcept": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByFactoryCall": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByInitParam": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByLocalImport": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByMatchPattern": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByMetaclass": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByModuleAlias": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByModuleVariable": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByNestedClass": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByParam": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByRegistry": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByRelativeImport": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByReturn": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByStringAnnotation": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.ByTypeVarBound": {
+      "depth": 3,
+      "fan_in": 1,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.NotByMatchCapture": {
+      "depth": 3,
+      "fan_in": 0,
+      "fan_out": 0,
+      "instability": 0.0
+    },
+    "refs.targets.NotByShadowingParam": {
+      "depth": 3,
+      "fan_in": 0,
+      "fan_out": 0,
+      "instability": 0.0
+    }
+  },
+  "link_metrics": [
+    {
+      "source": "refs.Farm",
+      "target": "refs.cycles.Chicken",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.__init__.exported",
+      "target": "refs.Farm",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.exported.impl.ByReExport",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByAlias",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByAnnotation",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByBase",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByBodyCall",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByCastString",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByDecorator",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByExcept",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByFactoryCall",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByInitParam",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByLocalImport",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByMatchPattern",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByMetaclass",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByModuleAlias",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByModuleVariable",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByNestedClass",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByParam",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByRegistry",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByRelativeImport",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByReturn",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByStringAnnotation",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.consumer.Consumer",
+      "target": "refs.targets.ByTypeVarBound",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.cycles.Chicken",
+      "target": "refs.cycles.Egg",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.cycles.Egg",
+      "target": "refs.cycles.Chicken",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.cycles.Paper",
+      "target": "refs.cycles.Rock",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.cycles.Rock",
+      "target": "refs.cycles.Scissors",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.cycles.Scissors",
+      "target": "refs.cycles.Paper",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.functions.Assembler",
+      "target": "refs.functions.build_widget",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.functions.Assembler",
+      "target": "refs.functions.label",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.functions.build_widget",
+      "target": "refs.functions.Widget",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.functions.handle",
+      "target": "refs.functions.Widget",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.functions.handle",
+      "target": "refs.functions.build_widget",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.functions.handle",
+      "target": "refs.functions.register",
+      "values": {
+        "edge_weight": 1
+      }
+    },
+    {
+      "source": "refs.functions.label",
+      "target": "refs.functions.Widget",
+      "values": {
+        "edge_weight": 1
+      }
+    }
+  ]
+}

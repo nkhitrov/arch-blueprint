@@ -49,10 +49,25 @@ This project uses `uv` for environment and dependency management.
     or a snapshot-file `diff` (`_reject_links`) — a snapshot records the level it was built at. Even an explicit
     `--links namespace` is rejected there (the parser default is `None`, resolved by
     `_link_level`), and a diff of two snapshots of different levels is exit 2.
-    A level also says how it is drawn (`Level.nested` → `RendererOptions.nested`): `module` is
-    flat — every node one box under its full name (PlantUML `set separator none`, d2 quoted keys),
-    and every endpoint no node carries (a facade an arrow ends on) is declared as a node of its own
-    (`flat_nodes`, from the endpoints — a facade above another facade has no group of its own). Containers only lengthen node-to-node arrows.
+    A level also says how it is drawn (`Level.nested` → `RendererOptions.nested`), laid out by
+    `renderer/layout.py` (see **Frames and labels** below): `namespace` and the `-grouped` levels
+    are nested — every dotted prefix a frame, a chain of frames that hold nothing but one frame
+    merged into one labelled by the joined path (`app.features.core.executory_processes`). `module`
+    and `class` are flat — every node one box labelled by its dotted name less the prefix
+    all drawn names share, which is shown once as the diagram title; every endpoint no node carries
+    (a facade an arrow ends on) is declared as a node of its own. Containers only lengthen
+    node-to-node arrows.
+  - `--links class|class-grouped` make the nodes **definitions**, not modules: the top-level
+    classes **and** module-level functions of every selected module, always together — a class
+    that calls a function using another class depends on it through that function, drawn as two
+    arrows. Arrows are always definition to definition, wherever a definition's code names another
+    — bases, metaclass, decorators, class-level annotations, `__init__`, signatures, defaults and
+    bodies (string annotations included). `class` is flat; `class-grouped` is nested
+    (`Level.nested`), so every node sits in its module's frame. One edge per definition pair,
+    so `edge_weight` is always 1 there. `-m 'pkg.**'` also takes the definitions of
+    `pkg/__init__.py` (`GrimpSource.pattern_stems`). These levels parse every module's source with
+    libcst — about ten times slower than the module levels.
+    Example: `uv run arch-blueprint draw tests/fixtures/classes -m 'refs.**' --links class-grouped`.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
@@ -84,17 +99,30 @@ publisher per index, bound to the `testpypi` / `pypi` environments.
 
 `tests/` holds the suite, one file per layer under test:
 
-- `test_domain.py` — link aggregation, `CycleAnalyzer`, `GroupAnalyzer`.
+- `test_domain.py` — link aggregation, `CycleAnalyzer`.
+- `test_layout.py` — `Layout`: frames and chain merging (nested), the shared prefix (flat).
 - `test_metrics.py` — metric computation, registry routing, render plugins, `RenderPlan` validation.
 - `test_renderers.py` — both renderers **in-process** (build a graph, render it, assert on the text).
 - `test_source.py` — `GrimpSource`, interpreter-state hygiene, extraction, `detect_roots`.
+- `test_symbols.py` — `extract/symbols.py` in-process over small `tmp_path` modules. `_FORMS` is the
+  catalogue of every way a top-level class or function refers to another — one case per syntactic
+  form of the declaration (decorators and their arguments, bases, class keywords, PEP 695 type
+  parameters, every kind of parameter, defaults, return, string annotations nested any way) and of
+  the body (calls, attribute chains, `except` / `raise` / `with`, comprehensions, lambdas, nested
+  definitions, `match` class and value patterns, f-strings, local imports, `cast("Foo")`), plus the
+  `not_*` cases deliberately no dependency (a parameter, local, comprehension / loop / `except as`
+  / match capture or type parameter shadowing an import, `Literal` and other value strings).
+  `_ALIASES` covers dependencies through a module-level name; then re-exports, star imports,
+  conditional imports, and `GrimpSource.module_file` / `modules_under` (nothing imported or
+  executed). A new form gets a case here first.
 - `test_cli.py` — exit codes, stderr messages and hints, output encoding, `-o` / PNG (through a
   stand-in tool from `conftest.stand_in_tool`), help / `--version` / `--list-metrics`.
 - `test_golden_puml.py` / `test_golden_d2.py` — run the CLI as a subprocess over every scenario in
   `tests/conftest.py:SCENARIOS` and assert byte-exact output against `tests/golden/<fmt>/`. When
   output changes *intentionally*, regenerate the affected golden.
 - `test_golden_structure.py` — invariants the goldens must satisfy, not just their bytes: every link
-  endpoint is declared, and no package wraps a class of its own name. Covers diff goldens too.
+  endpoint is declared, no package wraps a class of its own name, and no package holds nothing but
+  one package unless an arrow ends on it. Covers diff goldens too.
 - `test_snapshot.py` — golden snapshots (`tests/golden/json/<selection>.json`, one per
   `conftest.py:SELECTIONS`), and the key invariant: `draw` of a snapshot equals every
   `tests/golden/<fmt>/` diagram byte for byte. Plus validation errors.
@@ -111,18 +139,29 @@ A scenario is a `Selection` (project + `-m` patterns + `build_args` such as `--l
 the snapshot golden is keyed by) plus `render_args` (drawing-only options, passed unchanged when
 drawing the snapshot). A golden holding cycle notes has `CYCLE_DETAILS` in its `render_args`.
 
-A hand-built `BlueprintGraph` has **empty `cycles` and `groups`** until the analyze step fills them.
-A renderer test that needs either must populate them explicitly, or it will silently assert against
-ungrouped nodes and plain arrows.
+A hand-built `BlueprintGraph` has **empty `cycles` and `tangles`** until the analyze step fills
+them. A renderer test that needs either must populate them explicitly (or call `analyze`), or it
+will silently assert against plain arrows. Frames need nothing: the renderer lays them out.
 
 Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
 `tests/fixtures/ancestor_dep` (an import of a package facade),
 `tests/fixtures/package_nodes` (nodes that are packages, so every edge targets a submodule),
+`tests/fixtures/classes` (the class levels: `refs/consumer.py` refers to one class of
+`refs/targets.py` per construct, each named after it — `ByBase`, `ByInitParam`, `ByBodyCall`,
+`ByModuleVariable`, `ByTypeVarBound`, `ByRegistry`, `ByMatchPattern`, … — plus `NotBy...` classes
+(a shadowing parameter, a match capture) that must draw nothing, a re-export through `refs/exported/`, definitions in
+`refs/__init__.py` (the function `exported` is named like a subpackage, so its id is
+`refs.__init__.exported`), a pair and a ring of classes in `refs/cycles.py`, and module functions in
+`refs/functions.py` — `Assembler → build_widget → Widget` runs through a function; `handle` depends
+through its decorator, a default and a string naming a module-level alias),
 `tests/fixtures/diff` (snapshot edits used as diff inputs, every metric computed into them like a
 `-o graph.json` snapshot; `cyclic_weighted.json` is `cyclic` plus one import inside an existing link
-— a metric-only change; regenerate them if the snapshot format or a metric's counting changes). Fixture projects are excluded from
+— a metric-only change; `classes_class_edited.json` / `classes_class_grouped_edited.json` are the
+class snapshots with a class added, an arrow removed and a pair resolved — regenerate them from
+their golden snapshot, with the same three edits, when that golden changes; all of them when the
+snapshot format or a metric's counting changes). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 
 ## Git conventions
@@ -137,7 +176,7 @@ ruff and mypy — they are analysis subjects, not code we ship.
 extract → metrics → `analyze(graph)`. `ArchBlueprint` is a thin orchestrator around it (`build()`,
 `render(graph)`, `run()`). The CLI calls `build_graph` directly because it must see the graph — an
 empty selection is a user error, not a diagram — and because a snapshot or a diff side has no
-renderer. `analyze()` (`analyze/__init__.py`) derives cycles then groups, and is the one place that
+renderer. `analyze()` (`analyze/__init__.py`) derives cycles then tangles, and is the one place that
 happens, for a fresh extraction and a loaded snapshot alike.
 
 1. **Source** (`extract/source.py`) — `GrimpSource` owns all grimp/`sys.path` mechanics: resolves
@@ -158,24 +197,69 @@ happens, for a fresh extraction and a loaded snapshot alike.
 2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`, no constructor
    dictated) turns the source into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected
    module, and an edge when a selected module imports another across a boundary of its link level.
-   A level (`extract/levels.py`, registry `LINK_LEVELS`, CLI `--links`) maps `(importer, imported,
+   A module level's endpoints function (`extract/levels.py`, CLI `--links`) maps `(importer, imported,
    node ids)` to the edge's `(source_endpoint, target_endpoint)` — the aggregation key, nothing
    else; `Edge.source`/`target` stay the real import. `namespace_level` cuts both names where they
    diverge; `module_level` keeps the node, resolving an import to the selected node it lies under
    (a facade stays itself; drawn flat, it is a node of its own). `None` drops the edge (an import of itself or
-   of its own package). Links, cycles, groups, metrics, snapshot and diff are untouched by the
+   of its own package). Links, cycles, metrics, snapshot and diff are untouched by the
    choice; `SnapshotCache.key` includes the level. Selection
    matches **both directions**: a dependency under a selected module, and a dependency *on* a package
    whose children are selected (`pkg.*` never selects `pkg`, so a re-exporting facade is otherwise
    unmatchable).
-3. **Domain** (`domain/`) — `Node` (id + `NodeKind`; frozen, hashable, **no metric or grouping
-   fields** — which group a node belongs to depends on links that do not exist when it is built),
-   `Edge`, `Link`, `Cycle`, `Group`, and `BlueprintGraph`. `edges` is a `frozenset` because `links`,
-   `cycles` and `groups` are all derived from it and would silently go stale behind a mutation.
+   The level registry is `extract/registry.py:LINK_LEVELS` (apart from `levels.py`, which the
+   module extractor imports): a `Level` carries its `extractor` factory and `nested`, so `__main__._extractor`, `--links` choices, `snapshot.load` and
+   `SnapshotCache.key` all read one table — a new link level is one entry. A new node kind is a
+   `NodeKind` member too, declaring its snapshot name and its diagram `letter` together (no map
+   to keep in sync, no fallback letter).
+   `DefinitionExtractor(source, kinds)` (`extract/definition_extractor.py`) is the extractor of the
+   class levels: a node per top-level definition of a wanted `NodeKind` (`CLASS` and `FUNCTION`,
+   `registry.py:_DEFINITIONS`; a new kind, such as methods, is a `NodeKind` member added there) in every module
+   under a match (`GrimpSource.matching_modules` + `modules_under`, and `pattern_stems` for
+   `pkg/__init__.py`), sorted by id; an edge per reference that resolves to another node, both
+   endpoints the definitions themselves; no `facade_edges` (a re-export is followed to where the
+   name is defined). A definition in `pkg/__init__.py` named like a module of `pkg` gets the id
+   `pkg.__init__.name` (`FACADE_MODULE`) — `pkg.name` is the frame of that module's definitions.
+   `extract/symbols.py` is the only libcst user, imported lazily by the extractor.
+   `ModuleSymbols.parse` runs one `QualifiedNameProvider` pass per module: `definitions`,
+   `exports` (module-level imports, `TYPE_CHECKING` / `try` / `if` ones included — what a facade
+   re-exports; a name imported in two branches keeps both), `aliases` (every other module-level
+   variable → the names its values mention: `Alias = Foo | Bar`, `T = TypeVar("T", bound=Foo)`,
+   `type A = Foo`, `HANDLERS = {"a": Foo}`, `HANDLERS["b"] = Bar`, `HANDLERS |= {...}`,
+   `ITEMS += [Foo]`, `settings = Settings()`, and a function's `global settings; settings = ...` —
+   which still counts for the function too), star
+   imports, and per definition every absolute name its subtree references — declaration and body
+   alike (nested classes and functions count for the outer one; `<locals>` names — parameters,
+   even one named like an import — and builtins dropped). libcst misses two kinds of local, shadowed
+   here by name: PEP 695 type parameters and `match` captures (`_Collector._locals`). A body's
+   captures are pushed for the body alone (`visit_FunctionDef_body`), so they never shadow the
+   function's own signature or decorators, and a class body's are not seen by its methods. libcst
+   is not flow-sensitive either: in `class C: x: t.T; t = 0` it gives `t` only the class-local
+   meaning, so a name a class body binds is also resolved around the class
+   (`_outside_class`). It does not
+   look inside strings either: a string is re-parsed and resolved in its own scope when it sits
+   where a type goes — an annotation, a subscript of a `typing` / `collections.abc` / builtin
+   generic (`Optional["Foo"]`, `list["Foo"]`, even outside an annotation), `cast`'s first
+   argument, a `TypeVar`'s constraints / `bound`, a PEP 695 bound or default, the value of a
+   `TypeAlias` or `type` statement, a string inside such a string — and not in a `Literal`,
+   `Annotated` metadata or another call's arguments (a context stack, innermost wins).
+   `SymbolIndex.resolve` maps a name to the **set** of definitions it ends on: longest defined
+   prefix (`m.Foo.create` → `m.Foo`), else follow the deepest module's exports, aliases (each value
+   name, the rest of the dotted name appended — `settings.x` → `Settings.x` → `Settings`) and star
+   imports, with a visited set against loops; memoized per index. Files are found by
+   `GrimpSource.module_file`, which runs `find_spec` on the **top-level** name only — on a dotted
+   name it imports the parent packages, i.e. executes project code — and walks the search
+   locations below. Parses are cached by `(module, is package, content sha256)`, never by name
+   (#39); a file libcst cannot parse is skipped with a stderr warning.
+3. **Domain** (`domain/`) — `Node` (id + `NodeKind`: `MODULE`, `CLASS`, `FUNCTION`, each with
+   its `letter`, PlantUML's spot `M` / `C` / `F`; the id is always a dotted path, so frames and flat labels work
+   unchanged for definitions; frozen, hashable, **no metric or frame
+   fields** — which frame a node is drawn in depends on what else is drawn, a diff's nodes too),
+   `Edge`, `Link`, `Cycle`, `Tangle`, and `BlueprintGraph`. `edges` is a `frozenset` because `links`,
+   `cycles` and `tangles` are all derived from it and would silently go stale behind a mutation.
    Metrics live in side maps keyed by node id / endpoint pair. `Edge.source`/`target` are the real
    import; `Edge.source_endpoint`/`target_endpoint`, `Link.source`/`target` and
    `Cycle.endpoint_from`/`endpoint_to` are link endpoints — namespaces or nodes, by link level.
-   Only `Group.namespace` is always a namespace: a container is a dotted prefix no node carries.
 4. **Metrics** (`metrics/`) — compute-only plugins. `NodeMetric` and `LinkMetric` are **separate**
    protocols (`metrics/base.py`); the registry holds them in separate collections, so the collection
    a metric sits in *is* its target and results route without a cast. Register with
@@ -191,9 +275,9 @@ happens, for a fresh extraction and a loaded snapshot alike.
    links with `cyclic_link_styles` and, with cycle details, add one note listing all its imports
    (hidden ones marked "package facade import, not drawn"), tied to every member by a dotted line.
    A pair on a tangle gets no note of its own (`_format_cycle(..., details=False)`), in a diff too:
-   its imports are in the tangle's note, so a cycle of any length lists each import once. `GroupAnalyzer.build` decides which link endpoints
-   need a container (see below). All are agnostic to node kind and run in the pipeline — **not**
-   in a renderer. Snapshots store `facade_edges`; tangles are re-derived.
+   its imports are in the tangle's note, so a cycle of any length lists each import once. Both are
+   agnostic to node kind and run in the pipeline — **not** in a renderer. Frames are the
+   renderer's (`renderer/layout.py`): they depend on what a drawing shows, a diff's nodes included. Snapshots store `facade_edges`; tangles are re-derived.
 6. **Render** (`renderer/`) — a `BlueprintRenderer` turns the graph into the output string.
 
 ### Snapshot and diff
@@ -203,7 +287,7 @@ Snapshot` (graph + names of the metrics computed into it — stored, not inferre
 no links has no `edge_weight` values yet computed it — + the link level it was built at, stored for
 the same reason: endpoints alone cannot tell the levels apart). It holds **primary data only** — nodes (extractor
 order, which renderers draw in), edges, node/link metrics — and `load` re-derives links, cycles and
-groups via `analyze()`. `format` + `version` (2) and the link level are checked; anything unexpected is `SnapshotError`.
+tangles via `analyze()`. `format` + `version` (2) and the link level are checked; anything unexpected is `SnapshotError`.
 Rendering and diffing read snapshots, never rendered diagrams, so a new output format needs a
 renderer and no parser. `-f json` computes every registered metric so a snapshot can be drawn with any of them;
 `draw SNAPSHOT` rejects a `--metric` the snapshot does not hold.
@@ -220,7 +304,7 @@ renderer and no parser. `-f json` computes every registered metric so a snapshot
   `cycle_changes`). With `changes_only=True` context is exact instead: unchanged modules that the
   changed links' edges actually connect (an edge endpoint may be a package facade, not a node —
   filtered), and no unchanged link. `is_empty` ignores context either way.
-- `GraphDiff.graph` holds shown nodes + shown edges, with `groups` built but `cycles` left empty on
+- `GraphDiff.graph` holds shown nodes + shown edges, with `cycles` left empty on
   purpose (cycle detection on a partial edge set would report a resolved cycle as present).
 - tangles compare by their member set (`TangleDelta` NEW/RESOLVED, `context_tangles`); their links
   stay in `link_status` and are marked by `OnCycle` — an unchanged one on an unchanged tangle drawn
@@ -251,8 +335,10 @@ renderer and no parser. `-f json` computes every registered metric so a snapshot
   a shadowed endpoint (`_ref` / `_key_of`).
 
 Diff renderers (`render_base.py` Template Method, `render_puml.py`, `render_d2.py`, registry
-`diff/__init__.py:DIFF_RENDERERS`) reuse `wrap_groups` (`renderer/base.py`), `format_package` /
-`format_cycle_note` (`renderer/puml.py`) and `quote_label` / `format_cycle_note` /
+`diff/__init__.py:DIFF_RENDERERS`) reuse `Layout.build` / `placed_nodes` / `laid_out`
+(`renderer/layout.py`, `renderer/base.py`) — the layout of the shown nodes and the drawn connection
+endpoints, as a plain diagram of them has — `format_frame` / `class_head` /
+`format_cycle_note` (`renderer/puml.py`) and `layout_key` / `label_line` / `format_title` / `quote_label` / `format_cycle_note` /
 `format_cycle_notes_container` / `CYCLE_CONNECTION_TEMPLATE` (`renderer/d2.py`). Unchanged parts are
 drawn as a plain diagram draws them — node fill by depth from `RendererOptions` (`depth_of` keeps a
 shadowed node at its module's depth), plain arrows, cycles — and every change is dashed. So the
@@ -349,22 +435,46 @@ registry you construct — no library change needed). Branch on `ctx.fmt` (`"pum
 format-specific output; `text` becomes a node line / edge label, `style` is injected into the edge's
 style slot by the renderer.
 
-### Namespace grouping
+### Frames and labels
 
-Links aggregate to namespaces while nodes are modules, so most arrow endpoints are names no node
-carries. PlantUML resolves them anyway — it infers a container from the dotted class names, and the
-rendered picture is the same either way (verified by diffing renders before and after grouping).
-Declaring them is about the emitted source naming everything it points at, and about being able to
-style or label a container; it is **not** a fix for a broken image. `GroupAnalyzer.build` produces a
-`Group` per endpoint that needs one, under three rules — each earned by a case that breaks
-otherwise:
+Most of every dotted id is repeated on every box; `renderer/layout.py:Layout.build(node ids,
+endpoints, nested=...)` works out, once per drawing, where each name goes and what it is labelled.
+Ids never change — arrows, snapshots and diffs name the same things whatever a label reads. Both
+the plain and the diff template call it (the diff with its shown nodes and every drawn connection
+endpoint), so a diff of a graph with itself lays out exactly as its plain diagram.
 
-1. A namespace that **is** a node id gets no group: the endpoint is already declared, and
+**Nested** (`namespace`, `class-grouped`): every proper dotted prefix of a node or
+an endpoint is a frame, under rules each earned by a case that breaks otherwise:
+
+1. A prefix that **is** a node id is no frame: the node is already declared, and
    `package a.b { class a.b }` is a PlantUML syntax error. Not an edge case — 18 of 23 endpoints hit
    it when this project graphs itself.
-2. Namespaces nest, so a node joins the **deepest** one it lies under. Declaring a class in two
-   containers does not error; it silently collapses to one entity.
-3. A node under no endpoint namespace joins no group and is drawn as before.
+2. A node sits in the **deepest** frame it lies under. Declaring a class in two containers does
+   not error; it silently collapses to one entity.
+3. A frame holding no node and exactly one child frame is **merged** into that child, labelled by
+   the joined path, repeatedly — so `app` → `features` → `core` → `executory_processes` is one frame
+   `app.features.core.executory_processes`. Unless an arrow ends on it (the namespace level points
+   arrows at containers): then it stays. A frame holding a node or two frames stays.
+
+Frames sit where their first node is drawn (declaration order is layout order). PlantUML draws
+them explicitly: `set separator none` (always), `package "label" as full.id { ... }` nested, and
+`class "label" as full.id`; an arrow names the alias. D2 nests by key: a node's key is its path
+through the frames, a merged chain one quoted part (`"app.features.core".usecases.Run`), and D2
+labels a node by its last part.
+
+**Flat** (`module`, `class`): no frames; the items are the nodes plus every endpoint no
+node carries (a package facade), each facade before the first node under it. The prefix every drawn
+name shares, in whole dotted parts and never a whole name (`common_prefix`; a lone `a.b.c` keeps
+`c`; names differing in their first part share nothing), is dropped from every label and shown once
+as the title: PlantUML `title <prefix>`, D2 a `title` text shape `near: top-center`. A label equal
+to its key adds nothing (`class a.b` / no `label:` line). A diff works the prefix out on the modules
+its shadowed nodes stand for (`pkg (module)`).
+
+The layout reaches the hooks on a copy of the renderer (`laid_out`, the `LaidOut.layout`
+property), so the renderer a caller holds never changes and the hook signatures stay as they were.
+`render` is `@final` in both bases, and `layout` read anywhere but on that copy (a hook called
+directly) raises instead of drawing every name flat. PlantUML reads a title, a package label and a
+note as creole, where `__init__` is an underlined `init`: those go through `escape_creole`.
 
 ### Renderers (Template Method pattern)
 
@@ -375,9 +485,12 @@ set; the constructor rejects a plan built for another format.
 
 Abstract hooks: `_format_node`, `_format_link(source, target, decoration)`,
 `_format_cycle(cycle, decoration, *, details)`, `_combine_output`. `details` is decided by the
-template (cycle details on, the pair on no tangle), not by the renderer. `_format_group(namespace, nodes)` is
-**concrete**, defaulting to no wrapping — D2 nests by dotted name on its own, and an abstract method
-would break every renderer outside this package. `_format_cycle` returns a
+template (cycle details on, the pair on no tangle), not by the renderer. `_format_frame(frame, items)` is
+**concrete**, defaulting to no wrapping — D2 nests by key on its own, and an abstract method
+would break every renderer outside this package. It replaced `_format_group(namespace, nodes)`;
+a subclass still defining that is a `TypeError` at class creation (`LaidOut._RENAMED_HOOKS`),
+not a diagram silently drawn without containers. A hook spells a name through `self.layout`
+(`path`, `label`, `title`). `_format_cycle` returns a
 `CycleRender(inline, deferred)` so a renderer that must place cycle details elsewhere (D2) carries
 them out-of-band without mutating instance state. Shared cycle-detail formatting lives in
 `renderer/cycles.py`. Cycles use `CYCLE_HIGHLIGHT_COLOR`, kept distinct from every
@@ -386,7 +499,7 @@ text inside the frame rather than as a colored spot, which is noise on every con
 
 To add a new output format:
 1. Subclass `BlueprintRenderer` in a new `renderer/<name>.py`, set `fmt`, implement the abstract
-   hooks, and override `_format_group` if the format does not nest by dotted name.
+   hooks, and override `_format_frame` if the format does not nest by key.
 2. Register it in the `_RENDERERS` mapping in `__main__.py`.
 3. Subclass `DiffRenderer` in `diff/render_<name>.py` and register it in `DIFF_RENDERERS` —
    `test_diff.py` fails while the two registries disagree. No parser is ever needed: diagrams and
@@ -420,3 +533,5 @@ computes the requested metrics on both git sides (nothing else). The diff
 diagram is written even on exit 1. Output is written through `sys.stdout.buffer` as UTF-8 — cycle
 details contain arrows, and a non-UTF-8 console would otherwise raise `UnicodeEncodeError` after all
 the work is done.
+A reader that closes stdout early (`draw ... | head -1`) ends the run quietly with exit 1
+(`main` catches `BrokenPipeError` and points stdout at devnull, the Python docs' recipe).

@@ -49,7 +49,7 @@ diff_legend: Legend {
   }
 }
 
-"services": {
+services: {
   shape: class
   style: {
     fill: "#3498DB"
@@ -69,7 +69,7 @@ diff_legend: Legend {
     fill: "#2ECC71"
   }
 }
-"api.handlers" -> "services" {style.stroke: "#C0392B"; style.stroke-width: 4}
+"api.handlers" -> services {style.stroke: "#C0392B"; style.stroke-width: 4}
 "nest.a" <-> "nest.b": CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
 "ring.a" -> "ring.b": cycle resolved {style.stroke: "#95A5A6"; style.stroke-dash: 5}
 "ring.b" -> "ring.c": cycle resolved {style.stroke: "#95A5A6"; style.stroke-dash: 5}
