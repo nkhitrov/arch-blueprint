@@ -5,21 +5,72 @@ on:
     types:
       - released
 
+# Each job asks for exactly what it needs.
+permissions: {}
+
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
-      - name: Set up Python
-        uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          persist-credentials: false
       - name: Install the latest version of uv
         uses: astral-sh/setup-uv@v7
-      - name: Release package
+        with:
+          enable-cache: false  # a release is built from nothing a PR could have cached
+      - name: Build
         env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          VERSION: ${{ github.ref_name }}
         run: |
-          uv version "${{ github.ref_name }}"
+          uv version "$VERSION"
           uv build
-          uv publish
+      # A wheel that does not install, or carries the wrong version, stops here —
+      # before anything is published.
+      - name: Smoke-test the wheel
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          out="$(uv run --isolated --no-project --with dist/*.whl arch-blueprint --version)"
+          echo "$out"
+          test "$out" = "arch-blueprint $VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/arch-blueprint
+    permissions:
+      id-token: write  # trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          # A rerun after PyPI failed must not fail here on the version already uploaded.
+          skip-existing: true
+
+  pypi:
+    needs: testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/arch-blueprint
+    permissions:
+      id-token: write  # trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
