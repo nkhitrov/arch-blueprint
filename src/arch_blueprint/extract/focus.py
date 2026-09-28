@@ -14,8 +14,8 @@ from __future__ import annotations
 from typing import Final, Optional
 
 #: ``--deps`` values. ``out``: what the focus depends on. ``in``: what depends
-#: on the focus.
-DEPS_DIRECTIONS: Final = ("out", "in")
+#: on the focus. ``both``: either.
+DEPS_DIRECTIONS: Final = ("out", "in", "both")
 
 
 def follows_out(deps: Optional[str]) -> bool:
