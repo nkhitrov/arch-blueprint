@@ -11,6 +11,8 @@ from typing import Optional
 import grimp
 from grimp import ImportGraph
 
+from arch_blueprint.extract.layout import detect_roots
+
 
 class PackageNotFoundError(ImportError):
     """A pattern's top-level package is nowhere to be found.
@@ -25,6 +27,14 @@ class PackageNotFoundError(ImportError):
         self.package = pattern.split(".", 1)[0]
 
 
+def _lies_in(spec: ModuleSpec, directory: Path) -> bool:
+    """Whether the module ``spec`` locates has its code in ``directory``."""
+    places = [*(spec.submodule_search_locations or ())]
+    if spec.origin is not None:
+        places.append(spec.origin)
+    return any(Path(place).resolve().is_relative_to(directory) for place in places)
+
+
 class GrimpSource:
     """Builds and exposes a grimp import graph for the selected target packages.
 
@@ -34,15 +44,22 @@ class GrimpSource:
     Resolution never executes the target project's code: packages are located
     through ``importlib.util.find_spec``, and the interpreter state borrowed to
     do it (``sys.path``, ``sys.modules``) is handed back afterwards.
+
+    ``deps`` (a ``--deps`` direction, ``extract/focus.py``) makes the patterns
+    a focus whose dependencies are drawn too. They can lie in any package of
+    the project, so every package in ``project_dir`` is built then, not only
+    the patterns' own; what the patterns select does not change.
     """
 
     def __init__(
         self,
         project_dir: str,
         target_names: Sequence[str],
+        deps: Optional[str] = None,
     ) -> None:
         self.project_dir = project_dir
         self.target_names = target_names
+        self.deps = deps
         self._graph: Optional[ImportGraph] = None
         # Per run, like the graph: module names, located files, top-level specs.
         self._modules: Optional[frozenset[str]] = None
@@ -99,7 +116,7 @@ class GrimpSource:
 
     def selected_modules(self) -> list[str]:
         """Modules matching the target patterns, with parents of others removed."""
-        return sorted(self._exclude_sub_modules(set(self.matching_modules())))
+        return sorted(self.leaves(self.matching_modules()))
 
     def matching_modules(self) -> list[str]:
         """Every module a target pattern matches, sorted — parents of others too.
@@ -215,6 +232,29 @@ class GrimpSource:
             for graphable in self._expand_to_graphable(top_level):
                 if graphable not in packages:
                     packages.append(graphable)
+        if self.deps is not None:
+            packages.extend(
+                graphable
+                for graphable in self._project_packages()
+                if graphable not in packages
+            )
+        return packages
+
+    def _project_packages(self) -> list[str]:
+        """Every package of the project, for dependencies outside the patterns.
+
+        Only the ones found in ``project_dir`` itself: a directory named like a
+        module found first elsewhere (``sys.modules``, the standard library)
+        would build that one instead. One with no analyzable source is skipped
+        without a word — nobody asked for it.
+        """
+        project = Path(self.project_dir).resolve()
+        packages: list[str] = []
+        for root in detect_roots(self.project_dir):
+            spec = self._find_spec(root)
+            if spec is None or not _lies_in(spec, project):
+                continue
+            packages.extend(self._find_graphable_packages(root))
         return packages
 
     @classmethod
@@ -281,8 +321,12 @@ class GrimpSource:
         return names
 
     @staticmethod
-    def _exclude_sub_modules(modules: set[str]) -> set[str]:
-        """Filter out names that are namespaces of other modules in the set."""
+    def leaves(modules: Iterable[str]) -> set[str]:
+        """The names no other name in ``modules`` lies under.
+
+        A module node stands for its whole subtree, so no node may lie under
+        another: of ``pkg`` and ``pkg.sub``, ``pkg.sub`` is kept.
+        """
         sorted_names = sorted(modules, key=len, reverse=True)
         result: set[str] = set()
         for name in sorted_names:

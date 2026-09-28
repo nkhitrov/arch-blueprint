@@ -1,0 +1,56 @@
+direction: down
+title: app.features.core.executory_processes {near: top-center; shape: text}
+"app.features.core.executory_processes.models.Process": {
+  shape: class
+  label: "models.Process"
+  style: {
+    fill: "#27AE60"
+  }
+}
+
+"app.features.core.executory_processes.tasks.Tracker": {
+  shape: class
+  label: "tasks.Tracker"
+  style: {
+    fill: "#27AE60"
+  }
+}
+
+"app.features.core.executory_processes.tasks.run_delete_old_customer": {
+  shape: class
+  label: "tasks.run_delete_old_customer"
+  style: {
+    fill: "#27AE60"
+  }
+}
+
+"app.features.core.legal_cases.models.LegalCase": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+"app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+"billing.invoices.Invoice": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+"app.features.core.executory_processes.tasks.Tracker" -> "app.features.core.executory_processes.models.Process"
+"app.features.core.executory_processes.tasks.Tracker" -> "app.features.core.legal_cases.models.LegalCase"
+"app.features.core.executory_processes.tasks.Tracker" -> "billing.invoices.Invoice"
+"app.features.core.executory_processes.tasks.run_delete_old_customer" -> "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase"

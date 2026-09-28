@@ -1,0 +1,23 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+title app.features.core.executory_processes
+
+legend top left
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
+endlegend
+
+class "tasks" as app.features.core.executory_processes.tasks <<(M, #9B59B6)>>
+class billing.invoices <<(-, #FF1744) removed>> #FF1744;line.dashed
+
+app.features.core.executory_processes.tasks -[#FF1744,dashed,thickness=2]-> billing.invoices : removed
+@enduml
+

@@ -573,3 +573,78 @@ def test_drawing_a_snapshot_rejects_a_link_level(snapshot: str, level: str) -> N
     result = run_command("draw", snapshot, "--links", level, check=False)
     assert result.returncode == _USAGE_ERROR
     assert "a snapshot already records its link level" in result.stderr
+
+
+# --- --deps ------------------------------------------------------------------
+
+_FOCUS_DEPS_SNAPSHOT = str(snapshot_path("focus_deps_module_links"))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["draw", str(EXAMPLE_PROJECT), "-m", "app2.*"],
+        ["diff", "--base", "HEAD", str(EXAMPLE_PROJECT), "-m", "app2.*"],
+        ["history", str(EXAMPLE_PROJECT), "app2"],
+    ],
+    ids=["draw", "diff", "history"],
+)
+def test_deps_does_not_go_with_a_metric(command: list[str]) -> None:
+    """Checked before any work: a dependency's numbers would be wrong."""
+    result = run_command(*command, "--deps", "out", "--metric", "fan_in", check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "--metric does not go with --deps" in result.stderr
+    assert result.stdout == ""
+
+
+def test_deps_accepts_only_out_for_now() -> None:
+    result = run_cli(EXAMPLE_PROJECT, "-m", "app2.*", "--deps", "in", check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "invalid choice: 'in'" in result.stderr
+
+
+def test_deps_draws_what_the_focus_imports() -> None:
+    result = run_cli(
+        EXAMPLE_PROJECT,
+        "-m",
+        "app2.*",
+        "--deps",
+        "out",
+        "--links",
+        "module",
+    )
+    assert "class app1.models <<(M, #BDC3C7)>> #line.dashed" in result.stdout
+    assert "app2.service ---> plugins.auth.backend" in result.stdout
+
+
+def test_a_deps_snapshot_holds_no_metric_to_draw() -> None:
+    result = run_command(
+        "draw",
+        _FOCUS_DEPS_SNAPSHOT,
+        "--metric",
+        "fan_in",
+        check=False,
+    )
+    assert result.returncode == _USAGE_ERROR
+    assert "--metric does not go with --deps" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["draw", _FOCUS_DEPS_SNAPSHOT],
+        ["diff", _FOCUS_DEPS_SNAPSHOT, _FOCUS_DEPS_SNAPSHOT],
+    ],
+    ids=["draw", "diff"],
+)
+def test_a_snapshot_rejects_deps(command: list[str]) -> None:
+    result = run_command(*command, "--deps", "out", check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "a snapshot already records it" in result.stderr
+
+
+def test_diff_rejects_snapshots_built_with_and_without_deps() -> None:
+    plain = str(snapshot_path("example_module_links"))
+    result = run_command("diff", plain, _FOCUS_DEPS_SNAPSHOT, check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert "built without --deps against one built with --deps out" in result.stderr

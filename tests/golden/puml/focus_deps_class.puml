@@ -1,0 +1,22 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+title app.features.core.executory_processes
+
+class "models.Process" as app.features.core.executory_processes.models.Process <<(C, #27AE60)>>
+class "tasks.Tracker" as app.features.core.executory_processes.tasks.Tracker <<(C, #27AE60)>>
+class "tasks.run_delete_old_customer" as app.features.core.executory_processes.tasks.run_delete_old_customer <<(F, #27AE60)>>
+class app.features.core.legal_cases.models.LegalCase <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
+class app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
+class billing.invoices.Invoice <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
+
+app.features.core.executory_processes.tasks.Tracker ---> app.features.core.executory_processes.models.Process
+app.features.core.executory_processes.tasks.Tracker ---> app.features.core.legal_cases.models.LegalCase
+app.features.core.executory_processes.tasks.Tracker ---> billing.invoices.Invoice
+app.features.core.executory_processes.tasks.run_delete_old_customer ---> app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase
+@enduml
+

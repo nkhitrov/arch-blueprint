@@ -51,14 +51,22 @@ class SnapshotCache:
         self._dir = root / "snapshots"
 
     @staticmethod
-    def key(tree: str, patterns: Sequence[str], links: str) -> str:
+    def key(
+        tree: str,
+        patterns: Sequence[str],
+        links: str,
+        deps: Optional[str] = None,
+    ) -> str:
         """The entry for a project tree graphed with ``patterns`` at ``links`` level.
+
+        ``deps`` (``--deps``) is part of it: the focus drawn with its
+        dependencies is another graph.
 
         The versions are part of it: another snapshot format, or another
         release's extractor, may make another graph from the same tree.
         """
         material = json.dumps(
-            [tree, sorted(patterns), links, SNAPSHOT_VERSION, _tool_version()],
+            [tree, sorted(patterns), links, deps, SNAPSHOT_VERSION, _tool_version()],
         )
         return hashlib.sha256(material.encode()).hexdigest()
 

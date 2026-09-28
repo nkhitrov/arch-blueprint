@@ -68,6 +68,18 @@ This project uses `uv` for environment and dependency management.
     `pkg/__init__.py` (`GrimpSource.pattern_stems`). These levels parse every module's source with
     libcst — about ten times slower than the module levels.
     Example: `uv run arch-blueprint draw tests/fixtures/classes -m 'refs.**' --links class-grouped`.
+  - `--deps out` (`extract/focus.py:DEPS_DIRECTIONS`; `in`/`both` — the reverse view — are a
+    later PR) makes `-m` the **focus** and also draws every object the focus directly depends on,
+    wherever in `<project_dir>` it lives, as a **neighbor** (`BlueprintGraph.neighbors`): muted and
+    dashed (`NEIGHBOR_COLOR`, `_format_neighbor`), no metric blocks, labelled by its full name
+    when flat (the flat prefix is the focus's; a facade endpoint no focused node lies under is a
+    neighbor too — `Layout.neighbors`). Only the focus's imports / references are followed: no
+    edge leaves a neighbor, and stdlib / third-party code is never a node. Accepted where `--links`
+    is (`_reject_deps` on snapshots); `--metric` with it is exit 2 (`_check_deps`, also for a
+    snapshot built with it) — a neighbor's own imports are not read, so its numbers would lie; a
+    `--deps` snapshot / history cache entry computes only the compute-only metrics
+    (`_undrawn_metrics`). Example: `uv run arch-blueprint draw tests/fixtures/focus_deps -m
+    'app.features.core.executory_processes.**' --deps out --links class`.
   - `--metric NAME` (repeatable) displays a metric. A node metric (`fan_in`, `fan_out`,
     `instability`) renders as a block on each node; a link metric (`edge_weight`) renders as a label
     on each connection, including cyclic ones (as `forward/backward`). An unknown name is an error,
@@ -156,11 +168,16 @@ and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init
 `refs.__init__.exported`), a pair and a ring of classes in `refs/cycles.py`, and module functions in
 `refs/functions.py` — `Assembler → build_widget → Widget` runs through a function; `handle` depends
 through its decorator, a default and a string naming a module-level alias),
+`tests/fixtures/focus_deps` (`--deps out`: a focus `app.features.core.executory_processes`
+depending on `legal_cases` — a class through a facade re-export, the facade and a module under it —
+and on another top-level package `billing`; `legal_cases.models` imports `app.shared.clock`,
+which must not be drawn),
 `tests/fixtures/diff` (snapshot edits used as diff inputs, every metric computed into them like a
 `-o graph.json` snapshot; `cyclic_weighted.json` is `cyclic` plus one import inside an existing link
 — a metric-only change; `classes_class_edited.json` / `classes_class_grouped_edited.json` are the
 class snapshots with a class added, an arrow removed and a pair resolved — regenerate them from
-their golden snapshot, with the same three edits, when that golden changes; all of them when the
+their golden snapshot, with the same three edits, when that golden changes;
+`focus_deps_module_links_no_billing.json` is that golden less the `billing.invoices` dependency; all of them when the
 snapshot format or a metric's counting changes). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 
@@ -193,7 +210,9 @@ happens, for a fresh extraction and a loaded snapshot alike.
    the cwd and is keyed by module **name** and mtime, not path — `git archive` stamps every file
    with the commit time, and concurrent runs interleave its separate meta/data files — so another
    checkout's imports could be drawn silently (#39). Rebuilding is cheap; `history` has its own
-   `SnapshotCache`.
+   `SnapshotCache`. With `deps` (`--deps`) it also builds every package of `<project_dir>`
+   (`detect_roots`, only those `find_spec` locates inside it — `_lies_in`), so a dependency in a
+   sibling top-level package is in the graph and parseable; the selection is unchanged.
 2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`, no constructor
    dictated) turns the source into a `BlueprintGraph`. `ModuleExtractor` emits one node per selected
    module, and an edge when a selected module imports another across a boundary of its link level.
@@ -206,7 +225,11 @@ happens, for a fresh extraction and a loaded snapshot alike.
    choice; `SnapshotCache.key` includes the level. Selection
    matches **both directions**: a dependency under a selected module, and a dependency *on* a package
    whose children are selected (`pkg.*` never selects `pkg`, so a re-exporting facade is otherwise
-   unmatchable).
+   unmatchable). With `source.deps`, an import of a focused module that matches neither is
+   collected instead of dropped; the neighbor nodes are its **leaves** (`GrimpSource.leaves`, the
+   rule `selected_modules` uses — no node under another), an ancestor of one stays a facade
+   endpoint, and the level resolves over focus ∪ neighbors. Neighbors follow the focus in node
+   order, sorted.
    The level registry is `extract/registry.py:LINK_LEVELS` (apart from `levels.py`, which the
    module extractor imports): a `Level` carries its `extractor` factory and `nested`, so `__main__._extractor`, `--links` choices, `snapshot.load` and
    `SnapshotCache.key` all read one table — a new link level is one entry. A new node kind is a
@@ -220,6 +243,8 @@ happens, for a fresh extraction and a loaded snapshot alike.
    endpoints the definitions themselves; no `facade_edges` (a re-export is followed to where the
    name is defined). A definition in `pkg/__init__.py` named like a module of `pkg` gets the id
    `pkg.__init__.name` (`FACADE_MODULE`) — `pkg.name` is the frame of that module's definitions.
+   With `source.deps`, a resolved target of a wanted kind that no pattern selects is a neighbor
+   (its kind read from its module's `definitions`, `_kind_of`), ids assigned over both sets.
    `extract/symbols.py` is the only libcst user, imported lazily by the extractor.
    `ModuleSymbols.parse` runs one `QualifiedNameProvider` pass per module: `definitions`,
    `exports` (module-level imports, `TYPE_CHECKING` / `try` / `if` ones included — what a facade
@@ -282,12 +307,15 @@ happens, for a fresh extraction and a loaded snapshot alike.
 
 ### Snapshot and diff
 
-`snapshot.py` is the one intermediate format: `dump(graph, metrics, links)` / `load(text) ->
+`snapshot.py` is the one intermediate format: `dump(graph, metrics, links, deps)` / `load(text) ->
 Snapshot` (graph + names of the metrics computed into it — stored, not inferred, since a graph with
 no links has no `edge_weight` values yet computed it — + the link level it was built at, stored for
 the same reason: endpoints alone cannot tell the levels apart). It holds **primary data only** — nodes (extractor
 order, which renderers draw in), edges, node/link metrics — and `load` re-derives links, cycles and
-tangles via `analyze()`. `format` + `version` (2) and the link level are checked; anything unexpected is `SnapshotError`.
+tangles via `analyze()`. `format` + `version` (3) and the link level are checked; anything unexpected is `SnapshotError`.
+Version 3 adds `deps` (the `--deps` direction or null) and `neighbors` (node ids, each checked to
+be a node); version 2 is still read, as a graph without `--deps`. Two snapshots of different
+`deps` cannot be diffed (exit 2), and `SnapshotCache.key` includes it.
 Rendering and diffing read snapshots, never rendered diagrams, so a new output format needs a
 renderer and no parser. `-f json` computes every registered metric so a snapshot can be drawn with any of them;
 `draw SNAPSHOT` rejects a `--metric` the snapshot does not hold.
@@ -311,6 +339,10 @@ renderer and no parser. `-f json` computes every registered metric so a snapshot
   as a plain diagram does, on a new/resolved one like a new/resolved pair. A changed tangle's links
   are shown even with `changes_only`, and `is_empty` counts tangle changes: a facade's imports can
   close a cycle with no drawn link changing.
+- `GraphDiff.graph.neighbors`: a shown node that is a neighbor on the side it comes from (removed:
+  old, else new), drawn after the focus as the extractor orders them, so the identity invariant
+  holds with `--deps`. An unchanged neighbor is drawn as a plain diagram draws it
+  (`DiffRenderer._format_neighbor`); an added / removed one is marked as that, under its full name.
 - a change to the imports inside a link present on both sides is not a structural change — but it
   moves metrics, which is what `metrics=` is for.
 - `diff_graphs(..., metrics=names)` compares those metrics from each side's computed values (the
@@ -483,7 +515,9 @@ It takes a `RenderPlan` (required — a missing one is a `TypeError`, never a si
 render) and `RendererOptions` (depth colors, cycle details). `fmt` is a `ClassVar` each renderer must
 set; the constructor rejects a plan built for another format.
 
-Abstract hooks: `_format_node`, `_format_link(source, target, decoration)`,
+`_format_neighbor(node)` is concrete too: by default `_format_node(node, NEIGHBOR_COLOR, [])`, so
+a renderer outside this package draws `--deps` neighbors without knowing them; puml / d2 add a
+dashed, muted style (`NEIGHBOR_STYLE`). Abstract hooks: `_format_node`, `_format_link(source, target, decoration)`,
 `_format_cycle(cycle, decoration, *, details)`, `_combine_output`. `details` is decided by the
 template (cycle details on, the pair on no tangle), not by the renderer. `_format_frame(frame, items)` is
 **concrete**, defaulting to no wrapping — D2 nests by key on its own, and an abstract method
@@ -523,7 +557,7 @@ package name, not the wording.
 
 Failures are one line on stderr with no
 traceback: exit **2** for bad input (missing project directory, unresolvable pattern, no modules
-matched, bad `--metric`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
+matched, bad `--metric`, `--metric` with `--deps`, unreadable or invalid snapshot, `-f json` with drawing options), exit **1**
 for an analysis that could not finish (`history`: images that could not be drawn; `draw`: an image the tool refused). `diff` exits
 like `diff(1)` instead: **0** no change, **1** any change, **2** any trouble — an analysis failure there is 2, since 1 means "different". A
 "change" is structural, or — only with `--metric` — a shown metric whose value moved; without
