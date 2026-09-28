@@ -76,23 +76,26 @@ A link is drawn only when both of its ends are selected. That includes a depende
 package whose children you selected: `pkg.*` never selects `pkg` itself, but an import of `pkg`
 still counts.
 
-### Everything the selection depends on
+### Everything next to the selection
 
 `--deps out` turns the selection into the **focus** and draws what it depends on too, wherever in
 `PROJECT_DIR` that lives — another package, another top-level package — without adding it to
-`-m`. A dependency is drawn greyed out and dashed, under its full name, with the arrows from the
-focus to it; what the dependencies themselves import is left out, and so are the standard library
-and third-party packages. It works at every `--links` level: the imported module (or its
-namespace), or the class or function a name refers to, followed through re-exports.
+`-m`. `--deps in` draws the other side: what depends on the focus. Either way such a neighbor is
+drawn greyed out and dashed, under its full name, with every arrow between it and the focus, in
+both directions — a dependency that imports the focus back is drawn as the cycle it is. What the
+neighbors import from one another or from anything else is left out, and so are the standard
+library and third-party packages. It works at every `--links` level: the imported module (or its
+namespace), or the class or function a name refers to, followed through re-exports. At the class
+levels `--deps in` also parses every module importing the focus, directly or through others.
 
 ```shell
 arch-blueprint draw src -m 'app.features.core.executory_processes.**' --deps out --links class
+arch-blueprint draw src -m 'app.features.core.executory_processes.**' --deps in --links class
 ```
 
 `diff --base` and `history` take `--deps` too; a snapshot records it, so two snapshots built with
 and without it can't be diffed. Metrics are not drawn with `--deps` (`--metric` is refused): the
-dependencies' own imports are not read, so their numbers would be wrong. The reverse view — what
-depends on the focus — is not there yet.
+neighbors' own imports are not read, so their numbers would be wrong.
 
 ## Commands
 

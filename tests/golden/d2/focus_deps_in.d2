@@ -1,0 +1,54 @@
+direction: down
+app.features.core.executory_processes.models: {
+  shape: class
+  style: {
+    fill: "#9B59B6"
+  }
+}
+
+app.features.core.executory_processes.tasks: {
+  shape: class
+  style: {
+    fill: "#9B59B6"
+  }
+}
+
+app.features.core.legal_cases.models: {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+app.features.core.legal_cases.usecases: {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+app.api.routes: {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+billing.reports: {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+app.api -> app.features
+app.features.core.executory_processes <-> app.features.core.legal_cases: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
+app.features.core.executory_processes.tasks -> app.features.core.executory_processes.models
+billing -> app

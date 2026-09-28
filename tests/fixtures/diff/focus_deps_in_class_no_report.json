@@ -1,8 +1,8 @@
 {
   "format": "arch-blueprint-graph",
   "version": 3,
-  "links": "class-grouped",
-  "deps": "out",
+  "links": "class",
+  "deps": "in",
   "metrics": [
     "depth"
   ],
@@ -20,24 +20,36 @@
       "kind": "function"
     },
     {
+      "id": "app.api.routes.handle",
+      "kind": "function"
+    },
+    {
       "id": "app.features.core.legal_cases.models.LegalCase",
       "kind": "class"
     },
     {
       "id": "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
       "kind": "class"
-    },
-    {
-      "id": "billing.invoices.Invoice",
-      "kind": "class"
     }
   ],
   "neighbors": [
+    "app.api.routes.handle",
     "app.features.core.legal_cases.models.LegalCase",
-    "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
-    "billing.invoices.Invoice"
+    "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase"
   ],
   "edges": [
+    {
+      "source": "app.api.routes.handle",
+      "target": "app.features.core.executory_processes.tasks.Tracker",
+      "source_endpoint": "app.api.routes.handle",
+      "target_endpoint": "app.features.core.executory_processes.tasks.Tracker"
+    },
+    {
+      "source": "app.api.routes.handle",
+      "target": "app.features.core.executory_processes.tasks.run_delete_old_customer",
+      "source_endpoint": "app.api.routes.handle",
+      "target_endpoint": "app.features.core.executory_processes.tasks.run_delete_old_customer"
+    },
     {
       "source": "app.features.core.executory_processes.tasks.Tracker",
       "target": "app.features.core.executory_processes.models.Process",
@@ -49,12 +61,6 @@
       "target": "app.features.core.legal_cases.models.LegalCase",
       "source_endpoint": "app.features.core.executory_processes.tasks.Tracker",
       "target_endpoint": "app.features.core.legal_cases.models.LegalCase"
-    },
-    {
-      "source": "app.features.core.executory_processes.tasks.Tracker",
-      "target": "billing.invoices.Invoice",
-      "source_endpoint": "app.features.core.executory_processes.tasks.Tracker",
-      "target_endpoint": "billing.invoices.Invoice"
     },
     {
       "source": "app.features.core.executory_processes.tasks.run_delete_old_customer",
@@ -77,6 +83,9 @@
   ],
   "facade_edges": [],
   "node_metrics": {
+    "app.api.routes.handle": {
+      "depth": 4
+    },
     "app.features.core.executory_processes.models.Process": {
       "depth": 6
     },
@@ -91,9 +100,6 @@
     },
     "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase": {
       "depth": 6
-    },
-    "billing.invoices.Invoice": {
-      "depth": 3
     }
   },
   "link_metrics": []

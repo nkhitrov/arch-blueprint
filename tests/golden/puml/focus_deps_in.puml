@@ -1,0 +1,34 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+package "app" as app {
+  package "features" as app.features {
+    package "core" as app.features.core {
+      package "executory_processes" as app.features.core.executory_processes {
+        class "models" as app.features.core.executory_processes.models <<(M, #9B59B6)>>
+        class "tasks" as app.features.core.executory_processes.tasks <<(M, #9B59B6)>>
+      }
+      package "legal_cases" as app.features.core.legal_cases {
+        class "models" as app.features.core.legal_cases.models <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D
+        class "usecases" as app.features.core.legal_cases.usecases <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D
+      }
+    }
+  }
+  package "api" as app.api {
+    class "routes" as app.api.routes <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D
+  }
+}
+package "billing" as billing {
+  class "reports" as billing.reports <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D
+}
+
+app.api ---> app.features
+app.features.core.executory_processes <-[#C0392B,bold]-> app.features.core.legal_cases
+app.features.core.executory_processes.tasks ---> app.features.core.executory_processes.models
+billing ---> app
+@enduml
+

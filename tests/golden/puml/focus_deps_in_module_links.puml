@@ -1,0 +1,25 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+title app.features.core
+
+class "executory_processes" as app.features.core.executory_processes <<(M, #F39C12)>>
+class "executory_processes.models" as app.features.core.executory_processes.models <<(M, #9B59B6)>>
+class "executory_processes.tasks" as app.features.core.executory_processes.tasks <<(M, #9B59B6)>>
+class app.api.routes <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D
+class app.features.core.legal_cases.models <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D
+class app.features.core.legal_cases.usecases <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D
+class billing.reports <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D
+
+app.api.routes ---> app.features.core.executory_processes
+app.features.core.executory_processes.tasks ---> app.features.core.executory_processes.models
+app.features.core.executory_processes.tasks ---> app.features.core.legal_cases.usecases
+app.features.core.legal_cases.models ---> app.features.core.executory_processes.models
+app.features.core.legal_cases.usecases ---> app.features.core.executory_processes.models
+billing.reports ---> app.features.core.executory_processes.models
+@enduml
+
