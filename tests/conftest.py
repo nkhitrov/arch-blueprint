@@ -24,11 +24,14 @@ ANCESTOR_DEP_PROJECT = _FIXTURES / "ancestor_dep"
 PACKAGE_NODES_PROJECT = _FIXTURES / "package_nodes"
 TANGLE_PROJECT = _FIXTURES / "tangle"
 CLASSES_PROJECT = _FIXTURES / "classes"
+FOCUS_DEPS_PROJECT = _FIXTURES / "focus_deps"
 
 INIT_IMPORTS_MODULES = ["-m", "writer", "-m", "storage.*"]
 ANCESTOR_DEP_MODULES = ["-m", "api.*", "-m", "services.*"]
 PACKAGE_NODES_MODULES = ["-m", "shop.*"]
 CLASSES_MODULES = ["-m", "refs.**"]
+FOCUS_DEPS_MODULES = ["-m", "app.features.core.executory_processes.**"]
+DEPS_OUT = ["--deps", "out"]
 TANGLE_MODULES = ["-m", "api.*", "-m", "services.*", "-m", "ring.*", "-m", "nest.*"]
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
@@ -166,6 +169,30 @@ DEEP_CLASS = Selection(
     ["--links", "class"],
 )
 
+# A focus drawn with what it depends on (``--deps out``), at every level: a
+# class reached through a facade re-export, a package facade imported with a
+# module under it, another top-level package; the dependencies' own imports and
+# the standard library stay out.
+FOCUS_DEPS = Selection("focus_deps", FOCUS_DEPS_PROJECT, FOCUS_DEPS_MODULES, DEPS_OUT)
+FOCUS_DEPS_MODULE_LINKS = Selection(
+    "focus_deps_module_links",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    [*DEPS_OUT, "--links", "module"],
+)
+FOCUS_DEPS_CLASS = Selection(
+    "focus_deps_class",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    [*DEPS_OUT, "--links", "class"],
+)
+FOCUS_DEPS_CLASS_GROUPED = Selection(
+    "focus_deps_class_grouped",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    [*DEPS_OUT, "--links", "class-grouped"],
+)
+
 SELECTIONS = [
     EXAMPLE,
     CYCLIC,
@@ -185,6 +212,10 @@ SELECTIONS = [
     CLASSES_CLASS_GROUPED,
     INIT_IMPORTS_CLASS,
     DEEP_CLASS,
+    FOCUS_DEPS,
+    FOCUS_DEPS_MODULE_LINKS,
+    FOCUS_DEPS_CLASS,
+    FOCUS_DEPS_CLASS_GROUPED,
 ]
 
 
@@ -259,6 +290,10 @@ SCENARIOS = [
     ),
     Scenario("init_imports_class", INIT_IMPORTS_CLASS),
     Scenario("deep_class", DEEP_CLASS),
+    Scenario("focus_deps", FOCUS_DEPS),
+    Scenario("focus_deps_module_links", FOCUS_DEPS_MODULE_LINKS),
+    Scenario("focus_deps_class", FOCUS_DEPS_CLASS),
+    Scenario("focus_deps_class_grouped", FOCUS_DEPS_CLASS_GROUPED),
 ]
 
 
@@ -435,6 +470,19 @@ DIFF_CASES = [
         GOLDEN_DIR / "json" / "cyclic.json",
         _DIFF_FIXTURES / "cyclic_weighted.json",
         exit_code=0,
+    ),
+    # A focus drawn with its dependencies (--deps out) gains one: the new
+    # dependency is an added node and arrow, the old ones stay greyed out.
+    DiffCase(
+        "new_dependency",
+        _DIFF_FIXTURES / "focus_deps_module_links_no_billing.json",
+        GOLDEN_DIR / "json" / "focus_deps_module_links.json",
+    ),
+    DiffCase(
+        "lost_dependency_changes_only",
+        GOLDEN_DIR / "json" / "focus_deps_module_links.json",
+        _DIFF_FIXTURES / "focus_deps_module_links_no_billing.json",
+        ("--changes-only",),
     ),
 ]
 

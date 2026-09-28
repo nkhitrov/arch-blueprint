@@ -21,6 +21,7 @@ from tests.conftest import (
     ANCESTOR_DEP_PROJECT,
     CYCLIC_PROJECT,
     EXAMPLE_PROJECT,
+    FOCUS_DEPS_PROJECT,
     INIT_IMPORTS_PROJECT,
 )
 
@@ -446,3 +447,88 @@ def test_module_levels_are_unchanged(level: str, *, nested: bool) -> None:
     graph = registered.extractor(source).extract()
     assert {node.kind for node in graph.nodes} == {NodeKind.MODULE}
     assert registered.nested == nested
+
+
+# --- --deps: the focus and what it depends on ---------------------------------
+
+_FOCUS = ["app.features.core.executory_processes.**"]
+
+
+def _deps_graph(level: str, patterns: list[str] = _FOCUS) -> BlueprintGraph:
+    source = GrimpSource(str(FOCUS_DEPS_PROJECT), patterns, deps="out")
+    return LINK_LEVELS[level].extractor(source).extract()
+
+
+def test_deps_builds_every_package_but_selects_the_patterns_only() -> None:
+    plain = GrimpSource(str(FOCUS_DEPS_PROJECT), _FOCUS)
+    focused = GrimpSource(str(FOCUS_DEPS_PROJECT), _FOCUS, deps="out")
+    assert "billing.invoices" not in plain.graph.modules
+    assert "billing.invoices" in focused.graph.modules
+    assert focused.selected_modules() == plain.selected_modules()
+
+
+def test_deps_skips_a_package_found_outside_the_project(tmp_path: Path) -> None:
+    """A directory named like a module found first elsewhere is not built."""
+    shutil.copytree(FOCUS_DEPS_PROJECT, tmp_path, dirs_exist_ok=True)
+    (tmp_path / "json").mkdir()  # the standard library's, as sys.modules has it
+    (tmp_path / "json" / "__init__.py").write_text("", encoding="utf-8")
+    source = GrimpSource(str(tmp_path), _FOCUS, deps="out")
+    assert not any(module.startswith("json") for module in source.graph.modules)
+
+
+@pytest.mark.parametrize("level", ["module", "namespace"])
+def test_module_neighbors_are_the_imported_modules_outside_the_focus(
+    level: str,
+) -> None:
+    graph = _deps_graph(level)
+    focus = {
+        "app.features.core.executory_processes.models",
+        "app.features.core.executory_processes.tasks",
+    }
+    # ``legal_cases`` (a facade) is imported with a module under it: that module
+    # is the node, the facade an endpoint. ``app.shared.clock`` is imported by
+    # a neighbor only; ``datetime`` is the standard library.
+    assert graph.neighbors == {
+        "app.features.core.legal_cases.usecases",
+        "billing.invoices",
+    }
+    assert [node.id for node in graph.nodes] == [
+        *sorted(focus),
+        *sorted(graph.neighbors),
+    ]
+    assert {edge.source for edge in graph.edges} <= focus
+
+
+def test_module_level_neighbor_edges_end_on_the_imported_module() -> None:
+    tasks = "app.features.core.executory_processes.tasks"
+    ends = {
+        (edge.source_endpoint, edge.target_endpoint)
+        for edge in _deps_graph("module").edges
+    }
+    assert ends == {
+        (tasks, "app.features.core.executory_processes.models"),
+        (tasks, "app.features.core.legal_cases"),
+        (tasks, "app.features.core.legal_cases.usecases"),
+        (tasks, "billing.invoices"),
+    }
+
+
+@pytest.mark.parametrize("level", ["class", "class-grouped"])
+def test_definition_neighbors_are_resolved_through_re_exports(level: str) -> None:
+    graph = _deps_graph(level)
+    # ``LegalCase`` is imported through the ``legal_cases`` facade; ``now``,
+    # which it calls, is a dependency of a neighbor, not of the focus.
+    assert graph.neighbors == {
+        "app.features.core.legal_cases.models.LegalCase",
+        "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
+        "billing.invoices.Invoice",
+    }
+    assert not {edge.source for edge in graph.edges} & graph.neighbors
+
+
+@pytest.mark.parametrize("level", list(LINK_LEVELS))
+def test_without_deps_there_are_no_neighbors(level: str) -> None:
+    source = GrimpSource(str(FOCUS_DEPS_PROJECT), _FOCUS)
+    graph = LINK_LEVELS[level].extractor(source).extract()
+    assert graph.neighbors == frozenset()
+    assert not any(node.id.startswith("billing") for node in graph.nodes)

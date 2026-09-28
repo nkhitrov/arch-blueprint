@@ -111,6 +111,11 @@ class BlueprintGraph:
     ``facade_edges`` are the own imports of package facades above the nodes
     (their ``__init__.py``): primary data, never drawn, only closing cycles.
 
+    ``neighbors`` are the ids of nodes outside the ``-m`` focus, drawn only
+    because a focused node depends on them (``--deps``). Their own imports are
+    not extracted, so no edge leaves one. Kept beside the nodes, like metrics:
+    being drawn for the focus is not part of what a node is.
+
     ``links``, ``cycles`` and ``tangles`` are derived: ``links`` is aggregated
     from ``edges`` once at construction, the rest are filled by the analyze
     step of the pipeline. ``edges`` is a frozenset so those derivations cannot
@@ -120,6 +125,7 @@ class BlueprintGraph:
     nodes: list[Node]
     edges: frozenset[Edge]
     facade_edges: frozenset[Edge] = frozenset()
+    neighbors: frozenset[str] = frozenset()
     links: set[Link] = field(init=False)
     cycles: list[Cycle] = field(init=False, default_factory=list)
     tangles: list[Tangle] = field(init=False, default_factory=list)

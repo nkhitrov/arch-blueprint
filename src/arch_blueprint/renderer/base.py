@@ -21,6 +21,10 @@ from arch_blueprint.renderer.layout import Frame, Layout, LayoutItem
 # depth_colors so a cycle never visually collides with a node's depth color.
 CYCLE_HIGHLIGHT_COLOR: Final = "#C0392B"
 
+# A muted grey for neighbors (``--deps``): what the focus depends on, set apart
+# from it. Not a depth color either, so no focused node is ever drawn alike.
+NEIGHBOR_COLOR: Final = "#BDC3C7"
+
 
 @dataclass(frozen=True)
 @final
@@ -267,6 +271,7 @@ class BlueprintRenderer(LaidOut, ABC):
             [node.id for node in graph.nodes],
             endpoints,
             nested=self.options.nested,
+            neighbors=graph.neighbors,
         )
 
     def _render_nodes(self, graph: BlueprintGraph) -> list[str]:
@@ -277,6 +282,9 @@ class BlueprintRenderer(LaidOut, ABC):
         """
         rendered: list[tuple[str, str]] = []
         for node in graph.nodes:
+            if node.id in graph.neighbors:
+                rendered.append((node.id, self._format_neighbor(node)))
+                continue
             metrics = graph.node_metrics.get(node.id, {})
             depth = int(metrics.get(self.plan.color_metric, 0))
             color = self.options.get_color_for_depth(depth)
@@ -298,7 +306,10 @@ class BlueprintRenderer(LaidOut, ABC):
 
         Importing ``pkg`` runs ``pkg/__init__.py``, a module like any other, so
         drawing it as a box beside the modules under it is what the import means.
+        One outside the focus is drawn as the neighbor it is.
         """
+        if namespace in self.layout.neighbors:
+            return self._format_neighbor(Node(namespace, NodeKind.MODULE))
         color = self.options.get_color_for_depth(len(namespace.split(".")))
         return self._format_node(Node(namespace, NodeKind.MODULE), color, [])
 
@@ -431,6 +442,15 @@ class BlueprintRenderer(LaidOut, ABC):
     def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
         """Format a single node, optionally embedding metric blocks."""
         ...
+
+    def _format_neighbor(self, node: Node) -> str:
+        """A node outside the focus (``--deps``): muted, with no metric blocks.
+
+        Concrete for the same reason as ``_format_frame``: by default the node
+        is drawn as any other, in ``NEIGHBOR_COLOR``. A format that can do more
+        to set it apart (a dashed border) overrides this.
+        """
+        return self._format_node(node, NEIGHBOR_COLOR, [])
 
     @abstractmethod
     def _format_link(

@@ -1,0 +1,59 @@
+{
+  "format": "arch-blueprint-graph",
+  "version": 3,
+  "links": "module",
+  "deps": "out",
+  "metrics": [
+    "depth"
+  ],
+  "nodes": [
+    {
+      "id": "app.features.core.executory_processes.models",
+      "kind": "module"
+    },
+    {
+      "id": "app.features.core.executory_processes.tasks",
+      "kind": "module"
+    },
+    {
+      "id": "app.features.core.legal_cases.usecases",
+      "kind": "module"
+    }
+  ],
+  "neighbors": [
+    "app.features.core.legal_cases.usecases"
+  ],
+  "edges": [
+    {
+      "source": "app.features.core.executory_processes.tasks",
+      "target": "app.features.core.executory_processes.models",
+      "source_endpoint": "app.features.core.executory_processes.tasks",
+      "target_endpoint": "app.features.core.executory_processes.models"
+    },
+    {
+      "source": "app.features.core.executory_processes.tasks",
+      "target": "app.features.core.legal_cases",
+      "source_endpoint": "app.features.core.executory_processes.tasks",
+      "target_endpoint": "app.features.core.legal_cases"
+    },
+    {
+      "source": "app.features.core.executory_processes.tasks",
+      "target": "app.features.core.legal_cases.usecases",
+      "source_endpoint": "app.features.core.executory_processes.tasks",
+      "target_endpoint": "app.features.core.legal_cases.usecases"
+    }
+  ],
+  "facade_edges": [],
+  "node_metrics": {
+    "app.features.core.executory_processes.models": {
+      "depth": 5
+    },
+    "app.features.core.executory_processes.tasks": {
+      "depth": 5
+    },
+    "app.features.core.legal_cases.usecases": {
+      "depth": 5
+    }
+  },
+  "link_metrics": []
+}

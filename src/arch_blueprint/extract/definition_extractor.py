@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Collection
-from typing import Final
+from typing import TYPE_CHECKING, Final, Optional
 
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
 from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.extract.levels import ancestors
 from arch_blueprint.extract.source import GrimpSource
 
+if TYPE_CHECKING:
+    from arch_blueprint.extract.symbols import SymbolIndex
+
 #: Inserted into the id of a definition in a package's ``__init__.py`` that is
 #: named like one of the package's modules: ``pkg.mod`` would otherwise be both
 #: a box and the frame of the definitions in ``pkg/mod.py``.
 FACADE_MODULE: Final = "__init__"
+
+
+def _id(node: Node) -> str:
+    return node.id
 
 
 class DefinitionExtractor:
@@ -34,6 +41,11 @@ class DefinitionExtractor:
 
     No ``facade_edges``: a name a package facade re-exports is followed to where
     it is defined, so no cycle runs through a facade unseen.
+
+    With ``--deps`` (``source.deps``), a definition of those kinds that a node
+    refers to but no pattern selects is a neighbor node, wherever in the
+    project it is defined. Only the focus's references are followed: a
+    neighbor has no edges of its own.
     """
 
     def __init__(self, source: GrimpSource, kinds: Collection[NodeKind]) -> None:
@@ -65,14 +77,24 @@ class DefinitionExtractor:
                 if kind in self.kinds:
                     kinds[name] = kind
                     owned[name] = symbols.references[name]
-        ids = self._node_ids(kinds)
+        outside: dict[str, NodeKind] = {}
+        if self.source.deps is not None:
+            for references in owned.values():
+                for reference in references:
+                    for target in index.resolve(reference):
+                        found = self._kind_of(index, target)
+                        if target not in kinds and found in self.kinds:
+                            outside[target] = found
+        ids = self._node_ids({**kinds, **outside})
         # Sorted by id, as module nodes are: renderers declare nodes in graph
         # order and a diff in id order, and both must declare them alike for
-        # a diff of a graph with itself to lay out as its plain diagram.
-        nodes = sorted(
-            (Node(id=ids[name], kind=kind) for name, kind in kinds.items()),
-            key=lambda node: node.id,
-        )
+        # a diff of a graph with itself to lay out as its plain diagram. The
+        # focus first, then its neighbors, as at the module levels.
+        nodes = [
+            *sorted((Node(ids[name], kind) for name, kind in kinds.items()), key=_id),
+            *sorted((Node(ids[name], kind) for name, kind in outside.items()), key=_id),
+        ]
+        neighbors = frozenset(ids[name] for name in outside)
 
         edges = {
             Edge(
@@ -86,7 +108,17 @@ class DefinitionExtractor:
             for target in index.resolve(reference)
             if target != name and target in ids
         }
-        return BlueprintGraph(nodes=nodes, edges=frozenset(edges))
+        return BlueprintGraph(
+            nodes=nodes,
+            edges=frozenset(edges),
+            neighbors=neighbors,
+        )
+
+    @staticmethod
+    def _kind_of(index: SymbolIndex, definition: str) -> Optional[NodeKind]:
+        """What ``definition`` is — a top-level one, so its module is its parent."""
+        symbols = index.symbols(definition.rpartition(".")[0])
+        return None if symbols is None else symbols.definitions.get(definition)
 
     def _node_ids(self, definitions: Collection[str]) -> dict[str, str]:
         """Each definition's node id: its name, unless a module is named alike."""

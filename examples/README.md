@@ -59,6 +59,17 @@ Expected: `app2.service.make_user ---> app1.models.User` and
 the function that uses them. `--links class-grouped` frames each box in its module. A fuller class-level subject, one reference per construct, is `tests/fixtures/classes`
 (`-m 'refs.**' --links class`).
 
+Only `app2` as the focus, with what it depends on:
+
+```bash
+uv run arch-blueprint draw examples/project_root -m 'app2.*' --deps out --links module
+```
+
+Expected: `app2.service` drawn as usual, and `app1.models` and `plugins.auth.backend` greyed out and
+dashed under their full names, with an arrow from `app2.service` to each — neither is selected by
+`-m`. A deeper subject is `tests/fixtures/focus_deps`
+(`-m 'app.features.core.executory_processes.**' --deps out --links class`).
+
 ## Namespace package with no source
 
 If a namespace package contains **no** regular sub-package (no `__init__.py` anywhere underneath,

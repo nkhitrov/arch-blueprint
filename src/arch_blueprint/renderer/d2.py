@@ -9,6 +9,7 @@ from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.domain.node import Node
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
+    NEIGHBOR_COLOR,
     BlueprintRenderer,
     CycleRender,
     LinkDecoration,
@@ -254,6 +255,28 @@ def format_cycle_notes_container(notes: list[str]) -> str:
     )
 
 
+#: What sets a neighbor's box apart (``--deps``), inside its ``style`` block.
+NEIGHBOR_STYLE: Final = (
+    f'fill: "{NEIGHBOR_COLOR}"',
+    "stroke-dash: 3",
+    "opacity: 0.6",
+)
+
+
+def format_neighbor(key: str, layout: Layout, node_id: str) -> str:
+    """A node outside the focus: muted and dashed, with no metric blocks."""
+    lines = [
+        f"{key}: {{",
+        "  shape: class",
+        *label_line(layout, node_id),
+        "  style: {",
+        *(f"    {line}" for line in NEIGHBOR_STYLE),
+        "  }",
+        "}",
+    ]
+    return "\n".join(lines)
+
+
 class D2LangRenderer(BlueprintRenderer):
     """D2 diagram renderer (stateless: cycle notes flow through CycleRender)."""
 
@@ -279,6 +302,9 @@ class D2LangRenderer(BlueprintRenderer):
         lines.extend(f"  {block}" for block in blocks)
         lines.append("}")
         return "\n".join(lines)
+
+    def _format_neighbor(self, node: Node) -> str:
+        return format_neighbor(self._key(node.id), self.layout, node.id)
 
     def _format_link(
         self,

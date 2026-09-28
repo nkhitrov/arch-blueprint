@@ -1,0 +1,36 @@
+@startuml
+!theme amiga
+
+top to bottom direction
+hide empty members
+set separator none
+
+package "app.features.core" as app.features.core {
+  package "executory_processes" as app.features.core.executory_processes {
+    package "models" as app.features.core.executory_processes.models {
+      class "Process" as app.features.core.executory_processes.models.Process <<(C, #27AE60)>>
+    }
+    package "tasks" as app.features.core.executory_processes.tasks {
+      class "Tracker" as app.features.core.executory_processes.tasks.Tracker <<(C, #27AE60)>>
+      class "run_delete_old_customer" as app.features.core.executory_processes.tasks.run_delete_old_customer <<(F, #27AE60)>>
+    }
+  }
+  package "legal_cases" as app.features.core.legal_cases {
+    package "models" as app.features.core.legal_cases.models {
+      class "LegalCase" as app.features.core.legal_cases.models.LegalCase <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
+    }
+    package "usecases" as app.features.core.legal_cases.usecases {
+      class "RemoveOldCustomerUseCase" as app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
+    }
+  }
+}
+package "billing.invoices" as billing.invoices {
+  class "Invoice" as billing.invoices.Invoice <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
+}
+
+app.features.core.executory_processes.tasks.Tracker ---> app.features.core.executory_processes.models.Process
+app.features.core.executory_processes.tasks.Tracker ---> app.features.core.legal_cases.models.LegalCase
+app.features.core.executory_processes.tasks.Tracker ---> billing.invoices.Invoice
+app.features.core.executory_processes.tasks.run_delete_old_customer ---> app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase
+@enduml
+
