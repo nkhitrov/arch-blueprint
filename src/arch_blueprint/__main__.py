@@ -310,7 +310,7 @@ def _add_deps_arg(parser: argparse.ArgumentParser) -> None:
             "Treat -m as the focus and draw what is next to it too, wherever in "
             "PROJECT_DIR it lives — greyed out, dashed, under its full name, with "
             "every arrow between it and the focus. 'out': what the focus depends "
-            "on; 'in': what depends on the focus. Not with --metric."
+            "on; 'in': what depends on the focus; 'both': either. Not with --metric."
         ),
     )
 
@@ -697,7 +697,9 @@ def _add_draw(commands: "argparse._SubParsersAction[argparse.ArgumentParser]") -
             "  arch-blueprint draw src -m 'myapp.orders.**' --deps out  the package "
             "and what it uses\n"
             "  arch-blueprint draw src -m 'myapp.orders.**' --deps in   the package "
-            "and what uses it"
+            "and what uses it\n"
+            "  arch-blueprint draw src -m 'myapp.orders.**' --deps both  the package "
+            "and everything next to it"
         ),
         handler=_draw,
     )

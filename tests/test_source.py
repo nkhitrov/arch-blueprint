@@ -613,6 +613,16 @@ def test_module_neighbor_in_holds_no_other_importer(tmp_path: Path) -> None:
     ) in {(edge.source_endpoint, edge.target_endpoint) for edge in graph.edges}
 
 
+@pytest.mark.parametrize("level", list(LINK_LEVELS))
+def test_deps_both_draws_the_union_of_out_and_in(level: str) -> None:
+    out = _deps_graph(level, deps="out")
+    into = _deps_graph(level, deps="in")
+    both = _deps_graph(level, deps="both")
+    assert both.neighbors == out.neighbors | into.neighbors
+    assert both.edges == out.edges | into.edges
+    _assert_neighbor_edges_end_in_the_focus(both)
+
+
 @pytest.mark.parametrize("level", ["class", "class-grouped"])
 def test_definition_neighbors_in_refer_to_the_focus(level: str) -> None:
     graph = _deps_graph(level, deps="in")
