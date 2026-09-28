@@ -68,13 +68,16 @@ This project uses `uv` for environment and dependency management.
     `pkg/__init__.py` (`GrimpSource.pattern_stems`). These levels parse every module's source with
     libcst — about ten times slower than the module levels.
     Example: `uv run arch-blueprint draw tests/fixtures/classes -m 'refs.**' --links class-grouped`.
-  - `--deps out` (`extract/focus.py:DEPS_DIRECTIONS`; `in`/`both` — the reverse view — are a
-    later PR) makes `-m` the **focus** and also draws every object the focus directly depends on,
+  - `--deps out|in` (`extract/focus.py:DEPS_DIRECTIONS`, routed by `follows_out` / `follows_in`)
+    makes `-m` the **focus** and also draws every object the focus directly depends on (`out`) or
+    that directly depends on it (`in`),
     wherever in `<project_dir>` it lives, as a **neighbor** (`BlueprintGraph.neighbors`): muted and
     dashed (`NEIGHBOR_COLOR`, `_format_neighbor`), no metric blocks, labelled by its full name
     when flat (the flat prefix is the focus's; a facade endpoint no focused node lies under is a
-    neighbor too — `Layout.neighbors`). Only the focus's imports / references are followed: no
-    edge leaves a neighbor, and stdlib / third-party code is never a node. Accepted where `--links`
+    neighbor too — `Layout.neighbors`). The direction only picks the neighbors: every edge between
+    the focus and a neighbor is drawn, either way, so a cycle through one is never half hidden; a
+    neighbor's imports / references of anything but the focus are never read (no neighbor →
+    neighbor edge), and stdlib / third-party code is never a node. Accepted where `--links`
     is (`_reject_deps` on snapshots); `--metric` with it is exit 2 (`_check_deps`, also for a
     snapshot built with it) — a neighbor's own imports are not read, so its numbers would lie; a
     `--deps` snapshot / history cache entry computes only the compute-only metrics
@@ -171,13 +174,16 @@ through its decorator, a default and a string naming a module-level alias),
 `tests/fixtures/focus_deps` (`--deps out`: a focus `app.features.core.executory_processes`
 depending on `legal_cases` — a class through a facade re-export, the facade and a module under it —
 and on another top-level package `billing`; `legal_cases.models` imports `app.shared.clock`,
-which must not be drawn),
+which must not be drawn; `legal_cases.models` / `.usecases` import the focus back — a cycle under
+`out`; `app.api.routes` (through the focus's facade) and `billing.reports` depend on it for
+`--deps in`, and `routes` also imports `billing.invoices`, which `in` must not draw),
 `tests/fixtures/diff` (snapshot edits used as diff inputs, every metric computed into them like a
 `-o graph.json` snapshot; `cyclic_weighted.json` is `cyclic` plus one import inside an existing link
 — a metric-only change; `classes_class_edited.json` / `classes_class_grouped_edited.json` are the
 class snapshots with a class added, an arrow removed and a pair resolved — regenerate them from
 their golden snapshot, with the same three edits, when that golden changes;
-`focus_deps_module_links_no_billing.json` is that golden less the `billing.invoices` dependency; all of them when the
+`focus_deps_module_links_no_billing.json` is that golden less the `billing.invoices` dependency,
+`focus_deps_in_class_no_report.json` the `focus_deps_in_class` golden less `billing.reports.report`; all of them when the
 snapshot format or a metric's counting changes). Fixture projects are excluded from
 ruff and mypy — they are analysis subjects, not code we ship.
 
@@ -210,7 +216,7 @@ happens, for a fresh extraction and a loaded snapshot alike.
    the cwd and is keyed by module **name** and mtime, not path — `git archive` stamps every file
    with the commit time, and concurrent runs interleave its separate meta/data files — so another
    checkout's imports could be drawn silently (#39). Rebuilding is cheap; `history` has its own
-   `SnapshotCache`. With `deps` (`--deps`) it also builds every package of `<project_dir>`
+   `SnapshotCache`. `importers_of` / `downstream_of` serve `--deps in`. With `deps` (`--deps`) it also builds every package of `<project_dir>`
    (`detect_roots`, only those `find_spec` locates inside it — `_lies_in`), so a dependency in a
    sibling top-level package is in the graph and parseable; the selection is unchanged.
 2. **Extract** (`extract/`) — a `GraphExtractor` (Protocol in `extract/base.py`, no constructor
@@ -225,11 +231,13 @@ happens, for a fresh extraction and a loaded snapshot alike.
    choice; `SnapshotCache.key` includes the level. Selection
    matches **both directions**: a dependency under a selected module, and a dependency *on* a package
    whose children are selected (`pkg.*` never selects `pkg`, so a re-exporting facade is otherwise
-   unmatchable). With `source.deps`, an import of a focused module that matches neither is
-   collected instead of dropped; the neighbor nodes are its **leaves** (`GrimpSource.leaves`, the
-   rule `selected_modules` uses — no node under another), an ancestor of one stays a facade
-   endpoint, and the level resolves over focus ∪ neighbors. Neighbors follow the focus in node
-   order, sorted.
+   unmatchable). With `source.deps`, `out` collects an import of a focused module that matches
+   neither instead of dropping it, and `in` every module outside the selection importing the focus
+   (`_focus_targets`: a selected module, one below it, a `pattern_stems` facade); the neighbor nodes
+   are the **leaves** of both (`GrimpSource.leaves`, the rule `selected_modules` uses — no node
+   under another), an ancestor of one stays an endpoint, and the level resolves over focus ∪
+   neighbors. `_edges_into` then adds each neighbor's imports of the focus (a node's subtree, an
+   endpoint's own `__init__.py`). Neighbors follow the focus in node order, sorted.
    The level registry is `extract/registry.py:LINK_LEVELS` (apart from `levels.py`, which the
    module extractor imports): a `Level` carries its `extractor` factory and `nested`, so `__main__._extractor`, `--links` choices, `snapshot.load` and
    `SnapshotCache.key` all read one table — a new link level is one entry. A new node kind is a
@@ -243,8 +251,11 @@ happens, for a fresh extraction and a loaded snapshot alike.
    endpoints the definitions themselves; no `facade_edges` (a re-export is followed to where the
    name is defined). A definition in `pkg/__init__.py` named like a module of `pkg` gets the id
    `pkg.__init__.name` (`FACADE_MODULE`) — `pkg.name` is the frame of that module's definitions.
-   With `source.deps`, a resolved target of a wanted kind that no pattern selects is a neighbor
-   (its kind read from its module's `definitions`, `_kind_of`), ids assigned over both sets.
+   With `source.deps`, `out` makes a resolved target of a wanted kind that no pattern selects a
+   neighbor (its kind read from its module's `definitions`, `_kind_of`), `in` a definition of a
+   wanted kind referring to a focused one (`_referrers`, searching only the modules grimp finds
+   downstream of a focused one — a re-export or an alias is an import too); ids are assigned over
+   both sets, and every neighbor's references into the focus are edges too.
    `extract/symbols.py` is the only libcst user, imported lazily by the extractor.
    `ModuleSymbols.parse` runs one `QualifiedNameProvider` pass per module: `definitions`,
    `exports` (module-level imports, `TYPE_CHECKING` / `try` / `if` ones included — what a facade

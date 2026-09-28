@@ -46,9 +46,9 @@ class GrimpSource:
     do it (``sys.path``, ``sys.modules``) is handed back afterwards.
 
     ``deps`` (a ``--deps`` direction, ``extract/focus.py``) makes the patterns
-    a focus whose dependencies are drawn too. They can lie in any package of
-    the project, so every package in ``project_dir`` is built then, not only
-    the patterns' own; what the patterns select does not change.
+    a focus whose dependencies or dependents are drawn too. They can lie in any
+    package of the project, so every package in ``project_dir`` is built then,
+    not only the patterns' own; what the patterns select does not change.
     """
 
     def __init__(
@@ -165,6 +165,14 @@ class GrimpSource:
         for descendant in self.graph.find_descendants(module):
             result.update(self.graph.find_modules_directly_imported_by(descendant))
         return result
+
+    def importers_of(self, module: str) -> set[str]:
+        """The modules that import ``module`` itself — not one below it."""
+        return set(self.graph.find_modules_that_directly_import(module))
+
+    def downstream_of(self, module: str) -> set[str]:
+        """Every module that imports ``module``, directly or through others."""
+        return set(self.graph.find_downstream_modules(module))
 
     def modules_under(self, name: str) -> list[str]:
         """``name`` and every module below it that the graph holds, sorted.

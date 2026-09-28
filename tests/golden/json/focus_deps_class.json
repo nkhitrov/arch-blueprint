@@ -61,6 +61,18 @@
       "target": "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
       "source_endpoint": "app.features.core.executory_processes.tasks.run_delete_old_customer",
       "target_endpoint": "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase"
+    },
+    {
+      "source": "app.features.core.legal_cases.models.LegalCase",
+      "target": "app.features.core.executory_processes.models.Process",
+      "source_endpoint": "app.features.core.legal_cases.models.LegalCase",
+      "target_endpoint": "app.features.core.executory_processes.models.Process"
+    },
+    {
+      "source": "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
+      "target": "app.features.core.executory_processes.models.Process",
+      "source_endpoint": "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
+      "target_endpoint": "app.features.core.executory_processes.models.Process"
     }
   ],
   "facade_edges": [],

@@ -7,18 +7,29 @@ set separator none
 
 title app.features.core.executory_processes
 
+legend top left
+  unchanged: drawn as on a plain diagram
+  <color:#00C853>**+ added**</color> module / dependency (dashed)
+  <color:#FF1744>**- removed**</color> module / dependency (dashed)
+  <color:#C0392B>**NEW CYCLE**</color> cycle introduced (dashed)
+  <color:#95A5A6>**cycle resolved**</color> dependency that remains
+endlegend
+
 class "models.Process" as app.features.core.executory_processes.models.Process <<(C, #27AE60)>>
 class "tasks.Tracker" as app.features.core.executory_processes.tasks.Tracker <<(C, #27AE60)>>
 class "tasks.run_delete_old_customer" as app.features.core.executory_processes.tasks.run_delete_old_customer <<(F, #27AE60)>>
+class app.api.routes.handle <<(F, #BDC3C7)>> #line.dashed;text:7F8C8D
 class app.features.core.legal_cases.models.LegalCase <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
 class app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
-class billing.invoices.Invoice <<(C, #BDC3C7)>> #line.dashed;text:7F8C8D
+class billing.reports.report <<(+, #00C853) added>> #00C853;line.dashed
 
+app.api.routes.handle ---> app.features.core.executory_processes.tasks.Tracker
+app.api.routes.handle ---> app.features.core.executory_processes.tasks.run_delete_old_customer
 app.features.core.executory_processes.tasks.Tracker ---> app.features.core.executory_processes.models.Process
 app.features.core.executory_processes.tasks.Tracker ---> app.features.core.legal_cases.models.LegalCase
-app.features.core.executory_processes.tasks.Tracker ---> billing.invoices.Invoice
 app.features.core.executory_processes.tasks.run_delete_old_customer ---> app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase
 app.features.core.legal_cases.models.LegalCase ---> app.features.core.executory_processes.models.Process
 app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase ---> app.features.core.executory_processes.models.Process
+billing.reports.report -[#00C853,dashed,thickness=3]-> app.features.core.executory_processes.models.Process : added
 @enduml
 

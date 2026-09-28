@@ -31,5 +31,5 @@ billing.invoices: {
   }
 }
 app -> billing
-app."features.core".executory_processes -> app."features.core".legal_cases
+app."features.core".executory_processes <-> app."features.core".legal_cases: CYCLE {style.stroke: "#C0392B"; style.stroke-width: 4}
 app."features.core".executory_processes.tasks -> app."features.core".executory_processes.models

@@ -164,7 +164,11 @@ def test_without_patterns_every_package_on_either_side_is_compared(
 
 
 def test_deps_draws_both_sides_with_the_focus_dependencies(repo: Path) -> None:
-    """Only ``pkg_b.*`` is the focus: its new import of ``pkg_a`` is a dependency."""
+    """Only ``pkg_b.*`` is the focus: its new import of ``pkg_a`` is a dependency.
+
+    ``pkg_a.core`` already imports the focus back, and every edge between the
+    focus and a neighbor is drawn, so the new import closes a cycle.
+    """
     _restore_backward_import(repo)
     result = run_command(
         "diff",
@@ -183,5 +187,6 @@ def test_deps_draws_both_sides_with_the_focus_dependencies(repo: Path) -> None:
     )
     assert result.returncode == _DIFFERENT, result.stderr
     assert (
-        "pkg_b.util -[#00C853,dashed,thickness=3]-> pkg_a.core : added" in result.stdout
+        "pkg_a.core <-[#C0392B,dashed,thickness=3]-> pkg_b.util : NEW CYCLE"
+        in result.stdout
     )

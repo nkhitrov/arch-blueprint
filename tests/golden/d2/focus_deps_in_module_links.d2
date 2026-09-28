@@ -1,8 +1,16 @@
 direction: down
-title: app.features.core.executory_processes {near: top-center; shape: text}
+title: app.features.core {near: top-center; shape: text}
+"app.features.core.executory_processes": {
+  shape: class
+  label: "executory_processes"
+  style: {
+    fill: "#F39C12"
+  }
+}
+
 "app.features.core.executory_processes.models": {
   shape: class
-  label: "models"
+  label: "executory_processes.models"
   style: {
     fill: "#9B59B6"
   }
@@ -10,13 +18,22 @@ title: app.features.core.executory_processes {near: top-center; shape: text}
 
 "app.features.core.executory_processes.tasks": {
   shape: class
-  label: "tasks"
+  label: "executory_processes.tasks"
   style: {
     fill: "#9B59B6"
   }
 }
 
-"app.features.core.legal_cases": {
+"app.api.routes": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+"app.features.core.legal_cases.models": {
   shape: class
   style: {
     fill: "#BDC3C7"
@@ -34,7 +51,7 @@ title: app.features.core.executory_processes {near: top-center; shape: text}
   }
 }
 
-"billing.invoices": {
+"billing.reports": {
   shape: class
   style: {
     fill: "#BDC3C7"
@@ -42,8 +59,9 @@ title: app.features.core.executory_processes {near: top-center; shape: text}
     opacity: 0.6
   }
 }
+"app.api.routes" -> "app.features.core.executory_processes"
 "app.features.core.executory_processes.tasks" -> "app.features.core.executory_processes.models"
-"app.features.core.executory_processes.tasks" -> "app.features.core.legal_cases"
 "app.features.core.executory_processes.tasks" -> "app.features.core.legal_cases.usecases"
-"app.features.core.executory_processes.tasks" -> "billing.invoices"
+"app.features.core.legal_cases.models" -> "app.features.core.executory_processes.models"
 "app.features.core.legal_cases.usecases" -> "app.features.core.executory_processes.models"
+"billing.reports" -> "app.features.core.executory_processes.models"

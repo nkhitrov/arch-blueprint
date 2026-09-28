@@ -2,7 +2,7 @@
   "format": "arch-blueprint-graph",
   "version": 3,
   "links": "module",
-  "deps": "out",
+  "deps": "in",
   "metrics": [
     "depth"
   ],
@@ -16,19 +16,35 @@
       "kind": "module"
     },
     {
+      "id": "app.api.routes",
+      "kind": "module"
+    },
+    {
+      "id": "app.features.core.legal_cases.models",
+      "kind": "module"
+    },
+    {
       "id": "app.features.core.legal_cases.usecases",
       "kind": "module"
     },
     {
-      "id": "billing.invoices",
+      "id": "billing.reports",
       "kind": "module"
     }
   ],
   "neighbors": [
+    "app.api.routes",
+    "app.features.core.legal_cases.models",
     "app.features.core.legal_cases.usecases",
-    "billing.invoices"
+    "billing.reports"
   ],
   "edges": [
+    {
+      "source": "app.api.routes",
+      "target": "app.features.core.executory_processes",
+      "source_endpoint": "app.api.routes",
+      "target_endpoint": "app.features.core.executory_processes"
+    },
     {
       "source": "app.features.core.executory_processes.tasks",
       "target": "app.features.core.executory_processes.models",
@@ -37,26 +53,26 @@
     },
     {
       "source": "app.features.core.executory_processes.tasks",
-      "target": "app.features.core.legal_cases",
-      "source_endpoint": "app.features.core.executory_processes.tasks",
-      "target_endpoint": "app.features.core.legal_cases"
-    },
-    {
-      "source": "app.features.core.executory_processes.tasks",
       "target": "app.features.core.legal_cases.usecases",
       "source_endpoint": "app.features.core.executory_processes.tasks",
       "target_endpoint": "app.features.core.legal_cases.usecases"
     },
     {
-      "source": "app.features.core.executory_processes.tasks",
-      "target": "billing.invoices",
-      "source_endpoint": "app.features.core.executory_processes.tasks",
-      "target_endpoint": "billing.invoices"
+      "source": "app.features.core.legal_cases.models",
+      "target": "app.features.core.executory_processes.models",
+      "source_endpoint": "app.features.core.legal_cases.models",
+      "target_endpoint": "app.features.core.executory_processes.models"
     },
     {
       "source": "app.features.core.legal_cases.usecases",
       "target": "app.features.core.executory_processes.models",
       "source_endpoint": "app.features.core.legal_cases.usecases",
+      "target_endpoint": "app.features.core.executory_processes.models"
+    },
+    {
+      "source": "billing.reports",
+      "target": "app.features.core.executory_processes.models",
+      "source_endpoint": "billing.reports",
       "target_endpoint": "app.features.core.executory_processes.models"
     }
   ],
@@ -69,16 +85,22 @@
     }
   ],
   "node_metrics": {
+    "app.api.routes": {
+      "depth": 3
+    },
     "app.features.core.executory_processes.models": {
       "depth": 5
     },
     "app.features.core.executory_processes.tasks": {
       "depth": 5
     },
+    "app.features.core.legal_cases.models": {
+      "depth": 5
+    },
     "app.features.core.legal_cases.usecases": {
       "depth": 5
     },
-    "billing.invoices": {
+    "billing.reports": {
       "depth": 2
     }
   },

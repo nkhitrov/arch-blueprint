@@ -454,9 +454,27 @@ def test_module_levels_are_unchanged(level: str, *, nested: bool) -> None:
 _FOCUS = ["app.features.core.executory_processes.**"]
 
 
-def _deps_graph(level: str, patterns: list[str] = _FOCUS) -> BlueprintGraph:
-    source = GrimpSource(str(FOCUS_DEPS_PROJECT), patterns, deps="out")
+def _deps_graph(
+    level: str,
+    patterns: list[str] = _FOCUS,
+    deps: str = "out",
+) -> BlueprintGraph:
+    source = GrimpSource(str(FOCUS_DEPS_PROJECT), patterns, deps=deps)
     return LINK_LEVELS[level].extractor(source).extract()
+
+
+def _focus_ids(graph: BlueprintGraph) -> set[str]:
+    return {node.id for node in graph.nodes} - graph.neighbors
+
+
+def _assert_neighbor_edges_end_in_the_focus(graph: BlueprintGraph) -> None:
+    """A neighbor's own dependencies are never read, bar those on the focus."""
+    focus = _focus_ids(graph)
+    for edge in graph.edges:
+        if edge.source_endpoint not in focus:
+            assert not edge.target_endpoint.startswith(
+                ("billing.invoices", "app.shared"),
+            ), edge
 
 
 def test_deps_builds_every_package_but_selects_the_patterns_only() -> None:
@@ -496,7 +514,12 @@ def test_module_neighbors_are_the_imported_modules_outside_the_focus(
         *sorted(focus),
         *sorted(graph.neighbors),
     ]
-    assert {edge.source for edge in graph.edges} <= focus
+    # ``usecases`` imports the focus back: drawn too, as every edge between
+    # the focus and a neighbor is.
+    assert {edge.source for edge in graph.edges} == {
+        "app.features.core.executory_processes.tasks",
+        "app.features.core.legal_cases.usecases",
+    }
 
 
 def test_module_level_neighbor_edges_end_on_the_imported_module() -> None:
@@ -510,6 +533,10 @@ def test_module_level_neighbor_edges_end_on_the_imported_module() -> None:
         (tasks, "app.features.core.legal_cases"),
         (tasks, "app.features.core.legal_cases.usecases"),
         (tasks, "billing.invoices"),
+        (
+            "app.features.core.legal_cases.usecases",
+            "app.features.core.executory_processes.models",
+        ),
     }
 
 
@@ -523,7 +550,85 @@ def test_definition_neighbors_are_resolved_through_re_exports(level: str) -> Non
         "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
         "billing.invoices.Invoice",
     }
-    assert not {edge.source for edge in graph.edges} & graph.neighbors
+    # Both use cases refer to ``Process`` back: drawn, and nothing else a
+    # neighbor refers to is.
+    process = "app.features.core.executory_processes.models.Process"
+    assert {
+        (edge.source, edge.target)
+        for edge in graph.edges
+        if edge.source in graph.neighbors
+    } == {
+        ("app.features.core.legal_cases.models.LegalCase", process),
+        ("app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase", process),
+    }
+
+
+@pytest.mark.parametrize("level", ["module", "namespace"])
+def test_module_neighbors_in_are_the_modules_importing_the_focus(level: str) -> None:
+    graph = _deps_graph(level, deps="in")
+    # ``routes`` imports the focus through its package's facade, ``reports``
+    # from another top-level package, the ``legal_cases`` modules directly;
+    # ``invoices`` is only imported, by the focus and by ``routes``.
+    assert graph.neighbors == {
+        "app.api.routes",
+        "app.features.core.legal_cases.models",
+        "app.features.core.legal_cases.usecases",
+        "billing.reports",
+    }
+    _assert_neighbor_edges_end_in_the_focus(graph)
+
+
+def test_module_level_neighbor_edges_in_end_on_the_focus() -> None:
+    focus = "app.features.core.executory_processes"
+    ends = {
+        (edge.source_endpoint, edge.target_endpoint)
+        for edge in _deps_graph("module", deps="in").edges
+    }
+    assert ends == {
+        (f"{focus}.tasks", f"{focus}.models"),
+        # A focus edge to a neighbor drawn for importing the focus.
+        (f"{focus}.tasks", "app.features.core.legal_cases.usecases"),
+        # The facade the pattern selects the insides of stays an endpoint.
+        ("app.api.routes", focus),
+        ("app.features.core.legal_cases.models", f"{focus}.models"),
+        ("app.features.core.legal_cases.usecases", f"{focus}.models"),
+        ("billing.reports", f"{focus}.models"),
+    }
+
+
+def test_module_neighbor_in_holds_no_other_importer(tmp_path: Path) -> None:
+    """An importer above another is an endpoint, as a facade is for the focus."""
+    shutil.copytree(FOCUS_DEPS_PROJECT, tmp_path, dirs_exist_ok=True)
+    (tmp_path / "billing" / "__init__.py").write_text(
+        "from app.features.core.executory_processes.models import Process\n",
+        encoding="utf-8",
+    )
+    source = GrimpSource(str(tmp_path), _FOCUS, deps="in")
+    graph = LINK_LEVELS["module"].extractor(source).extract()
+    assert "billing" not in graph.neighbors
+    assert "billing.reports" in graph.neighbors
+    assert (
+        "billing",
+        "app.features.core.executory_processes.models",
+    ) in {(edge.source_endpoint, edge.target_endpoint) for edge in graph.edges}
+
+
+@pytest.mark.parametrize("level", ["class", "class-grouped"])
+def test_definition_neighbors_in_refer_to_the_focus(level: str) -> None:
+    graph = _deps_graph(level, deps="in")
+    # ``handle`` reaches the focus through its package's facade; ``Health``,
+    # beside it, refers to nothing focused. ``Invoice`` is only referred to.
+    assert graph.neighbors == {
+        "app.api.routes.handle",
+        "app.features.core.legal_cases.models.LegalCase",
+        "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
+        "billing.reports.report",
+    }
+    _assert_neighbor_edges_end_in_the_focus(graph)
+    focus = _focus_ids(graph)
+    assert all(
+        edge.target in focus for edge in graph.edges if edge.source in graph.neighbors
+    )
 
 
 @pytest.mark.parametrize("level", list(LINK_LEVELS))
