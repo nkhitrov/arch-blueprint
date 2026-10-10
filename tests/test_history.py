@@ -544,6 +544,7 @@ def test_cache_round_trip_and_key(tmp_path: Path) -> None:
     assert cache.key("tree", ["a.*"], "namespace") != key
     assert cache.key("other", ["a.**"], "namespace") != key
     assert cache.key("tree", ["a.**"], "module") != key
+    assert cache.key("tree", ["a.**"], "namespace", "out") != key
     assert not list((tmp_path / "cache").rglob("*.tmp"))
 
 

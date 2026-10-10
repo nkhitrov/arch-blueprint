@@ -139,11 +139,24 @@ def diff_graphs(
         (*(delta.cycle for delta in drawn_deltas), *drawn_context_cycles),
     )
 
+    # A neighbor (``--deps``) is one on the side the node comes from. Drawn
+    # after the focus, as the extractor orders them, so a diff of a graph with
+    # itself declares its nodes as the plain diagram does.
+    outside = {
+        node_id
+        for node_id, status in shown.items()
+        if node_id in (old if status is ChangeStatus.REMOVED else new).neighbors
+    }
     graph = BlueprintGraph(
         nodes=[
-            Node(id=drawn[node_id], kind=kinds[node_id]) for node_id in sorted(shown)
+            Node(id=drawn[node_id], kind=kinds[node_id])
+            for node_id in sorted(
+                shown,
+                key=lambda node_id: (node_id in outside, node_id),
+            )
         ],
         edges=frozenset(drawn_edges),
+        neighbors=frozenset(drawn[node_id] for node_id in outside),
     )
     # Not analyzed: cycle detection over this partial edge set would report a
     # resolved cycle as present. Cycles live in ``cycle_changes`` and

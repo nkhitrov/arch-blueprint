@@ -33,6 +33,7 @@ from arch_blueprint.renderer.puml import (
     format_cycle_note,
     format_frame,
     format_tangle_note,
+    neighbor_marker,
     puml_header,
     spot_letter,
 )
@@ -94,6 +95,9 @@ class PlantUmlDiffRenderer(DiffRenderer):
             return head
         body = "\n".join(f"  {row}" for row in rows)
         return f"{head} {{\n{body}\n}}"
+
+    def _format_neighbor(self, node: Node) -> str:
+        return class_head(self._name_of(node.id), node.id, neighbor_marker(node.kind))
 
     def _format_frame(self, frame: Frame, items: list[str]) -> list[str]:
         return format_frame(frame, items)

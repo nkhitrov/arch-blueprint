@@ -32,6 +32,7 @@ from arch_blueprint.renderer.d2 import (
     DIRECTION,
     format_cycle_note,
     format_cycle_notes_container,
+    format_neighbor,
     format_tangle_note,
     format_tangle_ties,
     format_title,
@@ -118,6 +119,9 @@ class D2LangDiffRenderer(DiffRenderer):
         lines += [f"  {row}" for row in rows]  # where a plain diagram puts them
         lines.append("}")
         return "\n".join(lines)
+
+    def _format_neighbor(self, node: Node) -> str:
+        return format_neighbor(self._key_of(node.id), self.layout, node.id)
 
     def _format_link(
         self,

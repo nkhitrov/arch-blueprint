@@ -15,15 +15,18 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Final, cast
+from typing import Final, Optional, cast
 
 from arch_blueprint.analyze import analyze
 from arch_blueprint.domain.graph import BlueprintGraph, Edge, MetricValue
 from arch_blueprint.domain.node import Node, NodeKind
+from arch_blueprint.extract.focus import DEPS_DIRECTIONS
 from arch_blueprint.extract.registry import LINK_LEVELS
 
 SNAPSHOT_FORMAT: Final = "arch-blueprint-graph"
-SNAPSHOT_VERSION: Final = 2
+SNAPSHOT_VERSION: Final = 3
+#: The last version without ``--deps``, still read: as a graph built without it.
+_BEFORE_DEPS: Final = 2
 
 _EDGE_FIELDS: Final = ("source", "target", "source_endpoint", "target_endpoint")
 
@@ -42,14 +45,23 @@ class Snapshot:
     stored for the same reason: edge endpoints alone cannot tell a module-level
     graph from a namespace-level one whose namespaces happen to be modules, and
     a diff of two graphs built at different levels compares nothing real.
+    ``deps`` (``--deps``, None without it) likewise: a graph with no neighbors
+    may have been built with it, and a diff of a focus with its dependencies
+    against one without them would report every dependency as a change.
     """
 
     graph: BlueprintGraph
     metrics: frozenset[str]
     links: str
+    deps: Optional[str] = None
 
 
-def dump(graph: BlueprintGraph, metrics: Iterable[str], links: str) -> str:
+def dump(
+    graph: BlueprintGraph,
+    metrics: Iterable[str],
+    links: str,
+    deps: Optional[str] = None,
+) -> str:
     """Serialize ``graph`` deterministically: the same code gives the same bytes.
 
     Node order is kept as the extractor produced it — renderers draw nodes in
@@ -60,8 +72,10 @@ def dump(graph: BlueprintGraph, metrics: Iterable[str], links: str) -> str:
         "format": SNAPSHOT_FORMAT,
         "version": SNAPSHOT_VERSION,
         "links": links,
+        "deps": deps,
         "metrics": sorted(metrics),
         "nodes": [{"id": node.id, "kind": node.kind.value} for node in graph.nodes],
+        "neighbors": sorted(graph.neighbors),
         "edges": _dump_edges(graph.edges),
         "facade_edges": _dump_edges(graph.facade_edges),
         "node_metrics": {
@@ -87,17 +101,31 @@ def load(text: str) -> Snapshot:
     if root.get("format") != SNAPSHOT_FORMAT:
         msg = f"not an arch-blueprint snapshot (format {root.get('format')!r})"
         raise SnapshotError(msg)
-    if root.get("version") != SNAPSHOT_VERSION:
+    version = root.get("version")
+    if version not in (_BEFORE_DEPS, SNAPSHOT_VERSION):
         msg = (
             f"unsupported snapshot version {root.get('version')!r}; "
             f"this arch-blueprint reads version {SNAPSHOT_VERSION}"
         )
         raise SnapshotError(msg)
 
+    nodes = [_node(item) for item in _list(root, "nodes")]
+    deps: Optional[str] = None
+    neighbors: frozenset[str] = frozenset()
+    if version != _BEFORE_DEPS:
+        deps = _deps(_field(root, "deps"))
+        neighbors = frozenset(
+            _as_str(name, "neighbors[]") for name in _list(root, "neighbors")
+        )
+        stray = sorted(neighbors - {node.id for node in nodes})
+        if stray:
+            msg = f"neighbors: {stray[0]!r} is not a node"
+            raise SnapshotError(msg)
     graph = BlueprintGraph(
-        nodes=[_node(item) for item in _list(root, "nodes")],
+        nodes=nodes,
         edges=frozenset(_edge(item) for item in _list(root, "edges")),
         facade_edges=frozenset(_edge(item) for item in _list(root, "facade_edges")),
+        neighbors=neighbors,
     )
     for node_id, values in _mapping(
         _field(root, "node_metrics"),
@@ -116,7 +144,17 @@ def load(text: str) -> Snapshot:
     if links not in LINK_LEVELS:
         msg = f"unknown link level {links!r}"
         raise SnapshotError(msg)
-    return Snapshot(graph=analyze(graph), metrics=metrics, links=links)
+    return Snapshot(graph=analyze(graph), metrics=metrics, links=links, deps=deps)
+
+
+def _deps(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    deps = _as_str(value, "deps")
+    if deps not in DEPS_DIRECTIONS:
+        msg = f"unknown --deps direction {deps!r}"
+        raise SnapshotError(msg)
+    return deps
 
 
 def _dump_edges(edges: frozenset[Edge]) -> list[dict[str, str]]:

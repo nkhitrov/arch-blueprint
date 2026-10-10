@@ -1,7 +1,8 @@
 {
   "format": "arch-blueprint-graph",
-  "version": 2,
+  "version": 3,
   "links": "class-grouped",
+  "deps": null,
   "metrics": [
     "depth",
     "edge_weight",
@@ -167,6 +168,7 @@
       "kind": "class"
     }
   ],
+  "neighbors": [],
   "edges": [
     {
       "source": "refs.Farm",

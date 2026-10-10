@@ -76,6 +76,27 @@ A link is drawn only when both of its ends are selected. That includes a depende
 package whose children you selected: `pkg.*` never selects `pkg` itself, but an import of `pkg`
 still counts.
 
+### Everything next to the selection
+
+`--deps out` turns the selection into the **focus** and draws what it depends on too, wherever in
+`PROJECT_DIR` that lives — another package, another top-level package — without adding it to
+`-m`. `--deps in` draws the other side: what depends on the focus. Either way such a neighbor is
+drawn greyed out and dashed, under its full name, with every arrow between it and the focus, in
+both directions — a dependency that imports the focus back is drawn as the cycle it is. What the
+neighbors import from one another or from anything else is left out, and so are the standard
+library and third-party packages. It works at every `--links` level: the imported module (or its
+namespace), or the class or function a name refers to, followed through re-exports. At the class
+levels `--deps in` also parses every module importing the focus, directly or through others.
+
+```shell
+arch-blueprint draw src -m 'app.features.core.executory_processes.**' --deps out --links class
+arch-blueprint draw src -m 'app.features.core.executory_processes.**' --deps in --links class
+```
+
+`diff --base` and `history` take `--deps` too; a snapshot records it, so two snapshots built with
+and without it can't be diffed. Metrics are not drawn with `--deps` (`--metric` is refused): the
+neighbors' own imports are not read, so their numbers would be wrong.
+
 ## Commands
 
 | Command | What it does |
@@ -202,8 +223,8 @@ arch-blueprint draw src -m 'myapp.*' -o graph.json
 arch-blueprint draw graph.json -o graph.png --metric instability
 ```
 
-A snapshot records its `--links` level, so drawing or diffing one takes no `--links`, and two
-snapshots built at different levels can't be diffed.
+A snapshot records its `--links` level and `--deps`, so drawing or diffing one takes neither, and
+two snapshots built at different levels (or with and without `--deps`) can't be diffed.
 
 ### diff
 
@@ -369,6 +390,8 @@ error, not an empty diagram. Common mistakes:
 | `unknown metric 'fanin'. Available: …` | See `arch-blueprint --list-metrics`. |
 | `--links applies when building a graph; a snapshot already records its link level` | Pass `--links` when saving the snapshot (`draw DIR --links module -o graph.json`), not when drawing it. |
 | `cannot diff a namespace-level snapshot against a module-level one` | Save both snapshots with the same `--links`. |
+| `--metric does not go with --deps` | Draw metrics in a run without `--deps`. |
+| `cannot diff a snapshot built without --deps against one built with --deps out` | Save both snapshots with the same `--deps`. |
 | `warning: cannot parse '…/x.py' (…); its definitions are left out.` | With `--links class` / `class-grouped`, a file that isn't valid Python; the rest is drawn. |
 
 A pattern resolves against `PROJECT_DIR` first, then against the installed packages. Graphing
