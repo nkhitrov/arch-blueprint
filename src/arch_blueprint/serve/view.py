@@ -144,7 +144,8 @@ def build_view(
             "target": link.target,
             "cyclic": (link.source, link.target) in on_tangle,
             "metrics": _pick(
-                graph.link_metrics.get((link.source, link.target)), link_names,
+                graph.link_metrics.get((link.source, link.target)),
+                link_names,
             ),
             "imports": _imports(link.edges),
         }
