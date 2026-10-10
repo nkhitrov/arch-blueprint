@@ -603,6 +603,21 @@ def test_deps_rejects_an_unknown_direction() -> None:
     assert "invalid choice: 'up'" in result.stderr
 
 
+def test_deps_both_draws_either_side() -> None:
+    result = run_cli(
+        EXAMPLE_PROJECT,
+        "-m",
+        "app2.*",
+        "--deps",
+        "both",
+        "--links",
+        "module",
+    )
+    # ``app1.models`` is imported by the focus; nothing imports ``app2``.
+    assert "class app1.models <<(M, #BDC3C7)>> #line.dashed" in result.stdout
+    assert "app2.service ---> app1.models" in result.stdout
+
+
 def test_deps_in_draws_what_imports_the_focus() -> None:
     result = run_cli(
         EXAMPLE_PROJECT,

@@ -80,7 +80,7 @@ still counts.
 
 `--deps out` turns the selection into the **focus** and draws what it depends on too, wherever in
 `PROJECT_DIR` that lives — another package, another top-level package — without adding it to
-`-m`. `--deps in` draws the other side: what depends on the focus. Either way such a neighbor is
+`-m`. `--deps in` draws the other side: what depends on the focus; `--deps both`, either. Such a neighbor is
 drawn greyed out and dashed, under its full name, with every arrow between it and the focus, in
 both directions — a dependency that imports the focus back is drawn as the cycle it is. What the
 neighbors import from one another or from anything else is left out, and so are the standard
@@ -91,6 +91,7 @@ levels `--deps in` also parses every module importing the focus, directly or thr
 ```shell
 arch-blueprint draw src -m 'app.features.core.executory_processes.**' --deps out --links class
 arch-blueprint draw src -m 'app.features.core.executory_processes.**' --deps in --links class
+arch-blueprint draw src -m 'app.features.core.executory_processes.**' --deps both --links module
 ```
 
 `diff --base` and `history` take `--deps` too; a snapshot records it, so two snapshots built with

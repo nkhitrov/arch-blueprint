@@ -1,0 +1,87 @@
+direction: down
+title: app.features.core {near: top-center; shape: text}
+"app.features.core.executory_processes": {
+  shape: class
+  label: "executory_processes"
+  style: {
+    fill: "#F39C12"
+  }
+}
+
+"app.features.core.executory_processes.models": {
+  shape: class
+  label: "executory_processes.models"
+  style: {
+    fill: "#9B59B6"
+  }
+}
+
+"app.features.core.executory_processes.tasks": {
+  shape: class
+  label: "executory_processes.tasks"
+  style: {
+    fill: "#9B59B6"
+  }
+}
+
+"app.api.routes": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+"app.features.core.legal_cases": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+"app.features.core.legal_cases.models": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+"app.features.core.legal_cases.usecases": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+"billing.invoices": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+
+"billing.reports": {
+  shape: class
+  style: {
+    fill: "#BDC3C7"
+    stroke-dash: 3
+    opacity: 0.6
+  }
+}
+"app.api.routes" -> "app.features.core.executory_processes"
+"app.features.core.executory_processes.tasks" -> "app.features.core.executory_processes.models"
+"app.features.core.executory_processes.tasks" -> "app.features.core.legal_cases"
+"app.features.core.executory_processes.tasks" -> "app.features.core.legal_cases.usecases"
+"app.features.core.executory_processes.tasks" -> "billing.invoices"
+"app.features.core.legal_cases.models" -> "app.features.core.executory_processes.models"
+"app.features.core.legal_cases.usecases" -> "app.features.core.executory_processes.models"
+"billing.reports" -> "app.features.core.executory_processes.models"

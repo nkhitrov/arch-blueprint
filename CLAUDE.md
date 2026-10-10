@@ -68,9 +68,9 @@ This project uses `uv` for environment and dependency management.
     `pkg/__init__.py` (`GrimpSource.pattern_stems`). These levels parse every module's source with
     libcst — about ten times slower than the module levels.
     Example: `uv run arch-blueprint draw tests/fixtures/classes -m 'refs.**' --links class-grouped`.
-  - `--deps out|in` (`extract/focus.py:DEPS_DIRECTIONS`, routed by `follows_out` / `follows_in`)
-    makes `-m` the **focus** and also draws every object the focus directly depends on (`out`) or
-    that directly depends on it (`in`),
+  - `--deps out|in|both` (`extract/focus.py:DEPS_DIRECTIONS`, routed by `follows_out` /
+    `follows_in`) makes `-m` the **focus** and also draws every object the focus directly depends
+    on (`out`), that directly depends on it (`in`), or either (`both`, the union),
     wherever in `<project_dir>` it lives, as a **neighbor** (`BlueprintGraph.neighbors`): muted and
     dashed (`NEIGHBOR_COLOR`, `_format_neighbor`), no metric blocks, labelled by its full name
     when flat (the flat prefix is the focus's; a facade endpoint no focused node lies under is a

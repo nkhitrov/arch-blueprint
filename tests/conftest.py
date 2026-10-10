@@ -33,6 +33,7 @@ CLASSES_MODULES = ["-m", "refs.**"]
 FOCUS_DEPS_MODULES = ["-m", "app.features.core.executory_processes.**"]
 DEPS_OUT = ["--deps", "out"]
 DEPS_IN = ["--deps", "in"]
+DEPS_BOTH = ["--deps", "both"]
 TANGLE_MODULES = ["-m", "api.*", "-m", "services.*", "-m", "ring.*", "-m", "nest.*"]
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
@@ -221,6 +222,26 @@ FOCUS_DEPS_IN_CLASS_GROUPED = Selection(
     FOCUS_DEPS_MODULES,
     [*DEPS_IN, "--links", "class-grouped"],
 )
+# The same focus with both sides (``--deps both``): the union of the two sets
+# of neighbors, a neighbor on both sides drawn once, with its cycle.
+FOCUS_DEPS_BOTH = Selection(
+    "focus_deps_both",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    DEPS_BOTH,
+)
+FOCUS_DEPS_BOTH_MODULE_LINKS = Selection(
+    "focus_deps_both_module_links",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    [*DEPS_BOTH, "--links", "module"],
+)
+FOCUS_DEPS_BOTH_CLASS = Selection(
+    "focus_deps_both_class",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    [*DEPS_BOTH, "--links", "class"],
+)
 
 SELECTIONS = [
     EXAMPLE,
@@ -249,6 +270,9 @@ SELECTIONS = [
     FOCUS_DEPS_IN_MODULE_LINKS,
     FOCUS_DEPS_IN_CLASS,
     FOCUS_DEPS_IN_CLASS_GROUPED,
+    FOCUS_DEPS_BOTH,
+    FOCUS_DEPS_BOTH_MODULE_LINKS,
+    FOCUS_DEPS_BOTH_CLASS,
 ]
 
 
@@ -331,6 +355,9 @@ SCENARIOS = [
     Scenario("focus_deps_in_module_links", FOCUS_DEPS_IN_MODULE_LINKS),
     Scenario("focus_deps_in_class", FOCUS_DEPS_IN_CLASS),
     Scenario("focus_deps_in_class_grouped", FOCUS_DEPS_IN_CLASS_GROUPED),
+    Scenario("focus_deps_both", FOCUS_DEPS_BOTH),
+    Scenario("focus_deps_both_module_links", FOCUS_DEPS_BOTH_MODULE_LINKS),
+    Scenario("focus_deps_both_class", FOCUS_DEPS_BOTH_CLASS),
 ]
 
 
