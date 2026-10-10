@@ -41,11 +41,14 @@ def degree_counts(graph: BlueprintGraph) -> tuple[dict[str, int], dict[str, int]
     dependents: dict[str, set[str]] = {node_id: set() for node_id in node_ids}
     dependencies: dict[str, set[str]] = {node_id: set() for node_id in node_ids}
     for edge in graph.edges:
+        # The importer is a node, or lies under one when packages are folded
+        # into single nodes (the viewer's ``serve/fold.py``).
+        importer = _owner(edge.source, node_ids)
         owner = _owner(edge.target, node_ids)
-        if owner is None or edge.source not in node_ids or owner == edge.source:
+        if owner is None or importer is None or owner == importer:
             continue
-        dependencies[edge.source].add(owner)
-        dependents[owner].add(edge.source)
+        dependencies[importer].add(owner)
+        dependents[owner].add(importer)
     fan_in = {node.id: len(dependents[node.id]) for node in graph.nodes}
     fan_out = {node.id: len(dependencies[node.id]) for node in graph.nodes}
     return fan_in, fan_out

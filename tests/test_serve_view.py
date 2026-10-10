@@ -235,3 +235,14 @@ def test_request_from_json() -> None:
         {"patterns": ["a.**"], "folded": ["a.b"], "links": "class"},
     )
     assert request == ViewRequest(("a.**",), frozenset({"a.b"}), "class")
+
+
+def test_fold_degrees_match_bare_selection() -> None:
+    """fan_in / fan_out of a folded package count the imports of what it holds."""
+    folded = fold(_modules(EXAMPLE_PROJECT, EXAMPLE_ROOTS), {"app2"})
+    bare = _modules(EXAMPLE_PROJECT, ["app1.**", "app2", "plugins.**"])
+    registry = default_registry()
+    registry.compute(folded, ["fan_in", "fan_out"])
+    registry.compute(bare, ["fan_in", "fan_out"])
+    assert folded.node_metrics == bare.node_metrics
+    assert folded.node_metrics["app2"]["fan_out"] == 2
