@@ -16,7 +16,8 @@ Boxes can be classes and functions too, with arrows between them
 
 - [Quick start](#quick-start)
 - [Choosing what to draw](#choosing-what-to-draw)
-- [Commands](#commands): [`draw`](#draw), [`diff`](#diff), [`history`](#history)
+- [Commands](#commands): [`draw`](#draw), [`diff`](#diff), [`history`](#history),
+  [`serve`](#serve)
 - [Metrics](#metrics)
 - [Troubleshooting](#troubleshooting)
 - [Examples](#examples)
@@ -84,6 +85,7 @@ still counts.
 | `draw SNAPSHOT` | draws a snapshot saved earlier by `draw -o graph.json` |
 | `diff` | draws what changed between two snapshots or two git revisions |
 | `history PROJECT_DIR` | writes one picture per commit that changed the graph |
+| `serve PROJECT_DIR` | opens a page in the browser to explore the graph interactively |
 
 Output goes to stdout unless `-o FILE` is given. Without `-f`, the extension of `-o` picks the
 format:
@@ -300,6 +302,38 @@ blueprint-history/               (or -o DIR)
   didn't produce are removed; nothing else in the directory is touched.
 - **Broken commits.** A commit whose code can't be analyzed is reported as `skipped`, with the
   reason.
+
+### serve
+
+`serve` opens a page in the browser where the graph is explored instead of chosen up front: no
+`-m` or `--links` to get right before you see anything.
+
+```bash
+arch-blueprint serve src                     # every package in src/
+arch-blueprint serve src -m 'myapp.**'       # one package
+arch-blueprint serve src --port 8000 --no-open
+```
+
+![The viewer: a package unfolded, one module focused](docs/images/serve.jpg)
+
+- **Fold and unfold.** The page opens on each package's direct subpackages, folded into one box
+  each. Double-click a folded box to unfold it, or a package's frame to fold it back. A folded box
+  draws what selecting that package whole (`-m pkg`) draws: its fan-in, fan-out and arrows count
+  everything inside it.
+- **Focus.** Click a box: what it depends on and what depends on it stay lit, the rest fades. The
+  panel on the right lists both, with the box's metrics. Esc clears the focus.
+- **Arrows.** Click an arrow to list the imports behind it. A red two-headed arrow is a cycle.
+- **Find.** Type in the search box to highlight matching boxes. Enter goes to the first match,
+  unfolding whatever package hides it.
+- **Choose.** The checkboxes on the left pick the packages and modules shown. "boxes" switches
+  between modules and classes & functions; "metric" shows a metric on every box or arrow.
+- **Share and keep.** The view lives in the page's address, so a link opens the same view.
+  "⧉ CLI command" copies the `draw` command for the same modules, arrows and metric, ready for a
+  doc or CI. `draw` folds nothing, so a view with folded packages notes that the command draws them
+  unfolded.
+
+The server listens on `127.0.0.1` only and stops with Ctrl-C. The import graph is read once per
+selection and kept while the server runs: restart `serve` to see edits to the code.
 
 ## Metrics
 
