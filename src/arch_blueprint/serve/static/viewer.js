@@ -155,6 +155,12 @@ function unfold(id) {
   subpackages(id).forEach((child) => state.folded.add(child));
 }
 
+/** Show a package one level deep: its modules, each subpackage folded. */
+function openOneLevel(id) {
+  [...state.folded].filter((f) => isUnder(f, id)).forEach((f) => state.folded.delete(f));
+  subpackages(id).forEach((child) => state.folded.add(child));
+}
+
 function foldInto(id) {
   [...state.folded].filter((f) => isUnder(f, id)).forEach((f) => state.folded.delete(f));
   state.folded.add(id);
@@ -232,7 +238,11 @@ function setChecked(id, on) {
     ancestor = parentOf(ancestor);
   }
   [...checked].filter((c) => isUnder(c, id)).forEach((c) => checked.delete(c));
-  if (on) checked.add(id);
+  if (on) {
+    checked.add(id);
+    // A package just ticked is drawn as one box; the user unfolds it.
+    if (tree.get(id).package) foldInto(id);
+  }
   state.patterns = patternsFor(checked);
   selectionChanged();
 }
@@ -276,13 +286,6 @@ function redraw() {
     renderTree();
     return;
   }
-  // A ticked package is shown opened, as `serve -m pkg.**` opens: never itself
-  // folded into one box, its subpackages folded instead.
-  state.patterns
-    .filter((p) => p.endsWith(".**"))
-    .map((p) => p.slice(0, -3))
-    .filter((stem) => state.folded.has(stem))
-    .forEach(unfold);
   refresh();
 }
 
@@ -594,7 +597,8 @@ function scope() {
 function isolate(id) {
   history.pushState(null, "", location.search);
   state.patterns = [isPackage(id) ? `${id}.**` : id];
-  state.folded = new Set(subpackages(id));
+  state.folded = new Set();
+  openOneLevel(id);
   state.focus = null;
   for (let name = id; name !== null; name = parentOf(name)) expanded.add(name);
   refresh();
@@ -865,6 +869,7 @@ $("auto-redraw").addEventListener("change", (event) => {
 $("redraw").addEventListener("click", redraw);
 $("select-all").addEventListener("click", () => {
   state.patterns = roots.map((r) => `${r}.**`);
+  roots.forEach(openOneLevel);
   selectionChanged();
 });
 $("select-none").addEventListener("click", () => {

@@ -332,7 +332,7 @@ arch-blueprint serve src --port 8000 --no-open
   unfolding whatever package hides it.
 - **Choose.** The checkboxes on the left pick the packages and modules shown; "all" and "none" tick
   or clear every box. Turn "auto-redraw" off to tick a few boxes without a redraw after each one,
-  then press "Redraw". A ticked package opens with its subpackages folded. "boxes" switches
+  then press "Redraw". A package you tick is drawn as one box; double-click it to open it. "boxes" switches
   between modules and classes & functions; "metric" shows a metric on every box or arrow.
 - **Share and keep.** The view lives in the page's address, so a link opens the same view.
   "⧉ CLI command" copies the `draw` command for the same modules, arrows and metric, ready for a
