@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import urllib.error
 import urllib.request
@@ -116,3 +117,15 @@ def test_bad_json(server: ViewServer) -> None:
 def test_not_found(server: ViewServer, path: str) -> None:
     status, _ = _get(server, path)
     assert status == 404
+
+
+def test_page_assets_are_served(server: ViewServer) -> None:
+    """Every script and stylesheet the page names is there: the page works offline."""
+    _, page = _get(server, "/")
+    assets = re.findall(r'(?:src|href)="(/static/[^"]+)"', page.decode())
+    assert "/static/vendor/cytoscape.min.js" in assets
+    assert "/static/viewer.js" in assets
+    for asset in assets:
+        status, body = _get(server, asset)
+        assert (asset, status) == (asset, 200)
+        assert body

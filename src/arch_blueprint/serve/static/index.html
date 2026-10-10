@@ -1,2 +1,59 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>arch-blueprint</title></head><body></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>arch-blueprint</title>
+  <link rel="stylesheet" href="/static/viewer.css">
+</head>
+<body>
+  <header class="bar">
+    <strong class="brand">arch-blueprint</strong>
+    <span class="project" id="project"></span>
+    <label>boxes
+      <select id="links" title="What a box is">
+        <option value="module">modules</option>
+        <option value="class">classes &amp; functions</option>
+      </select>
+    </label>
+    <label>metric
+      <select id="metric" title="The metric shown on boxes or arrows">
+        <option value="">none</option>
+      </select>
+    </label>
+    <input id="search" type="search" placeholder="find a module…  (Enter: go)" autocomplete="off">
+    <span class="spacer"></span>
+    <span class="stats" id="stats"></span>
+    <span class="busy" id="busy" hidden>computing…</span>
+    <button id="fit" type="button" title="Fit the graph to the window">fit</button>
+    <button id="copy-cli" type="button" title="Copy the 'draw' command that draws this view">⧉ CLI command</button>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+  <main class="panes">
+    <aside class="tree" aria-label="Packages">
+      <div class="pane-title">packages <span class="hint">☑ shown · ▸ folded</span></div>
+      <div id="tree"></div>
+    </aside>
+    <section class="canvas" id="canvas" aria-label="Import graph"></section>
+    <aside class="inspector" id="inspector" aria-label="Details">
+      <div class="pane-title">details</div>
+      <div id="details" class="details">
+        <p class="hint">Click a box to see what it depends on and what depends on it.
+          Click an arrow for the imports behind it. Double-click a package to fold or
+          unfold it. Esc clears the focus.</p>
+      </div>
+    </aside>
+  </main>
+  <dialog id="cli-dialog">
+    <form method="dialog">
+      <p>The command that draws this view:</p>
+      <pre id="cli-text"></pre>
+      <button type="submit">close</button>
+    </form>
+  </dialog>
+  <script src="/static/vendor/cytoscape.min.js"></script>
+  <script src="/static/vendor/elk.bundled.js"></script>
+  <script src="/static/vendor/cytoscape-elk.js"></script>
+  <script type="module" src="/static/viewer.js"></script>
+</body>
+</html>

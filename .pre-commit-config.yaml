@@ -6,11 +6,11 @@ repos:
     hooks:
       - id: check-ast
       - id: trailing-whitespace
-        exclude: ^(tests/golden/|docs/images/)
+        exclude: ^(tests/golden/|docs/images/|src/arch_blueprint/serve/static/vendor/)
       - id: check-toml
       - id: end-of-file-fixer
         # Both hold verbatim tool output; a "fix" makes them stop matching it.
-        exclude: ^(tests/golden/|docs/images/)
+        exclude: ^(tests/golden/|docs/images/|src/arch_blueprint/serve/static/vendor/)
 
   - repo: local
     hooks:
