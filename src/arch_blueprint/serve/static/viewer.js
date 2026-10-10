@@ -50,6 +50,7 @@ function writeUrl() {
 async function loadTree() {
   const response = await fetch("/api/tree");
   const data = await response.json();
+  if (!response.ok) throw new Error(data.error);
   $("project").textContent = data.project;
   roots = data.roots;
   for (const module of data.modules) {
@@ -102,6 +103,33 @@ function showError(message) {
   $("banner").hidden = !message;
   $("banner").textContent = message || "";
 }
+
+// --- packages and modules -----------------------------------------------------
+
+/** "1 module", "12 modules". */
+function modulesText(id) {
+  const count = moduleCount(id);
+  return `${count} module${count === 1 ? "" : "s"}`;
+}
+
+/** How many modules lie under a package (its own facade not counted). */
+function moduleCount(id) {
+  let count = 0;
+  for (const entry of tree.values()) {
+    if (!entry.package && entry.id.startsWith(`${id}.`)) count += 1;
+  }
+  return count;
+}
+
+/** Whether ``id`` names a package: a frame or a folded box is one, a module file is not. */
+function isPackage(id) {
+  const entry = tree.get(id);
+  return entry ? entry.package : true;
+}
+
+const PACKAGE_ICON = "📁";
+const OPEN_PACKAGE_ICON = "📂";
+const MODULE_ICON = "📄";
 
 // --- folding ----------------------------------------------------------------
 
@@ -253,13 +281,22 @@ function renderTree() {
 
     const name = document.createElement("span");
     name.className = "name";
-    name.textContent = depth === 0 ? id : id.slice(id.lastIndexOf(".") + 1);
+    const icon = entry.package ? PACKAGE_ICON : MODULE_ICON;
+    name.textContent = `${icon} ${depth === 0 ? id : id.slice(id.lastIndexOf(".") + 1)}`;
     name.title = state.folded.has(id) ? `${id} (folded)` : id;
     if (state.folded.has(id) && state.links === "module") name.textContent += "  ⊞";
     name.onclick = () => goTo(id);
     if (!drawn.has(id) && !state.folded.has(id)) name.style.opacity = "0.75";
 
     row.append(fold, box, name);
+    if (entry.package) {
+      const only = document.createElement("span");
+      only.className = "only";
+      only.textContent = "◎";
+      only.title = `show only ${id}`;
+      only.onclick = () => isolate(id);
+      row.append(only);
+    }
     rows.push(row);
     if (entry.package && open) entry.children.forEach((child) => walk(child, depth + 1));
   };
@@ -299,7 +336,13 @@ const cy = cytoscape({
     },
     {
       selector: "node.folded",
-      style: { "border-width": 4, "border-style": "double", "font-weight": "bold" },
+      style: {
+        shape: "rectangle",
+        "border-width": 5,
+        "border-style": "double",
+        "background-opacity": 0.4,
+        "font-weight": "bold",
+      },
     },
     {
       selector: "node.frame",
@@ -358,10 +401,18 @@ window.viewer = { cy, state }; // for the browser console
 cy.on("resize", () => cy.fit(undefined, 30));
 
 function nodeLabel(node) {
+  let label = node.label;
+  if (node.folded) {
+    label = `${PACKAGE_ICON} ${label}\n${modulesText(node.id)}`;
+  }
   const value = state.metric && node.metrics[state.metric];
   return value === undefined || value === "" || value === false
-    ? node.label
-    : `${node.label}\n${state.metric} ${value}`;
+    ? label
+    : `${label}\n${state.metric} ${value}`;
+}
+
+function frameLabel(frame) {
+  return `${isPackage(frame.id) ? OPEN_PACKAGE_ICON : MODULE_ICON} ${frame.label}`;
 }
 
 function linkLabel(link) {
@@ -375,7 +426,7 @@ function elements() {
   for (const frame of view.frames) {
     out.push({
       group: "nodes",
-      data: { id: frame.id, label: frame.label, parent: frame.parent ?? undefined },
+      data: { id: frame.id, label: frameLabel(frame), parent: frame.parent ?? undefined },
       classes: "frame",
     });
   }
@@ -427,21 +478,26 @@ function draw() {
   metricSelect.value = names.includes(state.metric) ? state.metric : "";
   $("links").value = state.links;
 
-  cy.elements().remove();
-  cy.add(elements());
-  cy.layout({
-    name: "elk",
-    fit: true,
-    padding: 30,
-    nodeDimensionsIncludeLabels: true,
-    elk: {
-      algorithm: "layered",
-      "elk.direction": "DOWN",
-      "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-      "elk.layered.spacing.nodeNodeBetweenLayers": 40,
-      "elk.spacing.nodeNode": 24,
-    },
-  }).run();
+  const wanted = elements();
+  const same =
+    wanted.length === cy.elements().length &&
+    wanted.every((item) => {
+      const current = cy.getElementById(item.data.id);
+      return current.nonempty() && (current.data("parent") ?? undefined) === item.data.parent;
+    });
+  if (same) {
+    // Only labels or styles changed (a metric): keep the picture where it is.
+    wanted.forEach((item) => {
+      const current = cy.getElementById(item.data.id);
+      current.data(item.data);
+      current.classes(item.classes);
+    });
+  } else {
+    cy.elements().remove();
+    cy.add(wanted);
+    layout();
+  }
+  showScope();
 
   const stats = `${view.nodes.length} boxes · ${view.links.length + view.cycles.length} arrows`;
   $("stats").textContent = view.cycles.length
@@ -455,6 +511,61 @@ function draw() {
     showHelp();
   }
 }
+
+function layout() {
+  cy.layout({
+    name: "elk",
+    fit: true,
+    padding: 30,
+    nodeDimensionsIncludeLabels: true,
+    elk: {
+      algorithm: "layered",
+      "elk.direction": "DOWN",
+      "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+      "elk.layered.spacing.nodeNodeBetweenLayers": 40,
+      "elk.spacing.nodeNode": 24,
+    },
+  }).run();
+}
+
+// --- showing only one package --------------------------------------------------
+
+/** The package the view is narrowed to, when it shows exactly one. */
+function scope() {
+  if (state.patterns.length !== 1) return null;
+  const [pattern] = state.patterns;
+  const stem = pattern.endsWith(".**") ? pattern.slice(0, -3) : pattern;
+  return roots.includes(stem) ? null : stem;
+}
+
+/** Show only what ``id`` holds; the browser's Back button returns. */
+function isolate(id) {
+  history.pushState(null, "", location.search);
+  state.patterns = [isPackage(id) ? `${id}.**` : id];
+  state.folded = new Set(subpackages(id));
+  state.focus = null;
+  for (let name = id; name !== null; name = parentOf(name)) expanded.add(name);
+  refresh();
+}
+
+function showAll() {
+  history.pushState(null, "", location.search);
+  state.patterns = roots.map((r) => `${r}.**`);
+  state.folded = new Set(roots.flatMap((r) => subpackages(r)));
+  state.focus = null;
+  refresh();
+}
+
+function showScope() {
+  const only = scope();
+  $("scope").hidden = only === null;
+  $("scope-name").textContent = only ?? "";
+}
+
+window.addEventListener("popstate", () => {
+  readUrl();
+  refresh();
+});
 
 function clearFocus() {
   cy.elements().removeClass("dim match");
@@ -569,16 +680,24 @@ function showNode(element) {
   const details = $("details");
   const id = element.id();
   if (element.hasClass("frame")) {
-    const fold = el("button", "fold into one box", { type: "button" });
-    fold.onclick = () => toggleFold(id);
     const actions = el("div", undefined, { className: "actions" });
-    if (state.links === "module") actions.append(fold);
-    details.replaceChildren(el("h3", id), el("p", "package", { className: "hint" }), actions);
+    if (state.links === "module") {
+      const fold = el("button", "fold into one box", { type: "button" });
+      fold.onclick = () => toggleFold(id);
+      actions.append(fold);
+    }
+    actions.append(onlyButton(id));
+    const what = isPackage(id) ? `package · ${modulesText(id)}` : "module";
+    details.replaceChildren(el("h3", id), el("p", what, { className: "hint" }), actions);
     return;
   }
   const node = view.nodes.find((n) => n.id === id);
   const { out, into } = connectionsOf(id);
-  const kinds = { M: state.folded.has(id) ? "package (folded)" : "module", C: "class", F: "function" };
+  const kinds = {
+    M: state.folded.has(id) ? `package (folded) · ${modulesText(id)}` : "module",
+    C: "class",
+    F: "function",
+  };
   const parts = [el("h3", id), el("p", kinds[node.kind] || node.kind, { className: "hint" })];
   if (Object.keys(node.metrics).length) parts.push(el("h4", "metrics"), metricTable(node.metrics));
   parts.push(...list("depends on", out), ...list("used by", into));
@@ -586,10 +705,19 @@ function showNode(element) {
     const unfoldButton = el("button", "unfold", { type: "button" });
     unfoldButton.onclick = () => toggleFold(id);
     const actions = el("div", undefined, { className: "actions" });
-    actions.append(unfoldButton);
+    actions.append(unfoldButton, onlyButton(id));
     parts.push(actions);
   }
   details.replaceChildren(...parts);
+}
+
+function onlyButton(id) {
+  const button = el("button", "show only this", {
+    type: "button",
+    title: "Show only what this package holds (Back returns)",
+  });
+  button.onclick = () => isolate(id);
+  return button;
 }
 
 function showEdge(element) {
@@ -674,6 +802,7 @@ $("metric").addEventListener("change", (event) => {
 });
 
 $("fit").addEventListener("click", () => cy.fit(undefined, 30));
+$("show-all").addEventListener("click", showAll);
 
 $("copy-cli").addEventListener("click", async () => {
   if (!view) return;
@@ -692,7 +821,11 @@ $("copy-cli").addEventListener("click", async () => {
 // --- start ------------------------------------------------------------------
 
 readUrl();
-await loadTree();
-roots.forEach((r) => expanded.add(r));
-renderTree();
-await refresh();
+try {
+  await loadTree();
+  roots.forEach((r) => expanded.add(r));
+  renderTree();
+  await refresh();
+} catch (error) {
+  showError(error.message);
+}

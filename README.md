@@ -320,6 +320,11 @@ arch-blueprint serve src --port 8000 --no-open
   each. Double-click a folded box to unfold it, or a package's frame to fold it back. A folded box
   draws what selecting that package whole (`-m pkg`) draws: its fan-in, fan-out and arrows count
   everything inside it.
+- **Packages and modules.** A folded package is a square box with a double border, a 📁 and the
+  number of modules it holds; an unfolded one is a 📂 frame; a module is a plain rounded box.
+- **Show only one package.** "show only this" (in the details panel, or ◎ beside a package in the
+  tree) narrows the graph to that package's contents — its modules and subpackages, nothing around
+  it. The browser's Back button, or "show all", returns.
 - **Focus.** Click a box: what it depends on and what depends on it stay lit, the rest fades. The
   panel on the right lists both, with the box's metrics. Esc clears the focus.
 - **Arrows.** Click an arrow to list the imports behind it. A red two-headed arrow is a cycle.

@@ -122,6 +122,29 @@ button:hover { border-color: var(--accent); }
 }
 
 .row .fold.off { visibility: hidden; }
+.row .only {
+  cursor: pointer;
+  color: var(--muted);
+  visibility: hidden;
+  margin-left: 4px;
+}
+
+.row:hover .only { visibility: visible; }
+.row .only:hover { color: var(--accent); }
+
+.scope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+}
+
+.scope strong { font-family: ui-monospace, monospace; }
+.scope button { padding: 1px 8px; border-radius: 999px; }
+
 .row .name { cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
 .row .name:hover { color: var(--accent); }
 .row.current .name { color: var(--accent); font-weight: 600; }
@@ -165,3 +188,5 @@ dialog {
 }
 
 dialog pre { white-space: pre-wrap; word-break: break-all; user-select: all; }
+
+.scope[hidden] { display: none; }

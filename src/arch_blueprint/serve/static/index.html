@@ -21,6 +21,8 @@
         <option value="">none</option>
       </select>
     </label>
+    <span class="scope" id="scope" hidden>only <strong id="scope-name"></strong>
+      <button id="show-all" type="button" title="Show the whole project again">show all</button></span>
     <input id="search" type="search" placeholder="find a module…  (Enter: go)" autocomplete="off">
     <span class="spacer"></span>
     <span class="stats" id="stats"></span>
@@ -40,7 +42,7 @@
       <div id="details" class="details">
         <p class="hint">Click a box to see what it depends on and what depends on it.
           Click an arrow for the imports behind it. Double-click a package to fold or
-          unfold it. Esc clears the focus.</p>
+          unfold it; “show only this” narrows the graph to one package. Esc clears the focus.</p>
       </div>
     </aside>
   </main>

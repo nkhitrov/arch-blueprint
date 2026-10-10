@@ -427,14 +427,18 @@ side goes to both, so a typo still fails.
   JSON. Frames and labels are `Layout.build(..., nested=True)`'s; a cycle pair is listed once in
   `cycles`, not in `links`. `cli_command` gives the closest `draw` command (with a note line when
   something is folded).
-- `server.py` — `ViewServer` (stdlib `ThreadingHTTPServer`, `127.0.0.1`): `GET /`, `/static/*`,
+- `server.py` — `ViewServer` (stdlib `ThreadingHTTPServer`, `127.0.0.1`, a `Host` other than
+  `127.0.0.1` / `localhost` is a 403 against DNS rebinding; content types from a fixed map, never
+  `mimetypes`, which reads the Windows registry): `GET /`, `/static/*`,
   `/api/tree`, `POST /api/view`. One `GrimpSource` per pattern set in a small LRU; a lock
   serializes builds, since `GrimpSource` borrows process-wide `sys.path` / `sys.modules`.
-- `static/` — `index.html`, `viewer.js` (no build step), `viewer.css`; `vendor/` holds cytoscape.js,
+- `static/` — `index.html`, `viewer.js` (no build step; "show only this" is just a narrower
+  `-m` pushed onto browser history; a redraw that changes only labels keeps the layout), `viewer.css`; `vendor/` holds cytoscape.js,
   elkjs and cytoscape-elk unmodified (versions in `vendor/LICENSES.md`, excluded from the
   whitespace fixers).
 - CLI `_serve` builds the first view before listening, so bad input is exit 2 like everywhere; the
-  page opens on each root's direct subpackages folded, passed in the URL query
+  page opens with the packages just below each pattern folded (`view.default_folds`), passed in
+  the URL query
   (`m`, `links`, `fold`, plus `metric`, `focus` set by the page).
 
 ### Render plan

@@ -174,7 +174,8 @@ class _Handler(BaseHTTPRequestHandler):
             hint = self.server.hint(project_dir)
             message = f"no package {error.package!r} in {project_dir}"
             self._error(
-                HTTPStatus.BAD_REQUEST, f"{message} ({hint})" if hint else message,
+                HTTPStatus.BAD_REQUEST,
+                f"{message} ({hint})" if hint else message,
             )
         except (ValueError, ImportError, GrimpException) as error:
             self._error(HTTPStatus.BAD_REQUEST, str(error) or type(error).__name__)
