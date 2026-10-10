@@ -33,7 +33,14 @@
   <div class="banner" id="banner" hidden></div>
   <main class="panes">
     <aside class="tree" aria-label="Packages">
-      <div class="pane-title">packages <span class="hint">☑ shown · ▸ folded</span></div>
+      <div class="pane-title">packages <span class="hint">☑ shown · ⊞ folded</span></div>
+      <div class="tree-tools">
+        <button id="select-all" type="button" title="Tick every package">all</button>
+        <button id="select-none" type="button" title="Untick everything, to tick a few">none</button>
+        <label title="Off: ticking boxes redraws nothing until you press Redraw">
+          <input id="auto-redraw" type="checkbox" checked> auto-redraw</label>
+        <button id="redraw" type="button" disabled title="Draw the ticked packages">Redraw</button>
+      </div>
       <div id="tree"></div>
     </aside>
     <section class="canvas" id="canvas" aria-label="Import graph"></section>

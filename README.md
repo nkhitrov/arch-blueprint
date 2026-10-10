@@ -322,15 +322,17 @@ arch-blueprint serve src --port 8000 --no-open
   everything inside it.
 - **Packages and modules.** A folded package is a square box with a double border, a 📁 and the
   number of modules it holds; an unfolded one is a 📂 frame; a module is a plain rounded box.
-- **Show only one package.** "show only this" (in the details panel, or ◎ beside a package in the
-  tree) narrows the graph to that package's contents — its modules and subpackages, nothing around
+- **Show only one package.** "show only this" (in the details panel, or "only" beside a package in
+  the tree, on hover) narrows the graph to that package's contents — its modules and subpackages, nothing around
   it. The browser's Back button, or "show all", returns.
 - **Focus.** Click a box: what it depends on and what depends on it stay lit, the rest fades. The
   panel on the right lists both, with the box's metrics. Esc clears the focus.
 - **Arrows.** Click an arrow to list the imports behind it. A red two-headed arrow is a cycle.
 - **Find.** Type in the search box to highlight matching boxes. Enter goes to the first match,
   unfolding whatever package hides it.
-- **Choose.** The checkboxes on the left pick the packages and modules shown. "boxes" switches
+- **Choose.** The checkboxes on the left pick the packages and modules shown; "all" and "none" tick
+  or clear every box. Turn "auto-redraw" off to tick a few boxes without a redraw after each one,
+  then press "Redraw". A ticked package opens with its subpackages folded. "boxes" switches
   between modules and classes & functions; "metric" shows a metric on every box or arrow.
 - **Share and keep.** The view lives in the page's address, so a link opens the same view.
   "⧉ CLI command" copies the `draw` command for the same modules, arrows and metric, ready for a

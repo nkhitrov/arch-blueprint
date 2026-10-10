@@ -123,14 +123,33 @@ button:hover { border-color: var(--accent); }
 
 .row .fold.off { visibility: hidden; }
 .row .only {
-  cursor: pointer;
-  color: var(--muted);
   visibility: hidden;
-  margin-left: 4px;
+  margin-left: 6px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 999px;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
-.row:hover .only { visibility: visible; }
-.row .only:hover { color: var(--accent); }
+.row:hover .only, .row .only:focus-visible { visibility: visible; }
+.row .only:hover { background: var(--accent); color: var(--bg); }
+
+.tree-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tree-tools button { padding: 1px 8px; }
+.tree-tools label { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+#redraw:disabled { opacity: 0.5; cursor: default; }
+#redraw.pending { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 
 .scope {
   display: flex;

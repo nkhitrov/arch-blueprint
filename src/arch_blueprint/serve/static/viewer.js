@@ -68,6 +68,8 @@ async function loadTree() {
 }
 
 async function refresh() {
+  pending = false;
+  showPending();
   writeUrl();
   const mine = ++sequence;
   $("busy").hidden = false;
@@ -231,14 +233,63 @@ function setChecked(id, on) {
   }
   [...checked].filter((c) => isUnder(c, id)).forEach((c) => checked.delete(c));
   if (on) checked.add(id);
-  const patterns = patternsFor(checked);
-  if (patterns.length === 0) {
-    showError("select at least one package or module");
+  state.patterns = patternsFor(checked);
+  selectionChanged();
+}
+
+// --- redrawing: at once, or when asked -----------------------------------------
+
+const AUTO_REDRAW_KEY = "arch-blueprint.autoRedraw";
+let autoRedraw = readAutoRedraw();
+let pending = false;
+
+function readAutoRedraw() {
+  try {
+    return localStorage.getItem(AUTO_REDRAW_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function writeAutoRedraw(on) {
+  try {
+    localStorage.setItem(AUTO_REDRAW_KEY, on ? "on" : "off");
+  } catch {
+    // no storage (a private window): the toggle lasts for this page only
+  }
+}
+
+/** The ticked boxes changed: redraw now, or hold the change for "Redraw". */
+function selectionChanged() {
+  if (autoRedraw) {
+    redraw();
+    return;
+  }
+  pending = true;
+  showPending();
+  renderTree();
+}
+
+function redraw() {
+  if (state.patterns.length === 0) {
+    showError("tick at least one package or module");
     renderTree();
     return;
   }
-  state.patterns = patterns;
+  // A ticked package is shown opened, as `serve -m pkg.**` opens: never itself
+  // folded into one box, its subpackages folded instead.
+  state.patterns
+    .filter((p) => p.endsWith(".**"))
+    .map((p) => p.slice(0, -3))
+    .filter((stem) => state.folded.has(stem))
+    .forEach(unfold);
   refresh();
+}
+
+function showPending() {
+  $("redraw").disabled = !pending;
+  $("redraw").classList.toggle("pending", pending);
+  $("redraw").textContent = pending ? "Redraw ●" : "Redraw";
 }
 
 // --- the tree -------------------------------------------------------------
@@ -290,10 +341,11 @@ function renderTree() {
 
     row.append(fold, box, name);
     if (entry.package) {
-      const only = document.createElement("span");
+      const only = document.createElement("button");
+      only.type = "button";
       only.className = "only";
-      only.textContent = "◎";
-      only.title = `show only ${id}`;
+      only.textContent = "only";
+      only.title = `Show only what ${id} holds (Back returns)`;
       only.onclick = () => isolate(id);
       row.append(only);
     }
@@ -803,6 +855,22 @@ $("metric").addEventListener("change", (event) => {
 
 $("fit").addEventListener("click", () => cy.fit(undefined, 30));
 $("show-all").addEventListener("click", showAll);
+
+$("auto-redraw").checked = autoRedraw;
+$("auto-redraw").addEventListener("change", (event) => {
+  autoRedraw = event.target.checked;
+  writeAutoRedraw(autoRedraw);
+  if (autoRedraw && pending) redraw();
+});
+$("redraw").addEventListener("click", redraw);
+$("select-all").addEventListener("click", () => {
+  state.patterns = roots.map((r) => `${r}.**`);
+  selectionChanged();
+});
+$("select-none").addEventListener("click", () => {
+  state.patterns = [];
+  selectionChanged();
+});
 
 $("copy-cli").addEventListener("click", async () => {
   if (!view) return;
