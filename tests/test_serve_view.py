@@ -1,19 +1,37 @@
 from __future__ import annotations
 
+import json
+import shlex
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from arch_blueprint.analyze import analyze
+from arch_blueprint.blueprint import build_graph
 from arch_blueprint.domain.graph import BlueprintGraph
+from arch_blueprint.extract import LINK_LEVELS
 from arch_blueprint.extract.levels import module_level
 from arch_blueprint.extract.module_extractor import ModuleExtractor
 from arch_blueprint.extract.source import GrimpSource
+from arch_blueprint.metrics import default_registry
+from arch_blueprint.renderer.layout import Layout
 from arch_blueprint.serve.fold import fold
+from arch_blueprint.serve.view import (
+    NoModulesError,
+    ViewRequest,
+    build_view,
+    cli_command,
+)
 from tests.conftest import (
     ANCESTOR_DEP_PROJECT,
+    CLASSES_PROJECT,
     CYCLIC_PROJECT,
+    DEEP_PROJECT,
     EXAMPLE_PROJECT,
     INIT_IMPORTS_PROJECT,
+    run_command,
 )
 
 EXAMPLE_ROOTS = ["app1.**", "app2.**", "plugins.**"]
@@ -93,3 +111,127 @@ def test_fold_cycle_between_folded_packages() -> None:
     assert [{cycle.endpoint_from, cycle.endpoint_to} for cycle in folded.cycles] == [
         {"pkg_a", "pkg_b"},
     ]
+
+
+# --- build_view ---------------------------------------------------------------
+
+
+def _view(
+    project: Path,
+    patterns: Sequence[str],
+    folded: Sequence[str] = (),
+    links: str = "module",
+) -> dict[str, Any]:
+    request = ViewRequest(tuple(patterns), frozenset(folded), links)
+    return build_view(GrimpSource(str(project), patterns), request, default_registry())
+
+
+def _view_pairs(view: dict[str, Any]) -> set[frozenset[str]]:
+    pairs = {frozenset((link["source"], link["target"])) for link in view["links"]}
+    return pairs | {frozenset((cycle["a"], cycle["b"])) for cycle in view["cycles"]}
+
+
+def test_view_unfolded_matches_module_level() -> None:
+    view = _view(CYCLIC_PROJECT, ["pkg_a.**", "pkg_b.**"])
+    graph = build_graph(
+        str(CYCLIC_PROJECT),
+        ["pkg_a.**", "pkg_b.**"],
+        LINK_LEVELS["module"].extractor,
+    )
+    assert _view_pairs(view) == {
+        frozenset((link.source, link.target)) for link in graph.links
+    }
+    assert [{c["a"], c["b"]} for c in view["cycles"]] == [
+        {c.endpoint_from, c.endpoint_to} for c in graph.cycles
+    ]
+    cyclic = {frozenset((c["a"], c["b"])) for c in view["cycles"]}
+    assert not any(
+        frozenset((link["source"], link["target"])) in cyclic for link in view["links"]
+    )
+
+
+def test_view_frames_nest() -> None:
+    view = _view(DEEP_PROJECT, ["deep.**"])
+    frames = {frame["id"]: frame for frame in view["frames"]}
+    assert frames
+    for item in [*view["nodes"], *view["frames"]]:
+        assert item["parent"] is None or item["parent"] in frames
+    ids = [node["id"] for node in view["nodes"]]
+    ends = {end for link in view["links"] for end in (link["source"], link["target"])}
+    layout = Layout.build(ids, ends, nested=True)
+    assert {node["id"]: node["label"] for node in view["nodes"]} == {
+        node_id: layout.label(node_id) for node_id in ids
+    }
+    assert ends <= set(ids) | set(frames)
+
+
+def test_view_link_lists_imports() -> None:
+    view = _view(EXAMPLE_PROJECT, EXAMPLE_ROOTS)
+    imports = {tuple(pair) for link in view["links"] for pair in link["imports"]}
+    assert ("app2.service", "app1.models") in imports
+    assert all(link["metrics"]["edge_weight"] >= 1 for link in view["links"])
+
+
+def test_view_folded_node_flagged() -> None:
+    view = _view(EXAMPLE_PROJECT, EXAMPLE_ROOTS, folded=["app1"])
+    flags = {node["id"]: node["folded"] for node in view["nodes"]}
+    assert flags["app1"] is True
+    assert flags["app2.service"] is False
+    assert "fan_in" in view["metrics"]["node"]
+    assert "depth" not in view["metrics"]["node"]
+
+
+def test_view_class_level() -> None:
+    view = _view(CLASSES_PROJECT, ["refs.**"], folded=["refs"], links="class")
+    assert {node["kind"] for node in view["nodes"]} == {"C", "F"}
+
+
+def test_view_no_modules() -> None:
+    with pytest.raises(NoModulesError, match="no modules matched"):
+        _view(EXAMPLE_PROJECT, ["app1.nothing.*"])
+
+
+def test_cli_command_roundtrip() -> None:
+    request = ViewRequest(("app1.**", "app2.**", "plugins.**"))
+    command = cli_command(str(EXAMPLE_PROJECT), request, "fan_in")
+    args = shlex.split(command)
+    assert args[:2] == ["arch-blueprint", "draw"]
+    assert args[-2:] == ["--metric", "fan_in"]
+    snapshot = run_command(*args[1:-2], "-f", "json").stdout
+    nodes = {node["id"] for node in json.loads(snapshot)["nodes"]}
+    view = _view(EXAMPLE_PROJECT, EXAMPLE_ROOTS)
+    assert nodes == {node["id"] for node in view["nodes"]}
+
+
+def test_cli_command_class_level_is_grouped() -> None:
+    command = cli_command("src", ViewRequest(("refs.**",), links="class"), None)
+    assert command == "arch-blueprint draw src -m 'refs.**' --links class-grouped"
+
+
+def test_cli_command_folded_note() -> None:
+    request = ViewRequest(("app1.**",), frozenset({"app1"}))
+    first, second = cli_command("src", request, None).splitlines()
+    assert first == "# folded packages have no CLI equivalent; this draws them unfolded"
+    assert second.startswith("arch-blueprint draw src")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"patterns": "app1.**"},
+        {"patterns": ["app1.**"], "links": "namespace"},
+        {"patterns": ["app1.**"], "folded": "app1"},
+        {"patterns": []},
+        {},
+    ],
+)
+def test_request_from_json_rejects(data: dict[str, Any]) -> None:
+    with pytest.raises(ValueError):
+        ViewRequest.from_json(data)
+
+
+def test_request_from_json() -> None:
+    request = ViewRequest.from_json(
+        {"patterns": ["a.**"], "folded": ["a.b"], "links": "class"},
+    )
+    assert request == ViewRequest(("a.**",), frozenset({"a.b"}), "class")
