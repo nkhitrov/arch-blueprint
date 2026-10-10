@@ -23,6 +23,7 @@ from arch_blueprint.serve.view import (
     ViewRequest,
     build_view,
     cli_command,
+    default_folds,
 )
 from tests.conftest import (
     ANCESTOR_DEP_PROJECT,
@@ -246,3 +247,22 @@ def test_fold_degrees_match_bare_selection() -> None:
     registry.compute(bare, ["fan_in", "fan_out"])
     assert folded.node_metrics == bare.node_metrics
     assert folded.node_metrics["app2"]["fan_out"] == 2
+
+
+@pytest.mark.parametrize(
+    ("patterns", "expected"),
+    [
+        (["app.**"], {"app.api", "app.core"}),
+        (["app.core.*"], {"app.core.db"}),
+        (["app.core.**", "lib.**"], {"app.core.db"}),
+        (["app.core"], set()),
+        (["app.c*"], set()),
+    ],
+)
+def test_default_folds_lie_below_each_pattern(
+    patterns: list[str],
+    expected: set[str],
+) -> None:
+    """The first view folds what lies below the selection, not the selection."""
+    packages = {"app", "app.api", "app.core", "app.core.db", "lib"}
+    assert default_folds(patterns, packages) == expected

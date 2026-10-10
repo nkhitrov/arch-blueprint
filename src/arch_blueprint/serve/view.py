@@ -9,7 +9,7 @@ link, a cycle or a label in JavaScript.
 from __future__ import annotations
 
 import shlex
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Optional
 
@@ -184,6 +184,23 @@ def build_view(
         "metrics": {"node": node_names, "link": link_names},
         "cycleColor": CYCLE_HIGHLIGHT_COLOR,
     }
+
+
+def default_folds(patterns: Iterable[str], packages: Collection[str]) -> frozenset[str]:
+    """What a view opens with folded: the packages just below each pattern's stem.
+
+    ``app.**`` and ``app.*`` fold ``app``'s subpackages, ``app.core.*`` those of
+    ``app.core`` — a small picture to unfold from, never the selection itself
+    folded into one box. A bare name or a partial wildcard (``app.c*``) folds
+    nothing.
+    """
+    folded: set[str] = set()
+    for pattern in patterns:
+        stem, _, last = pattern.rpartition(".")
+        if last not in {"*", "**"} or not stem or "*" in stem:
+            continue
+        folded |= {name for name in packages if name.rpartition(".")[0] == stem}
+    return frozenset(folded)
 
 
 def cli_command(project_dir: str, request: ViewRequest, metric: Optional[str]) -> str:

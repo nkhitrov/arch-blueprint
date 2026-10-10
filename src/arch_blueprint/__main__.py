@@ -62,7 +62,7 @@ from arch_blueprint.renderer.base import (
 from arch_blueprint.renderer.d2 import D2LangRenderer
 from arch_blueprint.renderer.puml import PlantUmlRenderer
 from arch_blueprint.serve.server import ViewServer
-from arch_blueprint.serve.view import VIEW_LEVELS, ViewRequest
+from arch_blueprint.serve.view import VIEW_LEVELS, ViewRequest, default_folds
 from arch_blueprint.snapshot import Snapshot, SnapshotError, dump, load
 
 _PROG: Final = "arch-blueprint"
@@ -1312,8 +1312,14 @@ def _serve(args: argparse.Namespace) -> None:
     patterns = args.modules or _default_patterns(args.source, _EXIT_USAGE, "serve")
     roots = list(dict.fromkeys(pattern.split(".", 1)[0] for pattern in patterns))
     try:
-        server = ViewServer(args.source, roots, default_registry(), args.port)
-    except OSError as error:
+        server = ViewServer(
+            args.source,
+            roots,
+            default_registry(),
+            args.port,
+            hint=_layout_hint,
+        )
+    except (OSError, OverflowError) as error:
         _abort(f"cannot listen on port {args.port}: {error}", _EXIT_USAGE)
     with server:
         query = _first_view(server, patterns, args.links)
@@ -1328,18 +1334,14 @@ def _serve(args: argparse.Namespace) -> None:
 def _first_view(server: ViewServer, patterns: Sequence[str], links: str) -> str:
     """Build the view the page opens on, so bad input fails here; its URL query.
 
-    The page opens with each root's direct subpackages folded: a small picture
-    to unfold from, rather than every module of a large project at once.
+    The page opens with the packages just below each pattern folded
+    (``default_folds``): a small picture to unfold from, rather than every
+    module of a large project at once.
     """
     project_dir = server.project_dir
     try:
-        modules = server.tree()["modules"]
-        roots = set(server.roots)
-        folded = [
-            module["id"]
-            for module in modules
-            if module["package"] and module["id"].rpartition(".")[0] in roots
-        ]
+        packages = [m["id"] for m in server.tree()["modules"] if m["package"]]
+        folded = sorted(default_folds(patterns, packages))
         request = ViewRequest(tuple(patterns), frozenset(folded), links)
         server.view(request, None)
     except PackageNotFoundError as error:
@@ -1348,7 +1350,7 @@ def _first_view(server: ViewServer, patterns: Sequence[str], links: str) -> str:
             f"({_layout_hint(project_dir)})",
             _EXIT_USAGE,
         )
-    except (ImportError, ValueError) as error:
+    except (ImportError, ValueError, GrimpException) as error:
         _abort(str(error), _EXIT_USAGE)
     except OSError as error:
         _abort(f"could not analyze {project_dir}: {error}", _EXIT_FAILURE)

@@ -9,15 +9,16 @@ expected failures into a ``400`` with the message the CLI would print.
 from __future__ import annotations
 
 import json
-import mimetypes
 import threading
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final, Optional
 from urllib.parse import unquote, urlsplit
+
+from grimp.exceptions import GrimpException
 
 from arch_blueprint.extract.levels import ancestors
 from arch_blueprint.extract.source import GrimpSource, PackageNotFoundError
@@ -32,12 +33,30 @@ _SOURCES_KEPT: Final = 4
 #: A view request is a few patterns; anything this large is not one.
 _MAX_BODY: Final = 1 << 20
 
+#: Fixed rather than ``mimetypes``: on Windows that reads the registry, which
+#: often maps ``.js`` to ``text/plain`` — and a module script served so never runs.
+_CONTENT_TYPES: Final = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8",
+}
+
+#: The names the page may be reached by: a DNS-rebinding page reaches
+#: 127.0.0.1 under a name of its own, and must not read the project.
+_LOCAL_HOSTS: Final = ("127.0.0.1", "localhost")
+
+
+def _no_hint(project_dir: str) -> str:
+    return ""
+
 
 class ViewServer(ThreadingHTTPServer):
     """Serves the viewer of the project in ``project_dir`` on ``127.0.0.1``.
 
     ``roots`` are the top-level packages the tree offers. ``port`` 0 picks a
-    free one; :attr:`url` says which.
+    free one; :attr:`url` says which. ``hint(project_dir)`` is appended to a
+    missing package's message, as the CLI does.
     """
 
     daemon_threads = True
@@ -48,9 +67,12 @@ class ViewServer(ThreadingHTTPServer):
         roots: Sequence[str],
         registry: MetricRegistry,
         port: int = 0,
+        hint: Callable[[str], str] = _no_hint,
     ) -> None:
         super().__init__(("127.0.0.1", port), _Handler)
         self.project_dir = project_dir
+        #: What a missing package probably means, in the CLI's words.
+        self.hint = hint
         self.roots = list(roots)
         self.registry = registry
         self._sources: OrderedDict[tuple[str, ...], GrimpSource] = OrderedDict()
@@ -97,6 +119,7 @@ class ViewServer(ThreadingHTTPServer):
         source = self._sources.pop(patterns, None)
         if source is None:
             source = GrimpSource(self.project_dir, patterns)
+            source.graph  # noqa: B018 — build now: a source that fails is not kept
         self._sources[patterns] = source
         while len(self._sources) > _SOURCES_KEPT:
             self._sources.popitem(last=False)
@@ -107,9 +130,11 @@ class _Handler(BaseHTTPRequestHandler):
     server: ViewServer
 
     def do_GET(self) -> None:
+        if not self._local():
+            return
         path = urlsplit(self.path).path
         if path == "/api/tree":
-            self._json(HTTPStatus.OK, self.server.tree())
+            self._answer(self.server.tree)
         elif path == "/":
             self._file(STATIC_DIR / "index.html")
         elif path.startswith("/static/"):
@@ -118,23 +143,48 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.NOT_FOUND, "not found")
 
     def do_POST(self) -> None:
+        if not self._local():
+            return
         if urlsplit(self.path).path != "/api/view":
             self._error(HTTPStatus.NOT_FOUND, "not found")
             return
-        try:
+
+        def view() -> dict[str, Any]:
             data = self._body()
-            request = ViewRequest.from_json(data)
             metric = data.get("metric")
-            view = self.server.view(request, None if metric is None else str(metric))
+            request = ViewRequest.from_json(data)
+            return self.server.view(request, None if metric is None else str(metric))
+
+        self._answer(view)
+
+    def _local(self) -> bool:
+        """Whether the request names this server by a loopback name; else 403."""
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
+        if host in _LOCAL_HOSTS:
+            return True
+        self._error(HTTPStatus.FORBIDDEN, "the viewer answers on 127.0.0.1 only")
+        return False
+
+    def _answer(self, build: Callable[[], dict[str, Any]]) -> None:
+        """``build()`` as JSON; every expected failure a ``400`` with its message."""
+        project_dir = self.server.project_dir
+        try:
+            data = build()
         except PackageNotFoundError as error:
+            hint = self.server.hint(project_dir)
+            message = f"no package {error.package!r} in {project_dir}"
             self._error(
-                HTTPStatus.BAD_REQUEST,
-                f"no package {error.package!r} in {self.server.project_dir}",
+                HTTPStatus.BAD_REQUEST, f"{message} ({hint})" if hint else message,
             )
-        except (ValueError, ImportError) as error:
-            self._error(HTTPStatus.BAD_REQUEST, str(error))
+        except (ValueError, ImportError, GrimpException) as error:
+            self._error(HTTPStatus.BAD_REQUEST, str(error) or type(error).__name__)
+        except OSError as error:
+            self._error(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                f"could not analyze {project_dir}: {error}",
+            )
         else:
-            self._json(HTTPStatus.OK, view)
+            self._json(HTTPStatus.OK, data)
 
     def _body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length") or 0)
@@ -152,15 +202,14 @@ class _Handler(BaseHTTPRequestHandler):
         return data
 
     def _file(self, path: Path) -> None:
-        resolved = path.resolve()
+        try:
+            resolved = path.resolve()
+        except (OSError, ValueError):  # a null byte, a name the OS refuses
+            resolved = STATIC_DIR / "missing"
         if not resolved.is_relative_to(STATIC_DIR) or not resolved.is_file():
             self._error(HTTPStatus.NOT_FOUND, "not found")
             return
-        content_type = (
-            mimetypes.guess_type(resolved.name)[0] or "application/octet-stream"
-        )
-        if content_type.startswith("text/") or content_type.endswith("javascript"):
-            content_type += "; charset=utf-8"
+        content_type = _CONTENT_TYPES.get(resolved.suffix, "application/octet-stream")
         self._send(HTTPStatus.OK, content_type, resolved.read_bytes())
 
     def _json(self, status: HTTPStatus, data: Any) -> None:

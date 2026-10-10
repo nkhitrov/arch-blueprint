@@ -6,6 +6,7 @@ import threading
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -129,3 +130,69 @@ def test_page_assets_are_served(server: ViewServer) -> None:
         status, body = _get(server, asset)
         assert (asset, status) == (asset, 200)
         assert body
+
+
+def test_scripts_are_served_as_javascript(server: ViewServer) -> None:
+    """A module script served as text/plain (a Windows registry default) never runs."""
+    with urllib.request.urlopen(server.url + "/static/viewer.js") as response:  # noqa: S310
+        assert response.headers["Content-Type"] == "text/javascript; charset=utf-8"
+    with urllib.request.urlopen(server.url + "/static/viewer.css") as response:  # noqa: S310
+        assert response.headers["Content-Type"] == "text/css; charset=utf-8"
+
+
+def test_null_byte_path_is_not_found(server: ViewServer) -> None:
+    assert _get(server, "/static/%00")[0] == 404
+
+
+def test_foreign_host_is_refused(server: ViewServer) -> None:
+    """A DNS-rebinding page reaches 127.0.0.1 under its own name: refuse it."""
+    port = server.url.rsplit(":", 1)[1]
+    request = urllib.request.Request(  # noqa: S310
+        server.url + "/api/tree",
+        headers={"Host": f"evil.example:{port}"},
+    )
+    with pytest.raises(urllib.error.HTTPError) as error:
+        urllib.request.urlopen(request)  # noqa: S310
+    assert error.value.code == 403
+    local = urllib.request.Request(  # noqa: S310
+        server.url + "/api/tree",
+        headers={"Host": f"localhost:{port}"},
+    )
+    with urllib.request.urlopen(local) as response:  # noqa: S310
+        assert response.status == 200
+
+
+def test_unparsable_project_is_a_400(tmp_path: Path) -> None:
+    package = tmp_path / "broken"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "bad.py").write_text("def (:\n")
+    running = ViewServer(str(tmp_path), ["broken"], default_registry())
+    thread = threading.Thread(target=running.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, body = _post(running, {"patterns": ["broken.**"]})
+        assert status == 400
+        assert "bad.py" in body["error"] or "syntax" in body["error"].lower()
+        assert _get(running, "/api/tree")[0] == 400
+    finally:
+        running.shutdown()
+        running.server_close()
+
+
+def test_missing_package_carries_the_hint() -> None:
+    running = ViewServer(
+        str(EXAMPLE_PROJECT),
+        ["app1"],
+        default_registry(),
+        hint=lambda project: f"found: app1 in {Path(project).name}",
+    )
+    thread = threading.Thread(target=running.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, body = _post(running, {"patterns": ["nope.**"]})
+        assert status == 400
+        assert body["error"].endswith("(found: app1 in project_root)")
+    finally:
+        running.shutdown()
+        running.server_close()
