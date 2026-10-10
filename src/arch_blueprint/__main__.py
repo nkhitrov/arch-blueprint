@@ -3,14 +3,16 @@ import os
 import shlex
 import shutil
 import sys
+import webbrowser
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import MappingProxyType
 from typing import Any, Final, NoReturn, Optional, TextIO
+from urllib.parse import urlencode
 
 from grimp.exceptions import GrimpException
 
@@ -59,6 +61,8 @@ from arch_blueprint.renderer.base import (
 )
 from arch_blueprint.renderer.d2 import D2LangRenderer
 from arch_blueprint.renderer.puml import PlantUmlRenderer
+from arch_blueprint.serve.server import ViewServer
+from arch_blueprint.serve.view import VIEW_LEVELS, ViewRequest
 from arch_blueprint.snapshot import Snapshot, SnapshotError, dump, load
 
 _PROG: Final = "arch-blueprint"
@@ -496,7 +500,7 @@ def _source_folder(project_dir: str) -> Optional[Path]:
     return src
 
 
-def _default_patterns(project_dir: str, code: int) -> list[str]:
+def _default_patterns(project_dir: str, code: int, command: str = "draw") -> list[str]:
     """Every package in ``project_dir``, whole — what no ``-m`` means."""
     roots = detect_roots(project_dir)
     if not roots:
@@ -504,11 +508,12 @@ def _default_patterns(project_dir: str, code: int) -> list[str]:
     src = _source_folder(project_dir)
     if src is not None:
         _abort(
-            f"{project_dir} keeps its packages in {src}: run '{_PROG} draw {src}', "
-            "or choose with -m",
+            f"{project_dir} keeps its packages in {src}: "
+            f"run '{_PROG} {command} {src}', or choose with -m",
             code,
         )
-    _note(f"drawing {', '.join(roots)} (all modules; narrow with -m)")
+    verb = "drawing" if command == "draw" else "showing"
+    _note(f"{verb} {', '.join(roots)} (all modules; narrow with -m)")
     return [f"{root}.**" for root in roots]
 
 
@@ -1248,6 +1253,110 @@ def _progress_reporter(
     return report
 
 
+def _add_serve(
+    commands: "argparse._SubParsersAction[argparse.ArgumentParser]",
+) -> None:
+    parser = _subparser(
+        commands,
+        "serve",
+        summary="explore a project's import graph in the browser",
+        description=(
+            "Open a page in the browser to explore the import graph of the\n"
+            "packages in PROJECT_DIR: fold and unfold packages, focus a module to\n"
+            "see what it depends on and what depends on it, and click an arrow\n"
+            "for the imports behind it. Every change is recomputed on the spot.\n"
+            "The page copies the 'draw' command that draws what it shows.\n\n"
+            "Serves on 127.0.0.1 only, until Ctrl-C."
+        ),
+        examples=(
+            "  arch-blueprint serve src                     every package in src/\n"
+            "  arch-blueprint serve src -m 'myapp.**'       one package\n"
+            "  arch-blueprint serve src --links class       classes and functions\n"
+            "  arch-blueprint serve src --port 8000 --no-open"
+        ),
+        handler=_serve,
+    )
+    parser.add_argument(
+        "source",
+        metavar="PROJECT_DIR",
+        help="The directory the packages sit in (e.g. 'src', or the repository root).",
+    )
+    _add_modules_arg(parser, "Default: every package in PROJECT_DIR, whole.")
+    parser.add_argument(
+        "--links",
+        default="module",
+        choices=list(VIEW_LEVELS),
+        metavar="LEVEL",
+        help=(
+            "What a box is: 'module' (packages fold into one box) or 'class' "
+            "(the classes and module-level functions, framed by module; some "
+            "ten times slower). Switchable on the page. Default: module."
+        ),
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=0,
+        help="The port to listen on. Default: a free one.",
+    )
+    parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Print the address without opening a browser.",
+    )
+
+
+def _serve(args: argparse.Namespace) -> None:
+    """``arch-blueprint serve PROJECT_DIR``: the viewer, until Ctrl-C."""
+    _check_project_dir(args.source, _EXIT_USAGE)
+    patterns = args.modules or _default_patterns(args.source, _EXIT_USAGE, "serve")
+    roots = list(dict.fromkeys(pattern.split(".", 1)[0] for pattern in patterns))
+    try:
+        server = ViewServer(args.source, roots, default_registry(), args.port)
+    except OSError as error:
+        _abort(f"cannot listen on port {args.port}: {error}", _EXIT_USAGE)
+    with server:
+        query = _first_view(server, patterns, args.links)
+        url = f"{server.url}/?{query}"
+        _note(f"serving {url} (Ctrl-C to stop)")
+        if not args.no_open:
+            webbrowser.open(url)
+        with suppress(KeyboardInterrupt):
+            server.serve_forever()
+
+
+def _first_view(server: ViewServer, patterns: Sequence[str], links: str) -> str:
+    """Build the view the page opens on, so bad input fails here; its URL query.
+
+    The page opens with each root's direct subpackages folded: a small picture
+    to unfold from, rather than every module of a large project at once.
+    """
+    project_dir = server.project_dir
+    try:
+        modules = server.tree()["modules"]
+        roots = set(server.roots)
+        folded = [
+            module["id"]
+            for module in modules
+            if module["package"] and module["id"].rpartition(".")[0] in roots
+        ]
+        request = ViewRequest(tuple(patterns), frozenset(folded), links)
+        server.view(request, None)
+    except PackageNotFoundError as error:
+        _abort(
+            f"no package {error.package!r} in {project_dir} "
+            f"({_layout_hint(project_dir)})",
+            _EXIT_USAGE,
+        )
+    except (ImportError, ValueError) as error:
+        _abort(str(error), _EXIT_USAGE)
+    except OSError as error:
+        _abort(f"could not analyze {project_dir}: {error}", _EXIT_FAILURE)
+    pairs = [("m", pattern) for pattern in patterns]
+    pairs += [("links", links)] + [("fold", name) for name in folded]
+    return urlencode(pairs)
+
+
 # --- entry point ----------------------------------------------------------
 
 
@@ -1256,6 +1365,7 @@ _COMMANDS: Final = MappingProxyType(
         "draw": _add_draw,
         "diff": _add_diff,
         "history": _add_history,
+        "serve": _add_serve,
     },
 )
 
@@ -1296,7 +1406,9 @@ def _parser() -> argparse.ArgumentParser:
             "  arch-blueprint diff --base origin/main src   what this branch "
             "changed\n"
             "  arch-blueprint history src -f d2-png         a picture per commit "
-            "that changed it\n\n"
+            "that changed it\n"
+            "  arch-blueprint serve src                     explore it in the "
+            "browser\n\n"
             f"Run '{_PROG} COMMAND -h' for a command's options and examples."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
