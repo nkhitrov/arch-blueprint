@@ -50,3 +50,5 @@ direction: down
 "app.features.core".executory_processes.tasks.Tracker -> "app.features.core".legal_cases.models.LegalCase
 "app.features.core".executory_processes.tasks.Tracker -> "billing.invoices".Invoice
 "app.features.core".executory_processes.tasks.run_delete_old_customer -> "app.features.core".legal_cases.usecases.RemoveOldCustomerUseCase
+"app.features.core".legal_cases.models.LegalCase -> "app.features.core".executory_processes.models.Process
+"app.features.core".legal_cases.usecases.RemoveOldCustomerUseCase -> "app.features.core".executory_processes.models.Process

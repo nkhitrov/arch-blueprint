@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from typing import TYPE_CHECKING, Final, Optional
 
 from arch_blueprint.domain.graph import BlueprintGraph, Edge
 from arch_blueprint.domain.node import Node, NodeKind
+from arch_blueprint.extract.focus import follows_in, follows_out
 from arch_blueprint.extract.levels import ancestors
 from arch_blueprint.extract.source import GrimpSource
 
@@ -42,10 +43,13 @@ class DefinitionExtractor:
     No ``facade_edges``: a name a package facade re-exports is followed to where
     it is defined, so no cycle runs through a facade unseen.
 
-    With ``--deps`` (``source.deps``), a definition of those kinds that a node
-    refers to but no pattern selects is a neighbor node, wherever in the
-    project it is defined. Only the focus's references are followed: a
-    neighbor has no edges of its own.
+    With ``--deps`` (``source.deps``), the definitions of those kinds next to
+    the selection are neighbor nodes, wherever in the project they are
+    defined: with ``out`` every one a node refers to, with ``in`` every one
+    referring to a node — searched for only in the modules importing a focused
+    one, directly or not, since no other can reach it. Every edge between the
+    focus and a neighbor is drawn, either way; a neighbor's references to
+    anything else are not followed.
     """
 
     def __init__(self, source: GrimpSource, kinds: Collection[NodeKind]) -> None:
@@ -78,13 +82,10 @@ class DefinitionExtractor:
                     kinds[name] = kind
                     owned[name] = symbols.references[name]
         outside: dict[str, NodeKind] = {}
-        if self.source.deps is not None:
-            for references in owned.values():
-                for reference in references:
-                    for target in index.resolve(reference):
-                        found = self._kind_of(index, target)
-                        if target not in kinds and found in self.kinds:
-                            outside[target] = found
+        if follows_out(self.source.deps):
+            outside.update(self._dependencies(index, owned.values(), kinds))
+        if follows_in(self.source.deps):
+            outside.update(self._referrers(index, modules, kinds))
         ids = self._node_ids({**kinds, **outside})
         # Sorted by id, as module nodes are: renderers declare nodes in graph
         # order and a diff in id order, and both must declare them alike for
@@ -108,11 +109,78 @@ class DefinitionExtractor:
             for target in index.resolve(reference)
             if target != name and target in ids
         }
+        # The neighbors' references back into the focus, and to nothing else.
+        edges.update(
+            Edge(
+                source=ids[name],
+                target=ids[target],
+                source_endpoint=ids[name],
+                target_endpoint=ids[target],
+            )
+            for name in outside
+            for reference in self._references_of(index, name)
+            for target in index.resolve(reference)
+            if target in kinds
+        )
         return BlueprintGraph(
             nodes=nodes,
             edges=frozenset(edges),
             neighbors=neighbors,
         )
+
+    def _dependencies(
+        self,
+        index: SymbolIndex,
+        references: Iterable[frozenset[str]],
+        focus: Collection[str],
+    ) -> dict[str, NodeKind]:
+        """The definitions of wanted kinds, outside the focus, it refers to."""
+        found: dict[str, NodeKind] = {}
+        for names in references:
+            for reference in names:
+                for target in index.resolve(reference):
+                    kind = self._kind_of(index, target)
+                    if target not in focus and kind in self.kinds:
+                        found[target] = kind
+        return found
+
+    def _referrers(
+        self,
+        index: SymbolIndex,
+        modules: list[str],
+        focus: Collection[str],
+    ) -> dict[str, NodeKind]:
+        """The definitions of wanted kinds, outside the focus, referring into it.
+
+        Only a module that imports a focused one, directly or through others,
+        can name a focused definition — a re-export and an alias are imports
+        too — so only those modules are parsed.
+        """
+        candidates = {
+            module
+            for name in modules
+            if name in self.source.graph.modules
+            for module in self.source.downstream_of(name)
+        }.difference(modules)
+        found: dict[str, NodeKind] = {}
+        for module in sorted(candidates):
+            symbols = index.symbols(module)
+            if symbols is None:
+                continue
+            for name, kind in symbols.definitions.items():
+                if kind in self.kinds and any(
+                    target in focus
+                    for reference in symbols.references[name]
+                    for target in index.resolve(reference)
+                ):
+                    found[name] = kind
+        return found
+
+    @staticmethod
+    def _references_of(index: SymbolIndex, definition: str) -> frozenset[str]:
+        """What ``definition`` — a top-level one — refers to."""
+        symbols = index.symbols(definition.rpartition(".")[0])
+        return frozenset() if symbols is None else symbols.references[definition]
 
     @staticmethod
     def _kind_of(index: SymbolIndex, definition: str) -> Optional[NodeKind]:

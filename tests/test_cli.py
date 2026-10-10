@@ -597,10 +597,24 @@ def test_deps_does_not_go_with_a_metric(command: list[str]) -> None:
     assert result.stdout == ""
 
 
-def test_deps_accepts_only_out_for_now() -> None:
-    result = run_cli(EXAMPLE_PROJECT, "-m", "app2.*", "--deps", "in", check=False)
+def test_deps_rejects_an_unknown_direction() -> None:
+    result = run_cli(EXAMPLE_PROJECT, "-m", "app2.*", "--deps", "up", check=False)
     assert result.returncode == _USAGE_ERROR
-    assert "invalid choice: 'in'" in result.stderr
+    assert "invalid choice: 'up'" in result.stderr
+
+
+def test_deps_in_draws_what_imports_the_focus() -> None:
+    result = run_cli(
+        EXAMPLE_PROJECT,
+        "-m",
+        "app1.*",
+        "--deps",
+        "in",
+        "--links",
+        "module",
+    )
+    assert "class app2.service <<(M, #BDC3C7)>> #line.dashed" in result.stdout
+    assert "app2.service ---> app1.models" in result.stdout
 
 
 def test_deps_draws_what_the_focus_imports() -> None:

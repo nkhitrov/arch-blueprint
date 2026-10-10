@@ -25,5 +25,6 @@ app.features.core.executory_processes.tasks ---> app.features.core.executory_pro
 app.features.core.executory_processes.tasks ---> app.features.core.legal_cases
 app.features.core.executory_processes.tasks ---> app.features.core.legal_cases.usecases
 app.features.core.executory_processes.tasks -[#00C853,dashed,thickness=3]-> billing.invoices : added
+app.features.core.legal_cases.usecases ---> app.features.core.executory_processes.models
 @enduml
 

@@ -32,6 +32,7 @@ PACKAGE_NODES_MODULES = ["-m", "shop.*"]
 CLASSES_MODULES = ["-m", "refs.**"]
 FOCUS_DEPS_MODULES = ["-m", "app.features.core.executory_processes.**"]
 DEPS_OUT = ["--deps", "out"]
+DEPS_IN = ["--deps", "in"]
 TANGLE_MODULES = ["-m", "api.*", "-m", "services.*", "-m", "ring.*", "-m", "nest.*"]
 
 EXAMPLE_MODULES = ["-m", "app1.*", "-m", "app2.*", "-m", "plugins.**"]
@@ -192,6 +193,34 @@ FOCUS_DEPS_CLASS_GROUPED = Selection(
     FOCUS_DEPS_MODULES,
     [*DEPS_OUT, "--links", "class-grouped"],
 )
+# The same focus drawn with what depends on it (``--deps in``): a module of
+# another package importing it through its facade, one from another top-level
+# package, and a dependency importing it back — every edge between the focus
+# and a neighbor drawn, either way; a dependent's other imports stay out.
+FOCUS_DEPS_IN = Selection(
+    "focus_deps_in",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    DEPS_IN,
+)
+FOCUS_DEPS_IN_MODULE_LINKS = Selection(
+    "focus_deps_in_module_links",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    [*DEPS_IN, "--links", "module"],
+)
+FOCUS_DEPS_IN_CLASS = Selection(
+    "focus_deps_in_class",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    [*DEPS_IN, "--links", "class"],
+)
+FOCUS_DEPS_IN_CLASS_GROUPED = Selection(
+    "focus_deps_in_class_grouped",
+    FOCUS_DEPS_PROJECT,
+    FOCUS_DEPS_MODULES,
+    [*DEPS_IN, "--links", "class-grouped"],
+)
 
 SELECTIONS = [
     EXAMPLE,
@@ -216,6 +245,10 @@ SELECTIONS = [
     FOCUS_DEPS_MODULE_LINKS,
     FOCUS_DEPS_CLASS,
     FOCUS_DEPS_CLASS_GROUPED,
+    FOCUS_DEPS_IN,
+    FOCUS_DEPS_IN_MODULE_LINKS,
+    FOCUS_DEPS_IN_CLASS,
+    FOCUS_DEPS_IN_CLASS_GROUPED,
 ]
 
 
@@ -294,6 +327,10 @@ SCENARIOS = [
     Scenario("focus_deps_module_links", FOCUS_DEPS_MODULE_LINKS),
     Scenario("focus_deps_class", FOCUS_DEPS_CLASS),
     Scenario("focus_deps_class_grouped", FOCUS_DEPS_CLASS_GROUPED),
+    Scenario("focus_deps_in", FOCUS_DEPS_IN),
+    Scenario("focus_deps_in_module_links", FOCUS_DEPS_IN_MODULE_LINKS),
+    Scenario("focus_deps_in_class", FOCUS_DEPS_IN_CLASS),
+    Scenario("focus_deps_in_class_grouped", FOCUS_DEPS_IN_CLASS_GROUPED),
 ]
 
 
@@ -483,6 +520,13 @@ DIFF_CASES = [
         GOLDEN_DIR / "json" / "focus_deps_module_links.json",
         _DIFF_FIXTURES / "focus_deps_module_links_no_billing.json",
         ("--changes-only",),
+    ),
+    # A focus drawn with its dependents (--deps in) gains one at the class
+    # level: a function of another top-level package starts calling it.
+    DiffCase(
+        "new_dependent",
+        _DIFF_FIXTURES / "focus_deps_in_class_no_report.json",
+        GOLDEN_DIR / "json" / "focus_deps_in_class.json",
     ),
 ]
 

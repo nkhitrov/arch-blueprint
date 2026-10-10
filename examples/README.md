@@ -67,8 +67,9 @@ uv run arch-blueprint draw examples/project_root -m 'app2.*' --deps out --links 
 
 Expected: `app2.service` drawn as usual, and `app1.models` and `plugins.auth.backend` greyed out and
 dashed under their full names, with an arrow from `app2.service` to each — neither is selected by
-`-m`. A deeper subject is `tests/fixtures/focus_deps`
-(`-m 'app.features.core.executory_processes.**' --deps out --links class`).
+`-m`. `--deps in` is the other side: with `-m 'app1.*'`, `app2.service` is drawn beside the
+focus with its arrow to `app1.models`. A deeper subject is `tests/fixtures/focus_deps`
+(`-m 'app.features.core.executory_processes.**' --deps out --links class`, or `--deps in`).
 
 ## Namespace package with no source
 

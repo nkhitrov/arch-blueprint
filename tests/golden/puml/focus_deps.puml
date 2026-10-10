@@ -21,7 +21,7 @@ package "billing" as billing {
 }
 
 app ---> billing
-app.features.core.executory_processes ---> app.features.core.legal_cases
+app.features.core.executory_processes <-[#C0392B,bold]-> app.features.core.legal_cases
 app.features.core.executory_processes.tasks ---> app.features.core.executory_processes.models
 @enduml
 
