@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import shlex
+import signal
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -573,6 +576,75 @@ def test_drawing_a_snapshot_rejects_a_link_level(snapshot: str, level: str) -> N
     result = run_command("draw", snapshot, "--links", level, check=False)
     assert result.returncode == _USAGE_ERROR
     assert "a snapshot already records its link level" in result.stderr
+
+
+# --- serve ------------------------------------------------------------------
+
+
+def test_serve_help_has_examples() -> None:
+    result = run_command("serve", "-h")
+    assert result.returncode == 0
+    assert "examples:" in result.stdout
+    assert "arch-blueprint serve" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        pytest.param(
+            [str(EXAMPLE_PROJECT / "nope")],
+            "no such project directory",
+            id="dir",
+        ),
+        pytest.param(
+            [str(EXAMPLE_PROJECT), "-m", "nosuch.*"],
+            "no package 'nosuch' in",
+            id="package",
+        ),
+        pytest.param(
+            [str(EXAMPLE_PROJECT), "-m", "app1.nothing.*"],
+            "no modules matched",
+            id="no_match",
+        ),
+        pytest.param([str(REPO_ROOT)], "arch-blueprint serve", id="src_layout"),
+    ],
+)
+def test_serve_bad_input_fails_before_serving(args: list[str], expected: str) -> None:
+    result = run_command("serve", "--no-open", *args, check=False)
+    assert result.returncode == _USAGE_ERROR
+    assert expected in result.stderr
+    assert "serving" not in result.stderr
+
+
+@posix_only  # SIGINT stands for Ctrl-C on POSIX only
+def test_serve_serves_until_interrupted() -> None:
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "arch_blueprint",
+            "serve",
+            "--no-open",
+            str(EXAMPLE_PROJECT),
+        ],
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        cwd=REPO_ROOT,
+    )
+    try:
+        assert process.stderr is not None
+        lines = [process.stderr.readline() for _ in range(2)]
+        serving = next(line for line in lines if " serving " in line)
+        url = serving.split(" serving ", 1)[1].split()[0]
+        assert url.startswith("http://127.0.0.1:")
+        assert "m=app1.%2A%2A" in url
+        base = url.split("/?", 1)[0]
+        with urllib.request.urlopen(f"{base}/api/tree") as response:  # noqa: S310
+            assert json.loads(response.read())["roots"] == ["app1", "app2", "plugins"]
+    finally:
+        process.send_signal(signal.SIGINT)
+        assert process.wait(timeout=10) == 0
 
 
 # --- --deps ------------------------------------------------------------------

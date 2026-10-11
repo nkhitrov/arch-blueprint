@@ -20,7 +20,7 @@ This project uses `uv` for environment and dependency management.
 - Type-check (strict mypy): `uv run mypy ./src ./tests`
 - Run the CLI against a project: `uv run arch-blueprint draw <project_dir> [-m '<pattern>'] [-f FMT] [-o FILE]`
   - Example: `uv run arch-blueprint draw src -m 'arch_blueprint.*'`
-  - Every command is explicit (`draw`, `diff`, `history`). The old implicit form
+  - Every command is explicit (`draw`, `diff`, `history`, `serve`). The old implicit form
     `arch-blueprint <dir> -m ...` and the old `render SNAPSHOT` are gone; each gets an exit-2 hint
     naming the `draw` command to run instead. `draw` takes a project directory or a snapshot file
     (an existing file, or any `*.json`).
@@ -97,6 +97,9 @@ This project uses `uv` for environment and dependency management.
   - `uv run arch-blueprint history <project_dir> [ROOT ...] [-m '<pattern>'] [--base REV]
     [--head REV] [-o DIR] [-f puml|d2|puml-png|d2-png]` — an album: a diagram and a diff per commit
     that changed the graph (see **History album** below).
+- Interactive viewer (see **Viewer** below): `uv run arch-blueprint serve <project_dir> [-m '<pattern>']
+  [--links module|class] [--port N] [--no-open]` — a local page (127.0.0.1) to fold / unfold
+  packages, focus a node, list an arrow's imports; the view state lives in the URL.
 - Runnable example fixture: `uv run arch-blueprint draw examples/project_root -m 'app1.*' -m 'app2.*' -m 'plugins.**'`
   (see `examples/README.md`) — exercises multi-root cross-links and namespace-package handling.
 
@@ -146,6 +149,10 @@ publisher per index, bound to the `testpypi` / `pypi` environments.
   including the exit code. Inputs are golden snapshots or small edits of them in
   `tests/fixtures/diff/`.
 - `test_diff_git.py` — `diff --base` end to end in a throwaway git repository.
+- `test_serve_view.py` — `serve/fold.py` (a folded package draws what `-m pkg` draws, its degrees
+  included) and `build_view` / `cli_command` in-process over the fixtures.
+- `test_serve_server.py` — the HTTP server on port 0 in a thread: routes, `400`s with the CLI's
+  wording, static files (no escape from `static/`, every asset the page names is served).
 - `test_history.py` — `history` end to end over a throwaway repository's commits (frames, cache,
   stale frames, `*-png` through a stand-in `plantuml` / `d2` on `PATH`), plus `collect` and the caches
   in-process.
@@ -158,7 +165,8 @@ A hand-built `BlueprintGraph` has **empty `cycles` and `tangles`** until the ana
 them. A renderer test that needs either must populate them explicitly (or call `analyze`), or it
 will silently assert against plain arrows. Frames need nothing: the renderer lays them out.
 
-Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
+Fixtures: `examples/shop` (the README's `serve` animation, `docs/images/serve.gif`: five packages, the
+cycle `orders ⇄ payments`; no test uses it), `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
 `tests/fixtures/ancestor_dep` (an import of a package facade),
@@ -449,6 +457,34 @@ side goes to both, so a typo still fails.
   is `skipped (reason)`. Exit 2 for bad input (including a missing image tool, checked before any
   work), 1 when images failed — caches keep everything else for the rerun.
 
+### Viewer
+
+`serve/` adds no graph logic; the page only draws what the server computed.
+
+- `fold.py` — `fold(graph, folded)` (any level): every node and endpoint under a folded prefix becomes that
+  prefix (outermost wins), a facade import inside a folded package becomes an ordinary edge, an
+  edge folded onto itself or its own package is dropped. `Edge.source`/`target` stay the real
+  import, which is why `metrics/_degrees.py` resolves the importer with `_owner` too. A transform
+  of the module-level graph, not a link level: `LINK_LEVELS`, snapshots and caches are untouched.
+- `view.py` — `ViewRequest(patterns, folded, links)` (`links` ∈ `module` | `class`; `class` is
+  `class-grouped`; folds apply there too, a module folding into one box) and `build_view`: extract → fold → every metric → `analyze` →
+  JSON. Frames and labels are `Layout.build(..., nested=True)`'s; a cycle pair is listed once in
+  `cycles`, not in `links`. `cli_command` gives the closest `draw` command (with a note line when
+  something is folded).
+- `server.py` — `ViewServer` (stdlib `ThreadingHTTPServer`, `127.0.0.1`, a `Host` other than
+  `127.0.0.1` / `localhost` is a 403 against DNS rebinding; content types from a fixed map, never
+  `mimetypes`, which reads the Windows registry): `GET /`, `/static/*`,
+  `/api/tree`, `POST /api/view`. One `GrimpSource` per pattern set in a small LRU; a lock
+  serializes builds, since `GrimpSource` borrows process-wide `sys.path` / `sys.modules`.
+- `static/` — `index.html`, `viewer.js` (no build step; "show only this" is just a narrower
+  `-m` pushed onto browser history; a redraw that changes only labels keeps the layout), `viewer.css`; `vendor/` holds cytoscape.js,
+  elkjs and cytoscape-elk unmodified (versions in `vendor/LICENSES.md`, excluded from the
+  whitespace fixers).
+- CLI `_serve` builds the first view before listening, so bad input is exit 2 like everywhere; the
+  page opens with the packages just below each pattern folded (`view.default_folds`), passed in
+  the URL query
+  (`m`, `links`, `fold`, plus `metric`, `focus` set by the page).
+
 ### Render plan
 
 `build_render_plan(registry, renders, display, fmt)` (`metrics/plan.py`) resolves requested metric
@@ -555,7 +591,7 @@ Reference implementations: `renderer/puml.py` (`PlantUmlRenderer`) and `renderer
 
 ### CLI behaviour
 
-One `argparse` parser with required subcommands (`_COMMANDS`: `draw`, `diff`, `history`; each an `_add_*` builder that sets its handler). No arguments prints the help to stderr
+One `argparse` parser with required subcommands (`_COMMANDS`: `draw`, `diff`, `history`, `serve`; each an `_add_*` builder that sets its handler). No arguments prints the help to stderr
 (exit 2); a first argument that is an existing directory is the retired implicit form and gets a
 hint naming `draw`. Top-level `--version` and `--list-metrics` (from each metric's `description`,
 displayable ones only). Every subcommand's help ends with examples — keep them runnable.

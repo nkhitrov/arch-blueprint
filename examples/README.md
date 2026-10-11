@@ -1,8 +1,30 @@
 # Examples
 
+## shop
+
+A small online shop, the project the README's animation explores:
+
+```shell
+arch-blueprint serve examples/shop
+```
+
+```
+shop/
+  api/        routes, schemas      # HTTP endpoints: use orders and catalog
+  orders/     models, service      # placing an order charges it through payments
+  payments/   gateway, refunds     # and the gateway imports orders.models back: a cycle
+  catalog/    models, queries
+  shared/     money, events        # used by everyone
+```
+
+Folded to its five packages it shows the cycle `orders ⇄ payments`; opened, the cycle turns out to
+be `orders.service → payments.gateway → orders.models`, no module importing itself back.
+
+## project_root
+
 A self-contained sample project used to verify multi-root and namespace-package support.
 
-## Layout
+### Layout
 
 ```
 project_root/                 # passed as <project_dir>; NO __init__.py here (a true project root)
@@ -28,7 +50,7 @@ Three things make this project interesting:
   package directly, so the tool expands it to its regular sub-package `plugins.auth` and graphs
   that. `app2` imports `plugins.auth.backend`, so an `app2 -> plugins` link should appear.
 
-## Run it
+### Run it
 
 From the repo root:
 
@@ -71,7 +93,7 @@ dashed under their full names, with an arrow from `app2.service` to each — nei
 focus with its arrow to `app1.models`. A deeper subject is `tests/fixtures/focus_deps`
 (`-m 'app.features.core.executory_processes.**' --deps out --links class`, or `--deps in`).
 
-## Namespace package with no source
+### Namespace package with no source
 
 If a namespace package contains **no** regular sub-package (no `__init__.py` anywhere underneath,
 e.g. a directory of compiled-only stubs), there is nothing for grimp to analyze. The tool skips it

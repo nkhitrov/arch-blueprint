@@ -1,22 +1,30 @@
 # arch-blueprint
 
-Draws the import graph of a Python project as an architecture diagram, in
-[PlantUML](https://plantuml.com) or [D2](https://d2lang.com) source or as a PNG. It also shows what
-a branch changed in that graph, and how the graph grew commit by commit.
+Explore the architecture of a Python project in the browser: its import graph, live, folded down
+to the packages you care about and opened as deep as you need. The same graph is drawn as
+[PlantUML](https://plantuml.com) or [D2](https://d2lang.com) source or a PNG, for docs and CI, and
+compared across a branch or the project's history.
 
-![Example project graph](docs/images/example.png)
+![arch-blueprint serve on the example project examples/shop](docs/images/serve.gif)
 
-Each box is a module. An arrow means a module on one side imports a module on the other. Arrows
-are drawn between packages, at the level where the two modules' paths part (`app2.service` →
-`app1.models` is drawn as `app2 → app1`). A red double arrow is a **cycle**: two packages that
-import each other.
+*The example project [`examples/shop`](examples/README.md#shop), opened with
+`arch-blueprint serve examples/shop`.*
 
-Boxes can be classes and functions too, with arrows between them
-([`--links class`](#arrows-between-classes-and-functions)).
+- **Modules, or classes and functions.** Each box is a module, an arrow an import between them.
+  Switch to classes & functions to see which definition uses which.
+- **Fold and open anything, independently.** Every package — and, at the class level, every
+  module — folds into one box or opens, on its own: one package opened down to its classes while
+  its neighbours stay single boxes. A folded box counts all the imports inside it.
+- **Follow a dependency.** Click a box for what it depends on and what depends on it, an arrow
+  for the imports behind it. A red arrow is a **cycle**.
+- **Keep what you found.** The view lives in the page's address; "⧉ CLI command" copies the
+  `draw` command that renders it as a diagram.
 
 - [Quick start](#quick-start)
+- [Explore in the browser](#serve): `serve`
+- [Diagrams as text and images](#draw): [`draw`](#draw), [`diff`](#diff),
+  [`history`](#history)
 - [Choosing what to draw](#choosing-what-to-draw)
-- [Commands](#commands): [`draw`](#draw), [`diff`](#diff), [`history`](#history)
 - [Metrics](#metrics)
 - [Troubleshooting](#troubleshooting)
 - [Examples](#examples)
@@ -31,11 +39,25 @@ Point it at the directory **your packages sit in**: `src` for a src layout, othe
 repository root.
 
 ```shell
+arch-blueprint serve src                # explore it in the browser
+```
+
+From a checkout of this repository, `arch-blueprint serve examples/shop` opens the example above.
+
+The same graph as a diagram:
+
+```shell
 arch-blueprint draw src                 # PlantUML source on stdout
 arch-blueprint draw src -o arch.puml    # the same, into a file
 arch-blueprint draw src -o arch.png     # an image (needs `plantuml` on PATH)
 arch-blueprint draw src -o arch.d2      # D2 source
 ```
+
+![Example project graph](docs/images/example.png)
+
+In a diagram, arrows are drawn between packages, at the level where the two modules' paths
+part (`app2.service` → `app1.models` is drawn as `app2 → app1`); boxes can be classes and
+functions too ([`--links class`](#arrows-between-classes-and-functions)).
 
 To view a `.puml` without installing anything, paste it into the
 [PlantUML web server](https://www.plantuml.com/plantuml). For `.d2` there's the
@@ -101,6 +123,7 @@ neighbors' own imports are not read, so their numbers would be wrong.
 
 | Command | What it does |
 | --- | --- |
+| `serve PROJECT_DIR` | opens a page in the browser to explore the graph interactively |
 | `draw PROJECT_DIR` | draws the project's import graph |
 | `draw SNAPSHOT` | draws a snapshot saved earlier by `draw -o graph.json` |
 | `diff` | draws what changed between two snapshots or two git revisions |
@@ -118,6 +141,53 @@ format:
 | `json` (`draw` only) | `.json` | a snapshot, to draw or diff later |
 
 A missing `plantuml` / `d2` is reported before any work starts.
+
+### serve
+
+`serve` opens a page in the browser where the graph is explored instead of chosen up front: no
+`-m` or `--links` to get right before you see anything.
+
+```bash
+arch-blueprint serve src                     # every package in src/
+arch-blueprint serve src -m 'myapp.**'       # one package
+arch-blueprint serve src --port 8000 --no-open
+```
+
+- **Modules, or classes and functions.** "boxes" switches what a box is: a module, or a class or
+  module-level function, with arrows wherever one's code uses another.
+- **Fold and unfold, each on its own.** The page opens on each package's direct subpackages,
+  folded into one box each. Double-click a folded box to unfold it, or a frame to fold it back.
+  Every package folds independently of the others, and at the class level so does every module:
+  one package can be open down to its classes while its neighbours stay single boxes. A folded
+  box draws what selecting that package whole (`-m pkg`) draws: its fan-in, fan-out and arrows
+  count everything inside it.
+- **Packages and modules.** A folded package is a square box with a double border, a 📁 and the
+  number of modules it holds; an unfolded one is a 📂 frame; a module is a plain rounded box.
+- **Show only one package.** "show only this" (in the details panel, or "only" beside a package
+  in the tree, on hover) narrows the graph to that package's contents — its modules and
+  subpackages, nothing around it. The browser's Back button, or "show all", returns.
+- **Focus.** Click a box: what it depends on and what depends on it stay lit, the rest fades. The
+  panel on the right lists both, with the box's metrics. Esc clears the focus.
+- **Arrows.** Click an arrow to list the imports behind it. A red two-headed arrow is a cycle.
+- **Large views.** Switching to classes & functions keeps the folds, so definitions appear only
+  where you opened. A view of more than 100 boxes is not drawn until you confirm: it is past
+  reading, and laying it out can freeze the page.
+- **Find.** Type in the search box to highlight matching boxes. Enter goes to the first match,
+  unfolding whatever package hides it.
+- **Choose.** The checkboxes on the left show what is drawn: a box on the graph is ticked, a
+  module hidden inside a folded box is not (tick it to unfold down to it), and an opened package
+  is half-ticked when only part of it is drawn. "all" and "none" tick or clear every box. Turn
+  "auto-redraw" off to tick a few boxes without a redraw after each one, then press "Redraw". A
+  package you tick is drawn as one box (double-click it to open it) — unless something inside it
+  is already shown: then it opens one level, keeping that in view. "metric" shows a metric on
+  every box or arrow.
+- **Share and keep.** The view lives in the page's address, so a link opens the same view.
+  "⧉ CLI command" copies the `draw` command for the same modules, arrows and metric, ready for a
+  doc or CI. `draw` folds nothing, so a view with folded packages notes that the command draws them
+  unfolded.
+
+The server listens on `127.0.0.1` only and stops with Ctrl-C. The import graph is read once per
+selection and kept while the server runs: restart `serve` to see edits to the code.
 
 ### draw
 
