@@ -110,8 +110,8 @@ function showError(message) {
   $("banner").textContent = message || "";
 }
 
-/** Past this many boxes the layout can freeze the page for a long while. */
-const BOX_LIMIT = 400;
+/** Past this many boxes a diagram is unreadable, and its layout can freeze the page. */
+const BOX_LIMIT = 100;
 /** The size of the largest view the user chose to draw anyway. */
 let acceptedBoxes = 0;
 
