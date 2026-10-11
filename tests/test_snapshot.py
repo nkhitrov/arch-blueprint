@@ -47,7 +47,7 @@ def test_render_from_snapshot_equals_direct_render(
 def test_dump_of_a_load_is_the_same_bytes(selection: Selection) -> None:
     text = snapshot_path(selection.name).read_text(encoding="utf-8").rstrip("\n")
     snapshot = load(text)
-    assert dump(snapshot.graph, snapshot.metrics, snapshot.links) == text
+    assert dump(snapshot.graph, snapshot.metrics, snapshot.links, snapshot.deps) == text
 
 
 def test_load_re_derives_cycles() -> None:
@@ -68,6 +68,27 @@ def test_load_keeps_the_link_level_and_node_kinds(links: str) -> None:
     snapshot = load(dump(graph, (), links))
     assert snapshot.links == links
     assert {node.kind for node in snapshot.graph.nodes} == {NodeKind.CLASS}
+
+
+def test_load_keeps_deps_and_neighbors() -> None:
+    snapshot = load(snapshot_path("focus_deps_class").read_text(encoding="utf-8"))
+    assert snapshot.deps == "out"
+    assert snapshot.graph.neighbors == {
+        "app.features.core.legal_cases.models.LegalCase",
+        "app.features.core.legal_cases.usecases.RemoveOldCustomerUseCase",
+        "billing.invoices.Invoice",
+    }
+
+
+def test_a_version_2_snapshot_reads_as_one_without_deps() -> None:
+    """Version 2 had no ``--deps``: its snapshots are still drawn and diffed."""
+    document = _valid()
+    del document["deps"]
+    del document["neighbors"]
+    snapshot = load(json.dumps({**document, "version": 2}))
+    assert snapshot.deps is None
+    assert snapshot.graph.neighbors == frozenset()
+    assert snapshot.graph.nodes == load(json.dumps(_valid())).graph.nodes
 
 
 def _valid() -> dict[str, object]:
@@ -121,6 +142,21 @@ def _without(key: str) -> dict[str, object]:
             json.dumps({**_valid(), "node_metrics": {"a": {"depth": True}}}),
             "expected a number or a string",
             id="metric_value",
+        ),
+        pytest.param(
+            json.dumps(_without("deps")),
+            "missing field 'deps'",
+            id="deps",
+        ),
+        pytest.param(
+            json.dumps({**_valid(), "deps": "sideways"}),
+            "unknown --deps direction 'sideways'",
+            id="deps_direction",
+        ),
+        pytest.param(
+            json.dumps({**_valid(), "neighbors": ["nowhere"]}),
+            "neighbors: 'nowhere' is not a node",
+            id="stray_neighbor",
         ),
     ],
 )

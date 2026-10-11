@@ -9,6 +9,7 @@ from arch_blueprint.domain.graph import Cycle, Tangle
 from arch_blueprint.domain.node import Node, NodeKind
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
+    NEIGHBOR_COLOR,
     BlueprintRenderer,
     CycleRender,
     LinkDecoration,
@@ -86,6 +87,15 @@ def format_frame(frame: Frame, items: list[str]) -> list[str]:
     return [f'package "{label}" as {frame.namespace} {{\n{body}\n}}']
 
 
+#: What sets a neighbor's box apart (``--deps``): a dashed border and grey text.
+NEIGHBOR_STYLE: Final = "#line.dashed;text:7F8C8D"
+
+
+def neighbor_marker(kind: NodeKind) -> str:
+    """The spot and box style of a node outside the focus."""
+    return f"<<({spot_letter(kind)}, {NEIGHBOR_COLOR})>> {NEIGHBOR_STYLE}"
+
+
 def class_head(label: str, node_id: str, marker: str) -> str:
     """``class`` declaring ``node_id``, labelled ``label`` where the two differ."""
     if label == node_id:
@@ -137,6 +147,13 @@ class PlantUmlRenderer(BlueprintRenderer):
             return head
         body = "\n".join(f"  {block}" for block in blocks)
         return f"{head} {{\n{body}\n}}"
+
+    def _format_neighbor(self, node: Node) -> str:
+        return class_head(
+            self.layout.label(node.id),
+            node.id,
+            neighbor_marker(node.kind),
+        )
 
     def _format_frame(self, frame: Frame, items: list[str]) -> list[str]:
         """Declare the frame as a package, so links point at a real element."""

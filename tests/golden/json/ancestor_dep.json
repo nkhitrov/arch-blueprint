@@ -1,7 +1,8 @@
 {
   "format": "arch-blueprint-graph",
-  "version": 2,
+  "version": 3,
   "links": "namespace",
+  "deps": null,
   "metrics": [
     "depth",
     "edge_weight",
@@ -19,6 +20,7 @@
       "kind": "module"
     }
   ],
+  "neighbors": [],
   "edges": [
     {
       "source": "api.handlers",

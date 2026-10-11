@@ -16,6 +16,7 @@ from arch_blueprint.metrics import (
     default_renders,
 )
 from arch_blueprint.renderer.base import (
+    NEIGHBOR_COLOR,
     BlueprintRenderer,
     CycleRender,
     LinkDecoration,
@@ -538,3 +539,61 @@ def test_flat_names_differing_at_the_first_part_have_no_title(fmt: str) -> None:
     assert "title" not in output
     assert "label" not in output
     assert '"a.x.A" as' not in output
+
+
+# --- neighbors (--deps) ---------------------------------------------------
+
+
+def _neighbor_graph() -> BlueprintGraph:
+    """``app.orders.api`` is the focus; it imports ``lib.money``, a neighbor."""
+    graph = make_graph(
+        ["app.orders.api", "app.orders.models", "lib.money"],
+        [
+            make_edge(
+                "app.orders.api",
+                "app.orders.models",
+                "app.orders.api",
+                "app.orders.models",
+            ),
+            make_edge("app.orders.api", "lib.money", "app.orders.api", "lib.money"),
+        ],
+    )
+    graph.neighbors = frozenset({"lib.money"})
+    default_registry().compute_all(graph)
+    return analyze(graph)
+
+
+def test_flat_neighbor_keeps_its_full_name_and_the_title_is_the_focus() -> None:
+    output = PlantUmlRenderer(plan=_plan("puml"), options=_FLAT).render(
+        _neighbor_graph(),
+    )
+    assert "title app.orders\n" in output
+    assert 'class "api" as app.orders.api <<(M, #000)>>' in output
+    assert "class lib.money <<(M, #BDC3C7)>> #line.dashed;text:7F8C8D\n" in output
+
+
+def test_neighbor_draws_no_metric_blocks() -> None:
+    plan = build_render_plan(
+        registry=default_registry(),
+        renders=default_renders(),
+        display=MetricDisplay(shown=("fan_in",)),
+        fmt="d2",
+    )
+    output = D2LangRenderer(plan=plan, options=_FLAT).render(_neighbor_graph())
+    neighbor = output[output.index('"lib.money": {') :]
+    assert "fan_in" not in neighbor.split("\n}\n")[0]
+    assert "stroke-dash: 3" in neighbor
+
+
+def test_a_renderer_that_knows_no_neighbors_draws_them_in_the_neighbor_color() -> None:
+    """``_format_neighbor`` is concrete: a renderer written before it still works."""
+    colors: dict[str, str] = {}
+
+    class _Colors(_CapturingRenderer):
+        def _format_node(self, node: Node, color: str, blocks: list[str]) -> str:
+            colors[node.id] = color
+            return ""
+
+    _Colors(_plan("puml")).render(_neighbor_graph())
+    assert colors["lib.money"] == NEIGHBOR_COLOR
+    assert colors["app.orders.api"] != NEIGHBOR_COLOR

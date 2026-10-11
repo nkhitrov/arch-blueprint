@@ -31,6 +31,7 @@ from arch_blueprint.metrics import (
 from arch_blueprint.renderer.base import (
     CYCLE_HIGHLIGHT_COLOR,
     DEFAULT_OPTIONS,
+    NEIGHBOR_COLOR,
     RendererOptions,
 )
 from arch_blueprint.snapshot import load
@@ -358,8 +359,12 @@ def test_resolved_cycle_with_a_shadowed_module_remains_on_the_container() -> Non
 
 def test_change_colors_stand_apart_from_a_plain_diagram() -> None:
     """Unchanged nodes keep their depth color, so no change may share one."""
-    plain = {*DEFAULT_OPTIONS.depth_colors, CYCLE_HIGHLIGHT_COLOR}
+    plain = {*DEFAULT_OPTIONS.depth_colors, CYCLE_HIGHLIGHT_COLOR, NEIGHBOR_COLOR}
     assert not {ADDED_COLOR, REMOVED_COLOR, RESOLVED_COLOR} & plain
+
+
+def test_neighbors_stand_apart_from_the_focus() -> None:
+    assert NEIGHBOR_COLOR not in {*DEFAULT_OPTIONS.depth_colors, CYCLE_HIGHLIGHT_COLOR}
 
 
 @pytest.mark.parametrize(

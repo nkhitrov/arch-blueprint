@@ -130,6 +130,7 @@ class DiffRenderer(LaidOut, ABC):
             _drawn_endpoints(diff),
             nested=self.options.nested,
             base=_unshadowed,
+            neighbors=diff.graph.neighbors,
         )
 
     def _render(self, diff: GraphDiff) -> str:
@@ -138,7 +139,10 @@ class DiffRenderer(LaidOut, ABC):
         rendered = [
             (
                 node.id,
-                self._format_node(
+                self._format_neighbor(node)
+                if node.id in diff.graph.neighbors
+                and diff.node_status[node.id] is ChangeStatus.CONTEXT
+                else self._format_node(
                     node,
                     diff.node_status[node.id],
                     self._metric_rows(node, diff.node_metrics.get(node.id, {})),
@@ -260,11 +264,18 @@ class DiffRenderer(LaidOut, ABC):
 
     def _format_facade(self, namespace: str) -> str:
         """A package an arrow ends on, drawn flat: as an unchanged node."""
-        return self._format_node(
-            Node(namespace, NodeKind.MODULE),
-            ChangeStatus.CONTEXT,
-            [],
-        )
+        node = Node(namespace, NodeKind.MODULE)
+        if namespace in self.layout.neighbors:
+            return self._format_neighbor(node)
+        return self._format_node(node, ChangeStatus.CONTEXT, [])
+
+    def _format_neighbor(self, node: Node) -> str:
+        """An unchanged node outside the focus (``--deps``), as a plain diagram's.
+
+        Concrete, as ``BlueprintRenderer._format_neighbor``: by default drawn
+        as any unchanged node. An added or removed one is marked as that.
+        """
+        return self._format_node(node, ChangeStatus.CONTEXT, [])
 
     @abstractmethod
     def _format_node(self, node: Node, status: ChangeStatus, rows: list[str]) -> str:

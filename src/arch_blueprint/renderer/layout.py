@@ -18,7 +18,7 @@ diffs name the same things whatever the labels read.
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Union
 
 
@@ -55,10 +55,16 @@ class Layout:
     before the first node under it — and ``prefix`` is what every label drops,
     shown once as the ``title``. Nested, ``prefix`` is empty: the outermost
     frame's label already says it.
+
+    ``neighbors`` are the drawn names outside the ``-m`` focus (``--deps``):
+    the graph's neighbor nodes and the facades no focused node lies under.
+    Flat, each is labelled by its full name — the prefix is the focus's — so a
+    dependency reads as where it lives.
     """
 
     items: tuple[LayoutItem, ...] = ()
     prefix: str = ""
+    neighbors: frozenset[str] = frozenset()
     _namespaces: frozenset[str] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -95,8 +101,15 @@ class Layout:
         return tuple(path)
 
     def label(self, name: str) -> str:
-        """What ``name`` is labelled: its last part in a frame, less the prefix."""
-        if self.prefix and name.startswith(f"{self.prefix}."):
+        """What ``name`` is labelled: its last part in a frame, less the prefix.
+
+        A neighbor keeps the prefix: flat, it is labelled by its full name.
+        """
+        if (
+            name not in self.neighbors
+            and self.prefix
+            and name.startswith(f"{self.prefix}.")
+        ):
             return name[len(self.prefix) + 1 :]
         return self.path(name)[-1]
 
@@ -107,15 +120,19 @@ class Layout:
         *,
         nested: bool,
         base: Callable[[str], str] = _identity,
+        neighbors: Collection[str] = frozenset(),
     ) -> Layout:
         """The layout of ``node_ids`` (in drawing order) and arrow ``endpoints``.
 
         ``base`` gives the name a drawn id stands for, where they differ (a
         diff's shadowed module): the flat prefix is worked out on those.
+        ``neighbors`` are the node ids outside the focus (``--deps``); a facade
+        endpoint no other node lies under joins them.
         """
+        outside = _outside(node_ids, endpoints, frozenset(neighbors))
         if nested:
-            return _nested(node_ids, endpoints)
-        return _flat(node_ids, endpoints, base)
+            return replace(_nested(node_ids, endpoints), neighbors=outside)
+        return _flat(node_ids, endpoints, base, outside)
 
 
 def _nested(node_ids: Sequence[str], endpoints: Collection[str]) -> Layout:
@@ -180,10 +197,32 @@ def _tree(order: dict[str, int], kept: Collection[str]) -> tuple[LayoutItem, ...
     return items(None)
 
 
+def _outside(
+    node_ids: Sequence[str],
+    endpoints: Collection[str],
+    neighbors: frozenset[str],
+) -> frozenset[str]:
+    """``neighbors``, plus each endpoint no focused node lies under.
+
+    Only with neighbors: without ``--deps`` everything drawn is the focus.
+    """
+    if not neighbors:
+        return neighbors
+    focus = [node_id for node_id in node_ids if node_id not in neighbors]
+    facades = {
+        end
+        for end in endpoints
+        if end not in node_ids
+        and not any(node_id.startswith(f"{end}.") for node_id in focus)
+    }
+    return neighbors | facades
+
+
 def _flat(
     node_ids: Sequence[str],
     endpoints: Collection[str],
     base: Callable[[str], str],
+    neighbors: frozenset[str],
 ) -> Layout:
     """Every node, plus each endpoint no node carries, under one shared prefix.
 
@@ -202,7 +241,8 @@ def _flat(
                 items.append(facade)
         items.append(node_id)
     items += [facade for facade in facades if facade not in placed]
-    return Layout(items=tuple(items), prefix=common_prefix([base(i) for i in items]))
+    focus = [base(item) for item in items if item not in neighbors]
+    return Layout(items=tuple(items), prefix=common_prefix(focus), neighbors=neighbors)
 
 
 def common_prefix(names: Sequence[str]) -> str:
