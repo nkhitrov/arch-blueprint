@@ -183,8 +183,25 @@ def test_view_folded_node_flagged() -> None:
 
 
 def test_view_class_level() -> None:
-    view = _view(CLASSES_PROJECT, ["refs.**"], folded=["refs"], links="class")
+    view = _view(CLASSES_PROJECT, ["refs.**"], links="class")
     assert {node["kind"] for node in view["nodes"]} == {"C", "F"}
+
+
+def test_view_class_level_folds() -> None:
+    """A folded package or module is one box at the class level too."""
+    view = _view(
+        CLASSES_PROJECT,
+        ["refs.**"],
+        folded=["refs.exported", "refs.targets"],
+        links="class",
+    )
+    ids = {node["id"]: node for node in view["nodes"]}
+    assert ids["refs.exported"]["folded"] is True
+    assert ids["refs.targets"]["folded"] is True
+    assert not any(i.startswith(("refs.targets.", "refs.exported.")) for i in ids)
+    assert ("refs.consumer.Consumer", "refs.targets") in {
+        (link["source"], link["target"]) for link in view["links"]
+    } | {(c["a"], c["b"]) for c in view["cycles"]}
 
 
 def test_view_no_modules() -> None:
@@ -207,6 +224,11 @@ def test_cli_command_roundtrip() -> None:
 def test_cli_command_class_level_is_grouped() -> None:
     command = cli_command("src", ViewRequest(("refs.**",), links="class"), None)
     assert command == "arch-blueprint draw src -m 'refs.**' --links class-grouped"
+
+
+def test_cli_command_folded_note_at_class_level() -> None:
+    request = ViewRequest(("refs.**",), frozenset({"refs.targets"}), "class")
+    assert cli_command("src", request, None).startswith("# folded packages")
 
 
 def test_cli_command_folded_note() -> None:

@@ -1,9 +1,11 @@
-"""Folding: a module-level graph with some packages drawn as one node each.
+"""Folding: a graph with some packages (or modules) drawn as one node each.
 
-A view of the viewer is the module-level graph with the packages the user
-collapsed folded. Folding is a property of the view, not of the extraction, so
-it is a transform of an extracted graph rather than a link level: snapshots,
-``LINK_LEVELS`` and every cache stay as they are.
+A view of the viewer is the graph of its level — modules, or classes and
+functions — with the packages the user collapsed folded; at the class level a
+module folds too, its definitions drawn as one box. Folding is a property of
+the view, not of the extraction, so it is a transform of an extracted graph
+rather than a link level: snapshots, ``LINK_LEVELS`` and every cache stay as
+they are.
 """
 
 from __future__ import annotations

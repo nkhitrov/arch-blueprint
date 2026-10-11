@@ -51,8 +51,8 @@ class NoModulesError(ValueError):
 class ViewRequest:
     """What the page asks to see.
 
-    ``patterns`` are ``-m`` patterns; ``folded`` the packages drawn as one node
-    (module level only — a class view ignores them); ``links`` one of
+    ``patterns`` are ``-m`` patterns; ``folded`` the packages — or, at the
+    class level, modules too — drawn as one node; ``links`` one of
     :data:`VIEW_LEVELS`.
     """
 
@@ -92,8 +92,11 @@ def build_graph_for(source: GrimpSource, request: ViewRequest) -> BlueprintGraph
     """The graph of a view, before metrics and analysis."""
     if request.links == "module":
         extracted = ModuleExtractor(source, level=module_level).extract()
-        return fold(extracted, request.folded)
-    return LINK_LEVELS["class-grouped"].extractor(source).extract()
+    else:
+        extracted = LINK_LEVELS["class-grouped"].extractor(source).extract()
+    # Folded at the class level too: a package or a module drawn as one box keeps
+    # a large project's class view to what the user opened.
+    return fold(extracted, request.folded)
 
 
 def build_view(
@@ -119,7 +122,7 @@ def build_view(
     on_tangle = {
         (link.source, link.target) for tangle in graph.tangles for link in tangle.links
     }
-    folded = request.folded if request.links == "module" else frozenset()
+    folded = request.folded
     nodes = []
     for node in graph.nodes:
         values = graph.node_metrics.get(node.id, {})
@@ -216,7 +219,7 @@ def cli_command(project_dir: str, request: ViewRequest, metric: Optional[str]) -
     if metric is not None:
         args += ["--metric", metric]
     command = shlex.join(args)
-    if request.folded and request.links == "module":
+    if request.folded:
         return f"{FOLDED_NOTE}\n{command}"
     return command
 

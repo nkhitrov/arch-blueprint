@@ -417,13 +417,13 @@ side goes to both, so a typo still fails.
 
 `serve/` adds no graph logic; the page only draws what the server computed.
 
-- `fold.py` — `fold(graph, folded)`: every node and endpoint under a folded prefix becomes that
+- `fold.py` — `fold(graph, folded)` (any level): every node and endpoint under a folded prefix becomes that
   prefix (outermost wins), a facade import inside a folded package becomes an ordinary edge, an
   edge folded onto itself or its own package is dropped. `Edge.source`/`target` stay the real
   import, which is why `metrics/_degrees.py` resolves the importer with `_owner` too. A transform
   of the module-level graph, not a link level: `LINK_LEVELS`, snapshots and caches are untouched.
 - `view.py` — `ViewRequest(patterns, folded, links)` (`links` ∈ `module` | `class`; `class` is
-  `class-grouped`, folds ignored) and `build_view`: extract → fold → every metric → `analyze` →
+  `class-grouped`; folds apply there too, a module folding into one box) and `build_view`: extract → fold → every metric → `analyze` →
   JSON. Frames and labels are `Layout.build(..., nested=True)`'s; a cycle pair is listed once in
   `cycles`, not in `links`. `cli_command` gives the closest `draw` command (with a note line when
   something is folded).

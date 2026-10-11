@@ -91,6 +91,10 @@ async function refresh() {
       return;
     }
     showError(null);
+    if (data.nodes.length > Math.max(BOX_LIMIT, acceptedBoxes)) {
+      warnTooBig(data);
+      return;
+    }
     view = data;
     draw();
   } catch (error) {
@@ -104,6 +108,33 @@ async function refresh() {
 function showError(message) {
   $("banner").hidden = !message;
   $("banner").textContent = message || "";
+}
+
+/** Past this many boxes the layout can freeze the page for a long while. */
+const BOX_LIMIT = 400;
+/** The size of the largest view the user chose to draw anyway. */
+let acceptedBoxes = 0;
+
+/** A view too large to lay out comfortably: say so, and draw it only if asked. */
+function warnTooBig(data) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "draw anyway";
+  button.onclick = () => {
+    showError(null);
+    acceptedBoxes = data.nodes.length;
+    view = data;
+    draw();
+    renderTree();
+  };
+  $("banner").hidden = false;
+  $("banner").replaceChildren(
+    document.createTextNode(
+      `This view has ${data.nodes.length} boxes; drawing it may freeze the page. ` +
+        "Fold packages or untick some, or ",
+    ),
+    button,
+  );
 }
 
 // --- packages and modules -----------------------------------------------------
@@ -396,7 +427,7 @@ function renderTree() {
     const icon = entry.package ? PACKAGE_ICON : MODULE_ICON;
     name.textContent = `${icon} ${depth === 0 ? id : id.slice(id.lastIndexOf(".") + 1)}`;
     name.title = state.folded.has(id) ? `${id} (folded)` : id;
-    if (state.folded.has(id) && state.links === "module") name.textContent += "  ⊞";
+    if (state.folded.has(id)) name.textContent += "  ⊞";
     name.onclick = () => goTo(id);
     if (shown === "off" || shown === "hidden") name.style.opacity = "0.6";
 
@@ -516,7 +547,9 @@ cy.on("resize", () => cy.fit(undefined, 30));
 function nodeLabel(node) {
   let label = node.label;
   if (node.folded) {
-    label = `${PACKAGE_ICON} ${label}\n${modulesText(node.id)}`;
+    label = isPackage(node.id)
+      ? `${PACKAGE_ICON} ${label}\n${modulesText(node.id)}`
+      : `${MODULE_ICON} ${label}`;
   }
   const value = state.metric && node.metrics[state.metric];
   return value === undefined || value === "" || value === false
@@ -718,7 +751,6 @@ cy.on("tap", (event) => {
 });
 cy.on("dbltap", "node", (event) => {
   const id = event.target.id();
-  if (state.links !== "module") return;
   if (event.target.hasClass("frame") || state.folded.has(id)) toggleFold(id);
 });
 
@@ -795,11 +827,9 @@ function showNode(element) {
   const id = element.id();
   if (element.hasClass("frame")) {
     const actions = el("div", undefined, { className: "actions" });
-    if (state.links === "module") {
-      const fold = el("button", "fold into one box", { type: "button" });
-      fold.onclick = () => toggleFold(id);
-      actions.append(fold);
-    }
+    const fold = el("button", "fold into one box", { type: "button" });
+    fold.onclick = () => toggleFold(id);
+    actions.append(fold);
     actions.append(onlyButton(id));
     const what = isPackage(id) ? `package · ${modulesText(id)}` : "module";
     details.replaceChildren(el("h3", id), el("p", what, { className: "hint" }), actions);
@@ -864,7 +894,7 @@ function goTo(id) {
     renderTree();
     return;
   }
-  if (state.links === "module" && [...state.folded].some((f) => isUnder(id, f))) {
+  if ([...state.folded].some((f) => isUnder(id, f))) {
     reveal(id);
     state.focus = id;
     refresh();

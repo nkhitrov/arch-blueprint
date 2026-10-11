@@ -328,6 +328,9 @@ arch-blueprint serve src --port 8000 --no-open
 - **Focus.** Click a box: what it depends on and what depends on it stay lit, the rest fades. The
   panel on the right lists both, with the box's metrics. Esc clears the focus.
 - **Arrows.** Click an arrow to list the imports behind it. A red two-headed arrow is a cycle.
+- **Classes and functions.** Folding works there too: a folded package — or module — stays one
+  box, so switching "boxes" to classes & functions shows definitions only where you opened. A view
+  of more than 400 boxes is not drawn until you confirm: laying it out can freeze the page.
 - **Find.** Type in the search box to highlight matching boxes. Enter goes to the first match,
   unfolding whatever package hides it.
 - **Choose.** The checkboxes on the left show what is drawn: a box on the graph is ticked, a module
