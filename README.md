@@ -330,7 +330,9 @@ arch-blueprint serve src --port 8000 --no-open
 - **Arrows.** Click an arrow to list the imports behind it. A red two-headed arrow is a cycle.
 - **Find.** Type in the search box to highlight matching boxes. Enter goes to the first match,
   unfolding whatever package hides it.
-- **Choose.** The checkboxes on the left pick the packages and modules shown; "all" and "none" tick
+- **Choose.** The checkboxes on the left show what is drawn: a box on the graph is ticked, a module
+  hidden inside a folded box is not (tick it to unfold down to it), and an opened package is
+  half-ticked when only part of it is drawn. They pick the packages and modules shown; "all" and "none" tick
   or clear every box. Turn "auto-redraw" off to tick a few boxes without a redraw after each one,
   then press "Redraw". A package you tick is drawn as one box (double-click it to open it) —
   unless something inside it is already shown: then it opens one level, keeping that in view. "boxes" switches

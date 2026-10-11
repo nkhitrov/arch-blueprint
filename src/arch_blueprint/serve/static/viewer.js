@@ -313,12 +313,42 @@ function showPending() {
 
 // --- the tree -------------------------------------------------------------
 
+/** The selected, folded package ``id`` is drawn inside, if any. */
+function foldedAround(id) {
+  return [...state.folded].find((f) => f !== id && isUnder(id, f) && selected(f)) ?? null;
+}
+
+/**
+ * What a tree row's checkbox shows — what is drawn, not what the patterns
+ * cover: "on" for a box on the graph (a module, a folded package), "hidden" for
+ * one inside a folded box, "off" for one not selected, and for an opened
+ * package, "on" / "partial" / "off" by what is drawn inside it.
+ */
+function shownState(id, memo) {
+  if (memo.has(id)) return memo.get(id);
+  let result;
+  const entry = tree.get(id);
+  if (!selected(id) && !entry.package) result = "off";
+  else if (selected(id) && foldedAround(id) !== null) result = "hidden";
+  else if (!entry.package || (selected(id) && state.folded.has(id))) {
+    result = selected(id) ? "on" : "off";
+  } else {
+    const inner = entry.children.map((child) => shownState(child, memo));
+    const on = inner.filter((s) => s === "on").length;
+    if (inner.length > 0 && on === inner.length) result = "on";
+    else if (inner.some((s) => s === "on" || s === "partial")) result = "partial";
+    else result = "off";
+  }
+  memo.set(id, result);
+  return result;
+}
+
 const expanded = new Set();
 
 function renderTree() {
   const container = $("tree");
   container.replaceChildren();
-  const drawn = new Set(view ? view.nodes.map((n) => n.id) : []);
+  const memo = new Map();
   const rows = [];
   const walk = (id, depth) => {
     const entry = tree.get(id);
@@ -345,9 +375,21 @@ function renderTree() {
 
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.checked = selected(id);
-    box.title = "show on the graph";
-    box.onchange = () => setChecked(id, box.checked);
+    const shown = shownState(id, memo);
+    box.checked = shown === "on";
+    box.indeterminate = shown === "partial";
+    box.title =
+      shown === "hidden"
+        ? `inside the folded ${foldedAround(id)} — tick to draw it on its own`
+        : "draw on the graph";
+    box.onchange = () => {
+      if (shown === "hidden") {
+        reveal(id);
+        selectionChanged();
+      } else {
+        setChecked(id, box.checked);
+      }
+    };
 
     const name = document.createElement("span");
     name.className = "name";
@@ -356,7 +398,7 @@ function renderTree() {
     name.title = state.folded.has(id) ? `${id} (folded)` : id;
     if (state.folded.has(id) && state.links === "module") name.textContent += "  ⊞";
     name.onclick = () => goTo(id);
-    if (!drawn.has(id) && !state.folded.has(id)) name.style.opacity = "0.75";
+    if (shown === "off" || shown === "hidden") name.style.opacity = "0.6";
 
     row.append(fold, box, name);
     if (entry.package) {
