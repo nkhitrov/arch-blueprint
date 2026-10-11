@@ -165,7 +165,8 @@ A hand-built `BlueprintGraph` has **empty `cycles` and `tangles`** until the ana
 them. A renderer test that needs either must populate them explicitly (or call `analyze`), or it
 will silently assert against plain arrows. Frames need nothing: the renderer lays them out.
 
-Fixtures: `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
+Fixtures: `examples/shop` (the README's `serve` animation, `docs/images/serve.gif`: five packages, the
+cycle `orders ⇄ payments`; no test uses it), `examples/project_root` (multi-root + PEP 420 namespace package), `tests/fixtures/cyclic`
 (a module cycle), `tests/fixtures/deep_ns` (single root whose link endpoints collide with node ids
 and nest), `tests/fixtures/init_imports` (a package re-exporting through `__init__.py`),
 `tests/fixtures/ancestor_dep` (an import of a package facade),
