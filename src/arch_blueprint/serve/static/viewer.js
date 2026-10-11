@@ -237,14 +237,30 @@ function setChecked(id, on) {
     }
     ancestor = parentOf(ancestor);
   }
+  const inside = [...checked].filter((c) => c !== id && isUnder(c, id));
   [...checked].filter((c) => isUnder(c, id)).forEach((c) => checked.delete(c));
   if (on) {
     checked.add(id);
-    // A package just ticked is drawn as one box; the user unfolds it.
-    if (tree.get(id).package) foldInto(id);
+    if (tree.get(id).package) tickPackage(id, inside);
   }
   state.patterns = patternsFor(checked);
   selectionChanged();
+}
+
+/**
+ * How a package just ticked is drawn. On its own: one box, the user unfolds it.
+ * Around what is already shown (``inside``): one level deep, so that stays in
+ * view as it was — each other subpackage folded.
+ */
+function tickPackage(id, inside) {
+  if (inside.length === 0) {
+    foldInto(id);
+    return;
+  }
+  state.folded.delete(id);
+  for (const child of subpackages(id)) {
+    if (!inside.some((shown) => isUnder(shown, child))) foldInto(child);
+  }
 }
 
 // --- redrawing: at once, or when asked -----------------------------------------
